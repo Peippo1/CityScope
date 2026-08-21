@@ -1,0 +1,22 @@
+[
+  {"question": "What dataset powers CityScope?", "expected": "describe_dataset"},
+  {"question": "What dates does the London cycling data cover?", "expected": "describe_dataset"},
+  {"question": "Which H3 cells are the busiest?", "expected": "find_hotspots"},
+  {"question": "Show the top 5 cycling hotspots", "expected": "find_hotspots"},
+  {"question": "Where are starts highest on weekends?", "expected": "find_hotspots"},
+  {"question": "Where are destinations highest?", "expected": "find_hotspots"},
+  {"question": "How active is H3 892a100d2d7ffff?", "expected": "get_area_metrics"},
+  {"question": "Compare the selected H3 cells", "expected": "get_area_metrics"},
+  {"question": "Compare these two areas", "expected": "compare_areas"},
+  {"question": "Which group has more cycling activity?", "expected": "compare_areas"},
+  {"question": "What is the weather in London?", "expected": "unsupported"},
+  {"question": "Find cafes near the hotspots", "expected": "unsupported"},
+  {"question": "What is traffic like now?", "expected": "unsupported"},
+  {"question": "Plan a route through the hotspots", "expected": "unsupported"},
+  {"question": "How much revenue will this area make?", "expected": "unsupported"},
+  {"question": "Predict next month's cycling activity", "expected": "unsupported"},
+  {"question": "Tell me about Manchester cycling", "expected": "unsupported"},
+  {"question": "What happens in Shoreditch?", "expected": "unsupported"},
+  {"question": "Show current live journeys", "expected": "unsupported"},
+  {"question": "What are London demographics near the cells?", "expected": "unsupported"}
+]

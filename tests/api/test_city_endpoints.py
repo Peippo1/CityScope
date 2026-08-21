@@ -29,3 +29,9 @@ def test_activity_limit_is_validated():
     response = TestClient(app).get("/cities/london/activity?limit=0")
 
     assert response.status_code == 422
+
+
+def test_investigation_request_rejects_unsupported_city_before_agent_execution():
+    response = TestClient(app).post("/investigate", json={"city": "paris", "question": "What are the hotspots?"})
+
+    assert response.status_code == 422

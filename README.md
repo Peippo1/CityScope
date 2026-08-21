@@ -1,6 +1,6 @@
 # CityScope
 
-CityScope is an agentic geospatial intelligence application for investigating historical London cycling activity. This repository currently contains the first deterministic vertical slice: cycling fixture data is transformed into H3-indexed Parquet, queried with DuckDB, served by FastAPI, and rendered on a Google Map.
+CityScope is an agentic geospatial intelligence application for investigating historical London cycling activity. This repository contains a deterministic H3/DuckDB data slice plus a bounded natural-language investigation layer that consumes the City Data MCP over Streamable HTTP.
 
 ## First vertical slice
 
@@ -8,7 +8,7 @@ CityScope is an agentic geospatial intelligence application for investigating hi
 fixture CSV -> validation/transform -> H3 -> Parquet -> DuckDB -> FastAPI -> Next.js -> map layer
 ```
 
-The slice deliberately does not include MCP, an LLM, Google Places, SSE, follow-ups, ranking, or authentication.
+The investigation slice deliberately does not include Google Places, Maps Grounding MCP, SSE, follow-ups, ranking, or authentication.
 
 ## Run the data pipeline
 
@@ -26,6 +26,14 @@ The production build reads the pinned May 2026 TfL snapshot from `data/raw/tfl/m
 ```bash
 uvicorn apps.api.app.main:app --reload --port 8000
 ```
+
+Run the City Data MCP in a second process before using `/investigate`:
+
+```bash
+uvicorn services.city_data_mcp.server:app --reload --port 8001
+```
+
+Configure `GEMINI_API_KEY` for the Gemini structured-output planner. The agent uses only the four City Data MCP tools and stops after three tool-call rounds. See [docs/investigations.md](docs/investigations.md).
 
 ## Run the web app
 

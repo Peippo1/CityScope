@@ -5,7 +5,9 @@ import { Loader } from "@googlemaps/js-api-loader";
 import { cellToBoundary } from "h3-js";
 import type { ActivityCell } from "../../types/city";
 
-export function CityMap({ cells }: { cells: ActivityCell[] }) {
+type MapCell = ActivityCell | { h3_cell: string; total_journeys: number };
+
+export function CityMap({ cells }: { cells: MapCell[] }) {
   const node = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
 
