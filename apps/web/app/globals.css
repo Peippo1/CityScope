@@ -14,4 +14,13 @@ main { max-width: 1200px; margin: 0 auto; padding: 24px; }
 .list-card ol { margin: 0; padding-left: 24px; }
 .list-card li { padding: 8px 0; border-bottom: 1px solid #edf0f2; }
 .error { color: #a33a31; }
+.investigation-card { background: white; border: 1px solid #d9e0e5; border-radius: 12px; padding: 16px; margin: 16px 0; }
+.investigation-card h2 { margin: 0 0 12px; }
+.question-row { display: flex; gap: 8px; margin-top: 6px; }
+.question-row input { flex: 1; min-width: 0; padding: 10px; border: 1px solid #b8c4cc; border-radius: 6px; }
+.question-row button { padding: 10px 14px; border: 0; border-radius: 6px; color: white; background: #0f766e; cursor: pointer; }
+.question-row button:disabled { opacity: .6; cursor: wait; }
+.investigation-result { margin-top: 16px; border-top: 1px solid #edf0f2; padding-top: 12px; }
+.investigation-result h3 { font-size: 15px; margin-bottom: 6px; }
+.investigation-result ul, .investigation-result ol { margin-top: 6px; }
 @media (max-width: 760px) { main { padding: 12px; } .layout { grid-template-columns: 1fr; } .map, .map-placeholder { min-height: 420px; } }

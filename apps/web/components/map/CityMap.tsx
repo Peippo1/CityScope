@@ -6,8 +6,9 @@ import { cellToBoundary } from "h3-js";
 import type { ActivityCell } from "../../types/city";
 
 type MapCell = ActivityCell | { h3_cell: string; total_journeys: number };
+type MapPlace = { place_id: string; name?: string; latitude: number; longitude: number; maps_uri?: string };
 
-export function CityMap({ cells }: { cells: MapCell[] }) {
+export function CityMap({ cells, places = [] }: { cells: MapCell[]; places?: MapPlace[] }) {
   const node = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
 
@@ -36,9 +37,35 @@ export function CityMap({ cells }: { cells: MapCell[] }) {
           fillOpacity: 0.2 + 0.65 * (cell.total_journeys / max),
         });
       });
-      return () => polygons.forEach((polygon) => polygon.setMap(null));
+      const infoWindow = new google.maps.InfoWindow();
+      const markers = places.map((place) => {
+        const marker = new google.maps.Marker({
+          position: { lat: place.latitude, lng: place.longitude },
+          map: map.current,
+          title: place.name ?? place.place_id,
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: "#b45309", fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 2 },
+        });
+        marker.addListener("click", () => {
+          const content = document.createElement("div");
+          const label = place.name ?? place.place_id;
+          if (place.maps_uri) {
+            const link = document.createElement("a");
+            link.href = place.maps_uri;
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            link.textContent = label;
+            content.append(link);
+          } else {
+            content.textContent = label;
+          }
+          infoWindow.setContent(content);
+          infoWindow.open({ map: map.current, anchor: marker });
+        });
+        return marker;
+      });
+      return () => { polygons.forEach((polygon) => polygon.setMap(null)); markers.forEach((marker) => marker.setMap(null)); infoWindow.close(); };
     });
-  }, [cells]);
+  }, [cells, places]);
 
   if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
     return <div className="map-placeholder" role="img" aria-label="Google Maps preview unavailable until a browser API key is configured">Google Maps preview requires NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. The ranked activity values remain available beside this panel.</div>;

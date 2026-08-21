@@ -18,5 +18,11 @@
   {"question": "Tell me about Manchester cycling", "expected": "unsupported"},
   {"question": "What happens in Shoreditch?", "expected": "unsupported"},
   {"question": "Show current live journeys", "expected": "unsupported"},
-  {"question": "What are London demographics near the cells?", "expected": "unsupported"}
+  {"question": "What are London demographics near the cells?", "expected": "unsupported"},
+  {"question": "Which busy cycling areas have relatively few cafes nearby?", "expected": "find_hotspots_then_maps"},
+  {"question": "Find active cycling areas with limited bike repair coverage", "expected": "find_hotspots_then_maps"},
+  {"question": "Which busiest Saturday-morning areas have the fewest coffee shops?", "expected": "find_hotspots_then_maps"},
+  {"question": "Show busy cycling areas with nearby bike shops", "expected": "find_hotspots_then_maps"},
+  {"question": "What cafes are near H3 892a100d2d7ffff?", "expected": "maps_search_places"},
+  {"question": "Find pubs around the hotspots", "expected": "unsupported"}
 ]

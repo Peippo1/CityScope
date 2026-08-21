@@ -68,12 +68,15 @@ class DatasetMetadata(BaseModel):
 
 
 class Evidence(BaseModel):
+    source: Literal["city_data", "google_maps"] = "city_data"
     metric: str
     value: int | float
     unit: str
     source_aggregate: str
     filters_applied: dict
     h3_cells: list[str] = Field(default_factory=list)
+    category: str | None = None
+    search_radius_m: int | None = None
 
 
 class MapLayer(BaseModel):
