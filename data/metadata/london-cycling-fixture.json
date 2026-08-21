@@ -1,0 +1,8 @@
+{
+  "city": "london",
+  "dataset": "london-cycling-fixture",
+  "observation_period": "2024-01-06/2024-01-08",
+  "source": "synthetic fixture shaped from the licensed London cycling schema",
+  "primary_h3_resolution": 9,
+  "journey_count": 5
+}

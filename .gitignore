@@ -1,0 +1,9 @@
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+data/generated/
+apps/web/node_modules/
+apps/web/.next/
+.env
+.env.local

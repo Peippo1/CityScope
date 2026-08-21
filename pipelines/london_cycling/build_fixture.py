@@ -1,0 +1,30 @@
+import json
+from pathlib import Path
+
+from .transform import build_activity_aggregate, read_and_transform
+
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = Path(__file__).parent / "fixtures" / "journeys.csv"
+OUTPUT = ROOT / "data" / "generated"
+
+
+def main() -> None:
+    OUTPUT.mkdir(parents=True, exist_ok=True)
+    journeys = read_and_transform(SOURCE)
+    activity = build_activity_aggregate(journeys)
+    journeys.to_parquet(OUTPUT / "london_cycling_journeys.parquet", index=False)
+    activity.to_parquet(OUTPUT / "london_cycling_activity.parquet", index=False)
+    metadata = {
+        "city": "london",
+        "dataset": "london-cycling-fixture",
+        "observation_period": "2024-01-06/2024-01-08",
+        "source": "synthetic fixture shaped from the licensed London cycling schema",
+        "primary_h3_resolution": 9,
+        "journey_count": len(journeys),
+    }
+    (ROOT / "data" / "metadata").mkdir(parents=True, exist_ok=True)
+    (ROOT / "data" / "metadata" / "london-cycling-fixture.json").write_text(json.dumps(metadata, indent=2) + "\n")
+
+
+if __name__ == "__main__":
+    main()
