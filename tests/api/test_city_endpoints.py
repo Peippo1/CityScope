@@ -13,7 +13,8 @@ def test_london_activity_endpoint_returns_typed_h3_activity():
     assert response.status_code == 200
     payload = response.json()
     assert payload["city"] == "london"
-    assert payload["observation_period"] == "2024-01-06/2024-01-08"
+    assert payload["observation_period"] in {"2024-01-06/2024-01-08", "2026-05-01/2026-05-31"}
+    assert payload["historical_snapshot"] is True
     assert len(payload["cells"]) == 2
     assert payload["cells"][0]["total_journeys"] >= payload["cells"][1]["total_journeys"]
 

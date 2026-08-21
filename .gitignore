@@ -3,6 +3,8 @@ __pycache__/
 .venv/
 *.pyc
 data/generated/
+data/raw/
+data/quarantine/
 apps/web/node_modules/
 apps/web/.next/
 .env

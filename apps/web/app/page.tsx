@@ -21,7 +21,7 @@ export default function HomePage() {
       <h1>CityScope</h1>
       <p>Explore London through historical cycling activity.</p>
     </header>
-    {activity && <div className="notice">Historical snapshot: {activity.observation_period}. This data does not represent current live cycling behaviour.</div>}
+    {activity && <div className="notice">{activity.dataset_name ?? "CityScope mobility dataset"} · historical snapshot: {activity.observation_period}. This data does not represent current live cycling behaviour. {activity.attribution_text}</div>}
     {error && <p className="error" role="alert">{error}</p>}
     {!activity && !error && <p aria-live="polite">Loading London activity…</p>}
     {activity && <section className="layout">

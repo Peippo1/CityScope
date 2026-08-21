@@ -15,7 +15,11 @@ The slice deliberately does not include MCP, an LLM, Google Places, SSE, follow-
 ```bash
 python3 -m pip install -e '.[dev]'
 python3 -m pipelines.london_cycling.build_fixture
+# With the ignored TfL raw snapshot acquired:
+python3 -m pipelines.build_production
 ```
+
+The production build reads the pinned May 2026 TfL snapshot from `data/raw/tfl/may-2026/`, writes versioned Parquet artifacts under `data/generated/`, writes unmatched/invalid rows under `data/quarantine/`, and records checksums and reconciliation counts in `data/metadata/london-cycling-production.json`.
 
 ## Run the API
 
@@ -39,4 +43,4 @@ Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` for a live Google Map. Without it, the pag
 pytest
 ```
 
-The fixture is intentionally small and is not representative of production coverage. Its metadata records the snapshot semantics and should be replaced with a licensed source artifact before public deployment.
+The small fixture remains useful for fast tests. The production/demo dataset is the authoritative TfL May 2026 snapshot documented in [docs/data-foundation.md](docs/data-foundation.md). Large raw and generated artifacts are intentionally excluded from Git.

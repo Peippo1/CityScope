@@ -1,0 +1,44 @@
+{
+  "city": "london",
+  "dataset_id": "tfl-santander-cycle-hire",
+  "snapshot_id": "2026-05",
+  "dataset_name": "TfL Santander Cycles journey data",
+  "source_organisation": "Transport for London",
+  "source_url": "https://tfl.gov.uk/info-for/open-data-users/our-open-data",
+  "source_files": [
+    {
+      "file": "443JourneyDataExtract01May2026-16May2026.csv",
+      "url": "https://s3-eu-west-1.amazonaws.com/cycling.data.tfl.gov.uk/usage-stats/443JourneyDataExtract01May2026-16May2026.csv",
+      "sha256": "1d77e82e4c540183d92d19d87a6f078ef9c1eeff09b0d22b7c330c5127d57bec"
+    },
+    {
+      "file": "444JourneyDataExtract17May2026-31May2026.csv",
+      "url": "https://s3-eu-west-1.amazonaws.com/cycling.data.tfl.gov.uk/usage-stats/444JourneyDataExtract17May2026-31May2026.csv",
+      "sha256": "20ff75281aefebd034883b59d3535a081b9b20862d4e1fceb9c666e5d9b8c97a"
+    },
+    {
+      "file": "bikepoint.json",
+      "url": "https://api.tfl.gov.uk/BikePoint",
+      "sha256": "22108b5adfdc45c88e53552f77c46dc8949048f8897b6bafbbe5ef490b0211ba"
+    }
+  ],
+  "retrieval_date": "2026-08-21",
+  "observation_start": "2026-05-01T00:00:00Z",
+  "observation_end_exclusive": "2026-06-01T00:00:00Z",
+  "observation_period": "2026-05-01/2026-05-31",
+  "licence_terms_reference": "https://tfl.gov.uk/info-for/open-data-users/our-open-data",
+  "attribution_text": "Data provided by Transport for London",
+  "source_row_count": 863017,
+  "accepted_row_count": 854875,
+  "rejected_quarantined_row_count": 8142,
+  "quarantine_file": "london-tfl-may-2026-unmatched-stations.parquet",
+  "transformation_version": "cityscope-core-v2-tfl-v1",
+  "h3_resolution": 9,
+  "generated_artifacts": {
+    "journeys": "london_cycling_production_journeys.parquet",
+    "activity": "london_cycling_activity.parquet"
+  },
+  "generated_artifact_version": "4ce67e92207d6151ec3ea4e30720193d8ef2dc80b25871f288a87fd9b8093279",
+  "historical_snapshot": true,
+  "generated_at": "2026-08-21T18:12:26.370838+00:00"
+}

@@ -10,6 +10,9 @@ class ActivityCell(BaseModel):
 
 class ActivityResponse(BaseModel):
     city: str
+    dataset_name: str | None = None
     observation_period: str
+    attribution_text: str | None = None
+    historical_snapshot: bool = True
     h3_resolution: int
     cells: list[ActivityCell]
