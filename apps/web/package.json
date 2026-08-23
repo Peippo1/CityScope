@@ -10,9 +10,13 @@
   "dependencies": {
     "@googlemaps/js-api-loader": "^1.16.8",
     "h3-js": "^4.1.0",
-    "next": "^14.2.0",
+    "next": "^15.5.21",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"
+  },
+  "overrides": {
+    "postcss": "8.5.23",
+    "sharp": "0.35.3"
   },
   "devDependencies": {
     "@types/google.maps": "^3.58.0",

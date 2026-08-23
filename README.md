@@ -53,4 +53,10 @@ Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` for a live Google Map. Without it, the pag
 pytest
 ```
 
+Run the Python dependency audit from the development environment:
+
+```bash
+pip-audit
+```
+
 The small fixture remains useful for fast tests. The production/demo dataset is the authoritative TfL May 2026 snapshot documented in [docs/data-foundation.md](docs/data-foundation.md). Large raw and generated artifacts are intentionally excluded from Git.
