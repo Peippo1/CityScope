@@ -27,13 +27,15 @@ The production build reads the pinned May 2026 TfL snapshot from `data/raw/tfl/m
 uvicorn apps.api.app.main:app --reload --port 8000
 ```
 
+The API loads the repository-root `.env.local` automatically, regardless of the directory from which `uvicorn` is launched. Keep that file local and use `GOOGLE_MAPS_GROUNDING_API_KEY` for the server-side Maps Grounding key; `GOOGLE_MAPS_API_KEY` remains supported as a backwards-compatible fallback.
+
 Run the City Data MCP in a second process before using `/investigate`:
 
 ```bash
 uvicorn services.city_data_mcp.server:app --reload --port 8001
 ```
 
-Configure `GEMINI_API_KEY` for the Gemini structured-output planner. The agent uses only the four City Data MCP tools and stops after three tool-call rounds. See [docs/investigations.md](docs/investigations.md).
+Configure `GEMINI_API_KEY` for the Gemini structured-output planner. Grounding MCP remains the place-search adapter; bicycle routes use the private Routes API adapter and are never exposed as a Gemini tool. See [docs/investigations.md](docs/investigations.md) and [ADR-004](docs/decisions/ADR-004-cityscope-google-routes-api.md).
 
 ## Run the web app
 

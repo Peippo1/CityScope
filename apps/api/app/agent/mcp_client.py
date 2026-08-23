@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import timedelta
 from typing import Any
 
 from mcp import ClientSession
@@ -13,7 +14,7 @@ class CityDataMcpClient:
 
     async def call(self, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
         async with streamable_http_client(self.url) as (read_stream, write_stream, _):
-            async with ClientSession(read_stream, write_stream) as session:
+            async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=20)) as session:
                 await session.initialize()
                 result = await session.call_tool(tool, {"request": arguments})
                 if result.isError:
@@ -24,4 +25,3 @@ class CityDataMcpClient:
                     if isinstance(payload, dict):
                         return payload
                 raise RuntimeError(f"City Data MCP returned no structured result: {tool}")
-

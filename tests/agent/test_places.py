@@ -10,6 +10,11 @@ from apps.api.app.agent.places import (
     parse_search_result,
     deterministic_amenity_analysis,
     GoogleMapsGroundingClient,
+    DEFAULT_CANDIDATE_CELLS,
+    DEFAULT_CATEGORIES,
+    MAX_CANDIDATE_CELLS,
+    MAX_CATEGORIES,
+    normalize_amenity_plan,
     MapsSearchResult,
 )
 
@@ -42,6 +47,22 @@ def test_amenity_plan_rejects_invalid_categories_and_untrusted_cells() -> None:
         pass
     else:
         raise AssertionError("invalid amenity category was accepted")
+
+
+def test_amenity_defaults_are_small_but_safety_ceilings_remain() -> None:
+    assert DEFAULT_CANDIDATE_CELLS == 3
+    assert DEFAULT_CATEGORIES == 1
+    assert MAX_CANDIDATE_CELLS == 5
+    assert MAX_CATEGORIES == 2
+
+    plan = AmenitySearchPlan(h3_cells=[CELL, "89194ad3353ffff", "89194ad3203ffff", "89194ad32cbffff"], categories=["cafe", "coffee_shop"])
+    normal = normalize_amenity_plan("Which busy areas have few cafes nearby?", plan)
+    explicit = normalize_amenity_plan("Compare cafes and coffee shops across the top five areas", plan)
+
+    assert len(normal.h3_cells) == 3
+    assert len(normal.categories) == 1
+    assert len(explicit.h3_cells) <= 5
+    assert len(explicit.categories) == 2
 
 
 def test_google_result_parser_keeps_only_provider_identifiers_and_links() -> None:

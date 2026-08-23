@@ -44,6 +44,8 @@ class InvestigationResult(BaseModel):
     evidence: list[Evidence] = Field(default_factory=list)
     places: list["PlaceResult"] = Field(default_factory=list)
     amenity_analysis: list[dict[str, Any]] = Field(default_factory=list)
+    route: "RouteDetails | None" = None
+    city_insights: list[dict[str, Any]] = Field(default_factory=list)
     map_layers: list[MapLayer] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
     trace: list[TraceEvent] = Field(default_factory=list)
@@ -52,7 +54,7 @@ class InvestigationResult(BaseModel):
 
 class ToolDecision(BaseModel):
     kind: Literal["call_tool", "answer", "unsupported"]
-    tool: Literal["describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "maps.search_places"] | None = None
+    tool: Literal["describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "maps.search_places", "route.intent"] | None = None
     arguments: dict[str, Any] = Field(default_factory=dict)
     answer: str | None = Field(default=None, max_length=1200)
     follow_up_suggestions: list[str] = Field(default_factory=list, max_length=3)
@@ -85,3 +87,6 @@ class PlaceResult(BaseModel):
     attribution_url: str | None = None
     category: AmenityCategory
     h3_cell: str
+
+
+from .route_service import RouteDetails  # noqa: E402  # Imported after schemas to avoid model import cycles.

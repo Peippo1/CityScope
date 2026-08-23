@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -9,9 +10,13 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 from pydantic import BaseModel, Field, field_validator
 
+from .. import config  # noqa: F401  # Load the project environment before reading it.
 from .schemas import AmenityCategory, PlaceResult
+from .route_service import ResolvedPlace
 
 MAPS_MCP_URL = "https://mapstools.googleapis.com/mcp"
+DEFAULT_CANDIDATE_CELLS = 3
+DEFAULT_CATEGORIES = 1
 MAX_CANDIDATE_CELLS = 5
 MAX_CATEGORIES = 2
 MAX_SEARCH_RADIUS_M = 800
@@ -36,6 +41,20 @@ class AmenitySearchPlan(BaseModel):
         if any(not is_valid_cell(cell) for cell in cells):
             raise ValueError("Every amenity search cell must be a valid H3 identifier")
         return list(dict.fromkeys(cells))
+
+
+def normalize_amenity_plan(question: str, plan: AmenitySearchPlan) -> AmenitySearchPlan:
+    """Keep normal enrichment small; retain larger plans only when explicitly requested."""
+    lowered = question.lower()
+    explicit_multi_category = (
+        sum(term in lowered for term in ("cafe", "cafés", "coffee shop", "coffee shops", "bike repair", "bicycle repair", "restaurant")) >= 2
+        or "both" in lowered
+        or "and" in lowered and len(plan.categories) > 1
+    )
+    explicit_more_cells = any(token in lowered for token in ("top 5", "top five", "five areas", "five cells", "all five"))
+    categories = plan.categories if explicit_multi_category else plan.categories[:DEFAULT_CATEGORIES]
+    cells = plan.h3_cells if explicit_more_cells else plan.h3_cells[:DEFAULT_CANDIDATE_CELLS]
+    return AmenitySearchPlan(h3_cells=cells, categories=categories)
 
 
 class MapsSearchResult(BaseModel):
@@ -89,7 +108,7 @@ class GoogleMapsGroundingClient:
 
     def __init__(self, url: str | None = None, api_key: str | None = None, timeout_s: float = 20.0) -> None:
         self.url = url or os.getenv("CITYSCOPE_MAPS_MCP_URL", MAPS_MCP_URL)
-        self.api_key = api_key or os.getenv("GOOGLE_MAPS_GROUNDING_API_KEY")
+        self.api_key = api_key or os.getenv("GOOGLE_MAPS_GROUNDING_API_KEY") or os.getenv("GOOGLE_MAPS_API_KEY")
         self.timeout_s = timeout_s
 
     async def search_places(self, category: AmenityCategory, cell: str) -> MapsSearchResult:
@@ -103,7 +122,7 @@ class GoogleMapsGroundingClient:
         }
         async with httpx.AsyncClient(headers=headers, timeout=self.timeout_s) as http_client:
             async with streamable_http_client(self.url, http_client=http_client) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream) as session:
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=self.timeout_s)) as session:
                     tools = await session.list_tools()
                     if "search_places" not in {tool.name for tool in tools.tools}:
                         raise RuntimeError("Maps Grounding MCP does not expose search_places")
@@ -112,6 +131,29 @@ class GoogleMapsGroundingClient:
                         raise RuntimeError("Maps Grounding MCP search_places failed")
                     payload = _structured_payload(result)
                     return parse_search_result(payload, category, cell)
+
+    async def resolve_location(self, query: str) -> ResolvedPlace:
+        """Resolve a named endpoint through Grounding search; never accept model coordinates."""
+        if not self.api_key:
+            raise RuntimeError("GOOGLE_MAPS_GROUNDING_API_KEY is not configured")
+        headers = {"X-Goog-Api-Key": self.api_key, "Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
+        arguments = {"text_query": f"{query}, London, UK", "language_code": "en", "region_code": "GB"}
+        async with httpx.AsyncClient(headers=headers, timeout=self.timeout_s) as http_client:
+            async with streamable_http_client(self.url, http_client=http_client) as (read_stream, write_stream, _):
+                async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=self.timeout_s)) as session:
+                    tools = await session.list_tools()
+                    if "search_places" not in {tool.name for tool in tools.tools}:
+                        raise RuntimeError("Maps Grounding MCP does not expose search_places")
+                    result = await session.call_tool("search_places", arguments)
+                    if result.isError:
+                        raise RuntimeError("Maps Grounding MCP location resolution failed")
+                    payload = _structured_payload(result)
+        raw = next(iter(payload.get("places", [])), None)
+        if not raw or not raw.get("location"):
+            raise RuntimeError(f"Google Maps could not resolve named location: {query}")
+        location = raw["location"]
+        links = raw.get("googleMapsLinks") or {}
+        return ResolvedPlace(name=raw.get("displayName") or raw.get("name") or query, place_id=raw.get("id"), latitude=float(location["latitude"]), longitude=float(location["longitude"]), maps_uri=links.get("placeUrl"))
 
 
 def _structured_payload(result: Any) -> dict[str, Any]:
