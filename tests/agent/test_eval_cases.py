@@ -1,10 +1,19 @@
 import json
 from pathlib import Path
 
+from evals.agent.runner import run
 
-def test_scope_evaluation_suite_has_bounded_supported_and_unsupported_cases():
-    cases = json.loads((Path(__file__).parents[2] / "evals/agent/cases.json").read_text())
+CASES = Path(__file__).parents[2] / "evals/agent/cases.json"
 
-    assert 20 <= len(cases) <= 30
-    assert {case["expected"] for case in cases} >= {"describe_dataset", "find_hotspots", "get_area_metrics", "compare_areas", "find_hotspots_then_maps", "maps_search_places", "unsupported"}
-    assert all(1 <= len(case["question"]) <= 500 for case in cases)
+
+def test_golden_dataset_is_versioned_and_complete():
+    dataset = json.loads(CASES.read_text())
+    required = {"case_id","question","expected_status","expected_tool_sequence","maximum_provider_calls","required_evidence_sources","forbidden_tools","required_policy_codes"}
+    assert dataset["version"] == 1 and len(dataset["cases"]) >= 12
+    assert all(required <= set(case) for case in dataset["cases"])
+    assert len({case["case_id"] for case in dataset["cases"]}) == len(dataset["cases"])
+
+
+def test_deterministic_evaluation_suite_passes():
+    report = run(CASES)
+    assert report["passed"], [item for item in report["results"] if not item["passed"]]

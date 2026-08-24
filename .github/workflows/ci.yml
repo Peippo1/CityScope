@@ -14,8 +14,12 @@ jobs:
           python-version: "3.12"
       - name: Install Python development dependencies
         run: python -m pip install -e ".[dev]"
+      - name: Build deterministic test fixture
+        run: python -m pipelines.london_cycling.build_fixture
       - name: Python tests
         run: pytest -q
+      - name: Deterministic agent evaluations
+        run: python -m evals.agent.runner --json-output /tmp/cityscope-eval-report.json
       - name: Python dependency audit
         run: pip-audit --skip-editable
       - uses: actions/setup-node@v4

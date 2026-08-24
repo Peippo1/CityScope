@@ -1,0 +1,2 @@
+Number,Start date,Start station number,Start station,End date,End station number,End station,Total duration
+test-journey-1,01/05/2026 08:00,000001,Test Origin,01/05/2026 08:12,000002,Test Destination,12m 0s

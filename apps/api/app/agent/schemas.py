@@ -34,6 +34,9 @@ class TraceEvent(BaseModel):
     tool: str | None = None
     result_count: int | None = None
     latency_ms: int | None = None
+    policy_code: str | None = None
+    call_number: int | None = Field(default=None, ge=1)
+    budget_limit: int | None = Field(default=None, ge=1)
 
 
 class InvestigationResult(BaseModel):

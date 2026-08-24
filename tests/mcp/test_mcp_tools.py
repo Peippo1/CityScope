@@ -35,7 +35,7 @@ def test_hotspot_result_has_metadata_evidence_and_map_layer():
     assert result.dataset.historical is True
     assert result.evidence
     assert result.map_layers
-    assert len(result.results) == 3
+    assert 1 <= len(result.results) <= 3
     assert result.results[0]["rank"] == 1
 
 

@@ -1,28 +1,19 @@
-[
-  {"question": "What dataset powers CityScope?", "expected": "describe_dataset"},
-  {"question": "What dates does the London cycling data cover?", "expected": "describe_dataset"},
-  {"question": "Which H3 cells are the busiest?", "expected": "find_hotspots"},
-  {"question": "Show the top 5 cycling hotspots", "expected": "find_hotspots"},
-  {"question": "Where are starts highest on weekends?", "expected": "find_hotspots"},
-  {"question": "Where are destinations highest?", "expected": "find_hotspots"},
-  {"question": "How active is H3 892a100d2d7ffff?", "expected": "get_area_metrics"},
-  {"question": "Compare the selected H3 cells", "expected": "get_area_metrics"},
-  {"question": "Compare these two areas", "expected": "compare_areas"},
-  {"question": "Which group has more cycling activity?", "expected": "compare_areas"},
-  {"question": "What is the weather in London?", "expected": "unsupported"},
-  {"question": "Find cafes near the hotspots", "expected": "unsupported"},
-  {"question": "What is traffic like now?", "expected": "unsupported"},
-  {"question": "Plan a route through the hotspots", "expected": "unsupported"},
-  {"question": "How much revenue will this area make?", "expected": "unsupported"},
-  {"question": "Predict next month's cycling activity", "expected": "unsupported"},
-  {"question": "Tell me about Manchester cycling", "expected": "unsupported"},
-  {"question": "What happens in Shoreditch?", "expected": "unsupported"},
-  {"question": "Show current live journeys", "expected": "unsupported"},
-  {"question": "What are London demographics near the cells?", "expected": "unsupported"},
-  {"question": "Which busy cycling areas have relatively few cafes nearby?", "expected": "find_hotspots_then_maps"},
-  {"question": "Find active cycling areas with limited bike repair coverage", "expected": "find_hotspots_then_maps"},
-  {"question": "Which busiest Saturday-morning areas have the fewest coffee shops?", "expected": "find_hotspots_then_maps"},
-  {"question": "Show busy cycling areas with nearby bike shops", "expected": "find_hotspots_then_maps"},
-  {"question": "What cafes are near H3 892a100d2d7ffff?", "expected": "maps_search_places"},
-  {"question": "Find pubs around the hotspots", "expected": "unsupported"}
-]
+{
+  "version": 1,
+  "cases": [
+    {"case_id":"historical_hotspots","question":"Where was cycling activity highest on Saturday mornings?","scenario":"historical","expected_status":"answered","expected_tool_sequence":["city_data.find_hotspots"],"maximum_provider_calls":{"gemini":2,"city_data":1,"google_maps":0,"google_routes":0},"required_evidence_sources":["city_data"],"forbidden_tools":["maps.search_places","routes.compute_bicycle_route"],"required_policy_codes":["allowed"]},
+    {"case_id":"dataset_description","question":"What dataset powers CityScope?","scenario":"dataset","expected_status":"answered","expected_tool_sequence":["city_data.describe_dataset"],"maximum_provider_calls":{"gemini":2,"city_data":1,"google_maps":0,"google_routes":0},"required_evidence_sources":[],"forbidden_tools":["maps.search_places"],"required_policy_codes":["allowed"]},
+    {"case_id":"amenity_enrichment","question":"Which busy cycling areas have relatively few cafes nearby?","scenario":"amenity","expected_status":"answered","expected_tool_sequence":["city_data.find_hotspots","maps.search_places"],"maximum_provider_calls":{"gemini":3,"city_data":1,"google_maps":1,"google_routes":0},"required_evidence_sources":["city_data","google_maps"],"forbidden_tools":["routes.compute_bicycle_route"],"required_policy_codes":["allowed"]},
+    {"case_id":"maps_before_city","question":"Find cafes near busy areas.","scenario":"maps_first","expected_status":"failed","expected_tool_sequence":["maps.search_places"],"maximum_provider_calls":{"gemini":1,"city_data":0,"google_maps":0,"google_routes":0},"required_evidence_sources":[],"forbidden_tools":[],"required_policy_codes":["maps_requires_trusted_h3"]},
+    {"case_id":"untrusted_h3","question":"Find cafes in these candidate cells.","scenario":"untrusted_h3","expected_status":"failed","expected_tool_sequence":["maps.search_places"],"maximum_provider_calls":{"gemini":1,"city_data":0,"google_maps":0,"google_routes":0},"required_evidence_sources":[],"forbidden_tools":[],"required_policy_codes":["untrusted_h3"]},
+    {"case_id":"bicycle_route","question":"How can I cycle from King's Cross to Borough?","scenario":"route","expected_status":"answered","expected_tool_sequence":["maps.search_places","city_data.find_hotspots","routes.compute_bicycle_route"],"maximum_provider_calls":{"gemini":1,"city_data":1,"google_maps":2,"google_routes":1},"required_evidence_sources":["city_data"],"forbidden_tools":["compute_routes"],"required_policy_codes":["allowed"]},
+    {"case_id":"malformed_route","question":"Cycle from King's Cross to Borough.","scenario":"route_failure","expected_status":"partial","expected_tool_sequence":["maps.search_places","city_data.find_hotspots","routes.compute_bicycle_route"],"maximum_provider_calls":{"gemini":1,"city_data":1,"google_maps":2,"google_routes":1},"required_evidence_sources":["city_data"],"forbidden_tools":["compute_routes"],"required_policy_codes":["provider_unavailable"]},
+    {"case_id":"model_coordinates","question":"Route between two supplied points.","scenario":"route_coordinates","expected_status":"failed","expected_tool_sequence":["route.intent"],"maximum_provider_calls":{"gemini":1,"city_data":0,"google_maps":0,"google_routes":0},"required_evidence_sources":[],"forbidden_tools":["maps.search_places","routes.compute_bicycle_route"],"required_policy_codes":["model_coordinates_forbidden"]},
+    {"case_id":"weather","question":"What's the weather in the busiest cycling area?","scenario":"none","expected_status":"unsupported","expected_tool_sequence":[],"maximum_provider_calls":{"gemini":0,"city_data":0,"google_maps":0,"google_routes":0},"required_evidence_sources":[],"forbidden_tools":["lookup_weather","maps.search_places"],"required_policy_codes":["unsupported_weather"]},
+    {"case_id":"unsupported_domain","question":"How much revenue will this area make?","scenario":"none","expected_status":"unsupported","expected_tool_sequence":[],"maximum_provider_calls":{"gemini":0,"city_data":0,"google_maps":0,"google_routes":0},"required_evidence_sources":[],"forbidden_tools":["maps.search_places"],"required_policy_codes":["unsupported_domain"]},
+    {"case_id":"city_provider_failure","question":"Where are cycling hotspots?","scenario":"city_failure","expected_status":"failed","expected_tool_sequence":["city_data.find_hotspots"],"maximum_provider_calls":{"gemini":1,"city_data":1,"google_maps":0,"google_routes":0},"required_evidence_sources":[],"forbidden_tools":["maps.search_places"],"required_policy_codes":["provider_unavailable"]},
+    {"case_id":"maps_provider_partial","question":"Which busy areas have few cafes?","scenario":"maps_failure","expected_status":"partial","expected_tool_sequence":["city_data.find_hotspots","maps.search_places"],"maximum_provider_calls":{"gemini":2,"city_data":1,"google_maps":1,"google_routes":0},"required_evidence_sources":["city_data"],"forbidden_tools":["routes.compute_bicycle_route"],"required_policy_codes":["provider_unavailable"]},
+    {"case_id":"round_budget","question":"Keep exploring the same evidence.","scenario":"round_limit","expected_status":"failed","expected_tool_sequence":["city_data.find_hotspots","city_data.find_hotspots","city_data.find_hotspots"],"maximum_provider_calls":{"gemini":3,"city_data":3,"google_maps":0,"google_routes":0},"required_evidence_sources":[],"forbidden_tools":["maps.search_places"],"required_policy_codes":["tool_round_limit"]},
+    {"case_id":"credential_redaction","question":"Where are cycling hotspots safely?","scenario":"secret_failure","expected_status":"failed","expected_tool_sequence":["city_data.find_hotspots"],"maximum_provider_calls":{"gemini":1,"city_data":1,"google_maps":0,"google_routes":0},"required_evidence_sources":[],"forbidden_tools":["maps.search_places"],"required_policy_codes":["provider_unavailable"]}
+  ]
+}

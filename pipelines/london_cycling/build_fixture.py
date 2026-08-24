@@ -12,7 +12,11 @@ def main() -> None:
     OUTPUT.mkdir(parents=True, exist_ok=True)
     journeys = read_and_transform(SOURCE)
     activity = build_activity_aggregate(journeys)
-    journeys.to_parquet(OUTPUT / "london_cycling_journeys.parquet", index=False)
+    # The fixture input keeps its original vertical-slice name, while the
+    # generated artifact conforms to the shared canonical analytics contract.
+    journeys.rename(columns={"journey_id": "trip_id"}).to_parquet(
+        OUTPUT / "london_cycling_journeys.parquet", index=False
+    )
     activity.to_parquet(OUTPUT / "london_cycling_activity.parquet", index=False)
     metadata = {
         "city": "london",

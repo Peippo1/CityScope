@@ -18,10 +18,15 @@ class MobilityAnalytics:
         self.root = root
         production = root / "data" / "metadata" / "london-cycling-production.json"
         fixture = root / "data" / "metadata" / "london-cycling-fixture.json"
-        self.metadata_path = production if production.exists() else fixture
+        production_journeys = root / "data" / "generated" / "london_cycling_production_journeys.parquet"
+        fixture_journeys = root / "data" / "generated" / "london_cycling_journeys.parquet"
+        # Clean CI and new checkouts intentionally do not contain licensed raw data.
+        # Use production metadata only when its corresponding artifact is present.
+        use_production = production.exists() and production_journeys.exists()
+        self.metadata_path = production if use_production else fixture
         self.metadata = json.loads(self.metadata_path.read_text())
         self.parquet_path = root / "data" / "generated" / "london_cycling_activity.parquet"
-        self.journeys_path = root / "data" / "generated" / "london_cycling_production_journeys.parquet"
+        self.journeys_path = production_journeys if use_production else fixture_journeys
 
     def describe_dataset(self, city: str) -> dict:
         self._validate_city(city)
@@ -104,7 +109,7 @@ class MobilityAnalytics:
 
     def _filtered_journeys(self, time_filter: TimeFilter) -> pd.DataFrame:
         if not self.journeys_path.exists():
-            raise FileNotFoundError("Production journey artifact is not built")
+            raise FileNotFoundError("Journey artifact is not built; run the fixture or production pipeline")
         conditions = []
         params: list[object] = [str(self.journeys_path)]
         if time_filter.start_date:

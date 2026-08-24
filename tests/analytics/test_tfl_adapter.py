@@ -10,10 +10,11 @@ from pipelines.sources.tfl.transform import to_canonical
 
 
 RAW = Path("data/raw/tfl/may-2026")
+FIXTURE = Path("pipelines/sources/tfl/fixtures/journeys.csv")
 
 
 def test_tfl_schema_and_duration_parser():
-    frame = read_journey_files([RAW / "443JourneyDataExtract01May2026-16May2026.csv"])
+    frame = read_journey_files([FIXTURE])
     assert {"Number", "Start date", "End date", "Start station number", "End station number"}.issubset(frame.columns)
     assert parse_duration_seconds("1h 2m 3s") == 3723
     with pytest.raises(ValueError):
