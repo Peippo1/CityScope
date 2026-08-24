@@ -25,7 +25,9 @@ class MobilityAnalytics:
         use_production = production.exists() and production_journeys.exists()
         self.metadata_path = production if use_production else fixture
         self.metadata = json.loads(self.metadata_path.read_text())
-        self.parquet_path = root / "data" / "generated" / "london_cycling_activity.parquet"
+        production_activity = root / "data" / "generated" / "london_cycling_activity.parquet"
+        fixture_activity = root / "data" / "generated" / "london_cycling_fixture_activity.parquet"
+        self.parquet_path = production_activity if use_production else fixture_activity
         self.journeys_path = production_journeys if use_production else fixture_journeys
 
     def describe_dataset(self, city: str) -> dict:

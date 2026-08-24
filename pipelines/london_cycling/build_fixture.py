@@ -17,7 +17,9 @@ def main() -> None:
     journeys.rename(columns={"journey_id": "trip_id"}).to_parquet(
         OUTPUT / "london_cycling_journeys.parquet", index=False
     )
-    activity.to_parquet(OUTPUT / "london_cycling_activity.parquet", index=False)
+    # Keep fixtures isolated so test setup can never overwrite the deployable
+    # production activity artifact or invalidate its provenance checksum.
+    activity.to_parquet(OUTPUT / "london_cycling_fixture_activity.parquet", index=False)
     metadata = {
         "city": "london",
         "dataset": "london-cycling-fixture",

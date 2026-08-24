@@ -8,6 +8,7 @@ import type { ActivityResponse } from "../../types/city";
 import type { InvestigationRequest, InvestigationResult } from "../../types/investigation";
 import { InvestigationResultPanel } from "./InvestigationResultPanel";
 import { QuestionComposer } from "./QuestionComposer";
+import { AccountActions } from "./AccountActions";
 
 type WorkspaceServices = {
   getActivity: () => Promise<ActivityResponse>;
@@ -29,6 +30,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [investigationError, setInvestigationError] = useState<string | null>(null);
   const [investigating, setInvestigating] = useState(false);
   const [selectedH3Cell, setSelectedH3Cell] = useState<string | null>(null);
+  const [submittedRequest, setSubmittedRequest] = useState<InvestigationRequest | null>(null);
 
   const loadActivity = useCallback(async () => {
     setActivityLoading(true);
@@ -50,11 +52,13 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     setInvestigating(true);
     setInvestigationError(null);
     try {
-      const result = await services.investigate({
+      const request = {
         city: "london",
         question: trimmedQuestion,
         context: { selected_h3_cells: selectedH3Cell ? [selectedH3Cell] : [], previous_turns: [], evidence_summary: undefined },
-      });
+      } satisfies InvestigationRequest;
+      const result = await services.investigate(request);
+      setSubmittedRequest(request);
       setInvestigation(result);
       setSelectedH3Cell(result.map_layers[0]?.h3_cell ?? null);
     } catch (reason: unknown) {
@@ -74,7 +78,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     <main id="main-content">
       <header className="app-header">
         <a className="brand" href="#main-content" aria-label="CityScope home"><span className="brand-mark" aria-hidden="true">CS</span><span>CityScope</span></a>
-        <div><p className="eyebrow">London mobility explorer</p><h1>See the city through its cycling patterns.</h1><p className="hero-copy">Ask a question, compare nearby places, or shape a bicycle route using grounded evidence.</p></div>
+        <div><p className="eyebrow">London mobility explorer</p><h1>See the city through its cycling patterns.</h1><p className="hero-copy">Ask a question, compare nearby places, or shape a bicycle route using grounded evidence.</p><AccountActions request={submittedRequest} result={investigation} /></div>
       </header>
 
       {activity && <aside className="snapshot-banner" aria-label="Historical dataset notice"><span className="source-badge source-badge--historical">Historical snapshot</span><p><strong>{activity.dataset_name ?? "CityScope mobility dataset"}</strong> · {activity.observation_period}. This is not live cycling behaviour. {activity.attribution_text}</p></aside>}

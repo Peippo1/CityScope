@@ -31,3 +31,11 @@ def log_configuration_status() -> None:
         LOGGER.warning("CityScope server integrations unavailable; missing configuration: %s", ", ".join(missing))
     else:
         LOGGER.info("CityScope server integration credentials are configured")
+
+
+def configured_origins() -> list[str]:
+    return [origin.strip() for origin in os.getenv("CITYSCOPE_WEB_ORIGIN", "http://localhost:3000").split(",") if origin.strip()]
+
+
+def trusted_hosts() -> list[str]:
+    return [host.strip() for host in os.getenv("CITYSCOPE_TRUSTED_HOSTS", "localhost,127.0.0.1,testserver").split(",") if host.strip()]

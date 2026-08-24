@@ -18,7 +18,8 @@ def get_activity(city: str, limit: int = Query(default=100, ge=1, le=500)) -> Ac
     fixture_metadata = ROOT / "data" / "metadata" / "london-cycling-fixture.json"
     metadata_path = production_metadata if production_metadata.exists() else fixture_metadata
     metadata = json.loads(metadata_path.read_text())
-    parquet = ROOT / "data" / "generated" / "london_cycling_activity.parquet"
+    production_journeys = ROOT / "data" / "generated" / "london_cycling_production_journeys.parquet"
+    parquet = ROOT / "data" / "generated" / ("london_cycling_activity.parquet" if production_metadata.exists() and production_journeys.exists() else "london_cycling_fixture_activity.parquet")
     if not parquet.exists():
         raise HTTPException(status_code=503, detail="Dataset artifact is not built")
     return ActivityResponse(

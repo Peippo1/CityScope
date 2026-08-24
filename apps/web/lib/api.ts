@@ -18,3 +18,25 @@ export async function investigate(request: InvestigationRequest): Promise<Invest
   if (!response.ok) throw new Error("CityScope investigation could not be completed");
   return response.json() as Promise<InvestigationResult>;
 }
+
+export type SavedInvestigation = {
+  id: string;
+  question: string;
+  selected_h3_cells: string[];
+  status: InvestigationResult["status"];
+  summary: string;
+  dataset_snapshot_id?: string | null;
+  dataset_name?: string | null;
+  historical_evidence: InvestigationResult["evidence"];
+  created_at: string;
+};
+
+export async function saveInvestigation(request: InvestigationRequest, result: InvestigationResult, idToken: string): Promise<SavedInvestigation> {
+  const response = await fetch(`${API_URL}/me/investigations`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ request, result }),
+  });
+  if (!response.ok) throw new Error("CityScope could not save this investigation");
+  return response.json() as Promise<SavedInvestigation>;
+}

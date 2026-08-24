@@ -1,0 +1,15 @@
+.gcloudignore
+.git
+.venv
+.pytest_cache
+__pycache__/
+*.pyc
+.env
+.env.*
+apps/web/node_modules/
+apps/web/.next/
+apps/web/test-results/
+apps/web/playwright-report/
+data/raw/
+data/quarantine/
+security_best_practices_report.md
