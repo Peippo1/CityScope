@@ -8,7 +8,7 @@ CityScope is an agentic geospatial intelligence application for investigating hi
 fixture CSV -> validation/transform -> H3 -> Parquet -> DuckDB -> FastAPI -> Next.js -> map layer
 ```
 
-The investigation slice deliberately does not include Google Places, Maps Grounding MCP, SSE, follow-ups, ranking, or authentication.
+The current investigation slice supports historical activity questions, bounded Google Maps Grounding place context, and deterministic bicycle routes through the private Routes API adapter. Authentication, durable investigations, weather, and open-ended ranking remain out of scope.
 
 ## Run the data pipeline
 
@@ -47,10 +47,16 @@ npm run dev
 
 Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` for a live Google Map. Without it, the page shows a clearly labelled map placeholder while still rendering the activity list.
 
+The responsive investigation workspace keeps historical TfL evidence, current Google Maps context, and route provenance visually separate. Raw H3 and trace detail are available under the evidence disclosure rather than leading the consumer-facing result.
+
 ## Test
 
 ```bash
 pytest
+cd apps/web
+npm test
+npm run test:e2e
+npm run build
 ```
 
 Run the Python dependency audit from the development environment:

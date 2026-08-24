@@ -16,6 +16,6 @@ export type InvestigationResult = {
   route?: { travel_mode: "bicycle"; distance_m: number; duration_seconds: number; polyline: string; origin: { name: string; place_id?: string; latitude: number; longitude: number; maps_uri?: string }; destination: { name: string; place_id?: string; latitude: number; longitude: number; maps_uri?: string }; waypoints: { h3_cell: string; latitude: number; longitude: number; mobility_value: number; score: number; reason: string }[]; source: "google_routes_api"; attribution_title?: string; attribution_url?: string; warning: string };
   map_layers: { h3_cell: string; metric: string; value: number; rank?: number }[];
   limitations: string[];
-  trace: { kind: string; label: string; status: string; tool?: string; result_count?: number; latency_ms?: number }[];
+  trace: { kind: string; label: string; status: string; tool?: string; result_count?: number; latency_ms?: number; policy_code?: string; call_number?: number; budget_limit?: number }[];
   follow_up_suggestions: string[];
 };

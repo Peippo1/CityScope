@@ -33,6 +33,9 @@ jobs:
       - name: npm dependency audit
         working-directory: apps/web
         run: npm audit --audit-level=high
+      - name: Frontend component tests
+        working-directory: apps/web
+        run: npm test
       - name: Install Chromium for mocked UI tests
         working-directory: apps/web
         run: npx playwright install --with-deps chromium
