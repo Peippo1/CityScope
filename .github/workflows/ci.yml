@@ -8,8 +8,8 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Install Python development dependencies
@@ -22,7 +22,7 @@ jobs:
         run: python -m evals.agent.runner --json-output /tmp/cityscope-eval-report.json
       - name: Python dependency audit
         run: pip-audit --skip-editable
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
           cache: npm
