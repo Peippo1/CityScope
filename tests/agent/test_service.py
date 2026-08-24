@@ -8,6 +8,7 @@ import time
 from apps.api.app.agent.schemas import InvestigationRequest, ToolDecision
 from apps.api.app.agent.places import MapsSearchResult
 from apps.api.app.agent.model import GeminiInvestigationModel
+from apps.api.app.agent.route_service import ResolvedPlace, RouteDetails
 from apps.api.app.agent.service import InvestigationService
 from services.city_data_mcp.schemas import DatasetMetadata, Evidence, MapLayer, ToolEnvelope
 
@@ -66,6 +67,30 @@ class FakeMaps:
             "place_id": f"place-{category}", "name": "Example Cafe", "latitude": 51.5, "longitude": -0.1,
             "maps_uri": "https://maps.google.com/example", "category": category, "h3_cell": cell,
         }]})
+
+    async def resolve_location(self, query: str) -> ResolvedPlace:
+        raise NotImplementedError
+
+
+class RouteMaps(FakeMaps):
+    def __init__(self) -> None:
+        super().__init__()
+        self.resolution_calls: list[str] = []
+
+    async def resolve_location(self, query: str) -> ResolvedPlace:
+        self.resolution_calls.append(query)
+        if query == "King's Cross":
+            return ResolvedPlace(name=query, place_id="place-origin", latitude=51.5308, longitude=-0.1238, maps_uri="https://maps.google.com/origin")
+        return ResolvedPlace(name=query, place_id="place-destination", latitude=51.5033, longitude=-0.1195, maps_uri="https://maps.google.com/destination")
+
+
+class FakeRouteService:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, int]] = []
+
+    async def compute_bicycle_route(self, origin, destination, waypoints):
+        self.calls.append((origin.place_id or "", destination.place_id or "", len(waypoints)))
+        return RouteDetails(distance_m=2400, duration_seconds=900, polyline="encoded-route", origin=origin, destination=destination, waypoints=waypoints)
 
 
 class ConcurrentMaps(FakeMaps):
@@ -186,6 +211,25 @@ def test_maps_failure_returns_partial_historical_result_without_places() -> None
     assert result.status == "partial"
     assert result.places == []
     assert any("unavailable" in limitation for limitation in result.limitations)
+
+
+def test_route_intent_executes_city_data_then_private_route_adapter_without_routes_tool() -> None:
+    mcp = FakeMcp()
+    maps = RouteMaps()
+    route_service = FakeRouteService()
+    service = InvestigationService(mcp_client=mcp, maps_client=maps, route_service=route_service, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "King's Cross", "destination": "Borough"}),
+    ]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(question="How can I cycle from King's Cross to Borough?")))
+
+    assert result.status == "answered"
+    assert maps.resolution_calls == ["King's Cross", "Borough"]
+    assert mcp.calls == [("find_hotspots", {"city": "london", "metric": "total_activity", "limit": 10, "time_filter": {}})]
+    assert route_service.calls == [("place-origin", "place-destination", 0)]
+    assert result.route is not None and result.route.polyline == "encoded-route"
+    assert all("secret" not in event.label for event in result.trace)
+    assert "compute_routes" not in {event.tool for event in result.trace}
 
 
 def test_agent_enforces_three_round_budget() -> None:

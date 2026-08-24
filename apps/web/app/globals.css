@@ -23,4 +23,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 24px; }
 .investigation-result { margin-top: 16px; border-top: 1px solid #edf0f2; padding-top: 12px; }
 .investigation-result h3 { font-size: 15px; margin-bottom: 6px; }
 .investigation-result ul, .investigation-result ol { margin-top: 6px; }
+.result-section { border-top: 1px solid #edf0f2; margin-top: 14px; padding-top: 10px; }
+.result-section h4 { margin: 10px 0 4px; font-size: 14px; }
+.answer { font-size: 17px; line-height: 1.45; }
 @media (max-width: 760px) { main { padding: 12px; } .layout { grid-template-columns: 1fr; } .map, .map-placeholder { min-height: 420px; } }

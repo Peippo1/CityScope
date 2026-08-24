@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import pytest
 
 from apps.api.app.agent.route_service import GoogleRoutesService, RouteLocation, RouteWaypoint, select_waypoints
 
@@ -42,3 +43,20 @@ def test_routes_request_is_bicycle_and_uses_place_ids(monkeypatch) -> None:
     assert captured["json"]["intermediates"][0]["location"]["latLng"]["latitude"] == waypoint.latitude
     assert "routes.polyline.encodedPolyline" in captured["headers"]["X-Goog-FieldMask"]
     assert result.polyline == "abc"
+
+
+def test_routes_rejects_missing_geometry(monkeypatch) -> None:
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return {"routes": [{"distanceMeters": 2400, "duration": "900s", "polyline": {}}]}
+
+    class Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def post(self, url, json, headers): return Response()
+
+    monkeypatch.setattr("apps.api.app.agent.route_service.httpx.AsyncClient", lambda **kwargs: Client())
+    origin = RouteLocation(name="Origin", latitude=51.5, longitude=-0.1)
+    destination = RouteLocation(name="Destination", latitude=51.51, longitude=-0.09)
+    with pytest.raises(RuntimeError, match="invalid bicycle route"):
+        asyncio.run(GoogleRoutesService(api_key="test").compute_bicycle_route(origin, destination, []))

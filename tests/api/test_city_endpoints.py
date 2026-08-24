@@ -35,3 +35,19 @@ def test_investigation_request_rejects_unsupported_city_before_agent_execution()
     response = TestClient(app).post("/investigate", json={"city": "paris", "question": "What are the hotspots?"})
 
     assert response.status_code == 422
+
+
+def test_health_reports_configuration_without_secret_values(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_MAPS_GROUNDING_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_MAPS_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_ROUTES_API_KEY", raising=False)
+
+    response = TestClient(app).get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "status": "degraded",
+        "missing_configuration": "GEMINI_API_KEY, GOOGLE_MAPS_GROUNDING_API_KEY or GOOGLE_MAPS_API_KEY, GOOGLE_ROUTES_API_KEY or GOOGLE_MAPS_API_KEY",
+    }
+    assert "AIza" not in response.text

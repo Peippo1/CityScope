@@ -5,8 +5,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .routes.cities import router as cities_router
 from .routes.investigations import router as investigations_router
+from . import config
 
 app = FastAPI(title="CityScope API", version="0.1.0")
+config.log_configuration_status()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[os.getenv("CITYSCOPE_WEB_ORIGIN", "http://localhost:3000")],
@@ -20,4 +22,5 @@ app.include_router(investigations_router)
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok"}
+    missing = config.missing_server_credentials()
+    return {"status": "ok" if not missing else "degraded", "missing_configuration": ", ".join(missing) if missing else "none"}
