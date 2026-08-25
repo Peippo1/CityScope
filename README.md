@@ -1,68 +1,145 @@
 # CityScope
 
-CityScope is an agentic geospatial intelligence application for investigating historical London cycling activity. This repository contains a deterministic H3/DuckDB data slice plus a bounded natural-language investigation layer that consumes the City Data MCP over Streamable HTTP.
+**Evidence-grounded geospatial intelligence for London cycling activity.**
 
-## First vertical slice
+[![CityScope checks](https://github.com/Peippo1/CityScope/actions/workflows/ci.yml/badge.svg)](https://github.com/Peippo1/CityScope/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=nextdotjs)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-Auth%20%2B%20Firestore-FFCA28?logo=firebase&logoColor=black)
+![Google Cloud](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run%20%2B%20Maps-4285F4?logo=googlecloud&logoColor=white)
+![License](https://img.shields.io/badge/license-private-lightgrey)
+
+CityScope turns natural-language questions into bounded, traceable investigations over historical London cycling data. It combines deterministic H3 and DuckDB analytics with a guarded Gemini planning layer, current Google Maps context, bicycle routing, and user-owned investigation history.
+
+The current vertical slice can:
+
+- rank and compare historical cycling activity across H3 cells;
+- enrich trusted areas with current Google Maps place context;
+- compute deterministic bicycle routes through selected activity areas;
+- show source-tagged evidence, dataset provenance, limitations, and execution traces;
+- authenticate users with Google and save investigations through a Firebase-token-verified API.
+
+> CityScope currently covers a pinned May 2026 TfL cycling snapshot for London. It does not claim live cycling conditions, weather, traffic, forecasts, or support for other cities.
+
+## Architecture
+
+[Open the editable system architecture and investigation flow in FigJam](https://www.figma.com/board/qfv9Yo1Z88fcn7FBArJeTG)
+
+```mermaid
+flowchart LR
+    user["Browser"] --> web["Next.js web app"]
+    web -->|"HTTPS + JSON"| api["FastAPI API"]
+    web -.->|"Google sign-in"| auth["Firebase Authentication"]
+
+    api -->|"Bounded MCP tools"| mcp["City Data MCP"]
+    mcp -->|"DuckDB queries"| data[("Versioned Parquet + metadata")]
+    api -->|"User-owned records"| firestore[("Firestore")]
+    api -.->|"Verify ID token"| auth
+    api -.->|"Structured planning"| gemini["Gemini"]
+    api -.->|"Place context"| maps["Maps Grounding Lite"]
+    api -.->|"Bicycle route"| routes["Google Routes API"]
+
+    tfl["TfL snapshots"] --> pipeline["Validation + H3 pipeline"]
+    pipeline --> data
+```
+
+The FastAPI service is the trust boundary. Browser Firestore access is denied; authenticated history operations pass a Firebase ID token to the API, which verifies ownership before reading or writing Firestore. The City Data MCP remains deterministic and private behind the API.
+
+## Data Flow
 
 ```text
-fixture CSV -> validation/transform -> H3 -> Parquet -> DuckDB -> FastAPI -> Next.js -> map layer
+TfL snapshot -> validate and normalize -> H3 aggregation -> Parquet -> DuckDB
+                                                               |
+question -> guarded planner -> City Data MCP -------------------+
+                          \-> Maps and Routes -> evidence-grounded result
 ```
 
-The current investigation slice supports historical activity questions, bounded Google Maps Grounding place context, and deterministic bicycle routes through the private Routes API adapter. Authentication, durable investigations, weather, and open-ended ranking remain out of scope.
+Generated artifacts retain checksums, reconciliation counts, observation period, source attribution, and snapshot metadata. Large raw and generated datasets are intentionally excluded from Git.
 
-## Run the data pipeline
+## Quick Start
 
-```bash
-python3 -m pip install -e '.[dev]'
-python3 -m pipelines.london_cycling.build_fixture
-# With the ignored TfL raw snapshot acquired:
-python3 -m pipelines.build_production
-```
+Prerequisites: Python 3.11+, Node.js 20+, and npm.
 
-The production build reads the pinned May 2026 TfL snapshot from `data/raw/tfl/may-2026/`, writes versioned Parquet artifacts under `data/generated/`, writes unmatched/invalid rows under `data/quarantine/`, and records checksums and reconciliation counts in `data/metadata/london-cycling-production.json`.
-
-## Run the API
+Install dependencies and build the deterministic fixture:
 
 ```bash
-uvicorn apps.api.app.main:app --reload --port 8000
-```
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+python -m pipelines.london_cycling.build_fixture
 
-The API loads the repository-root `.env.local` automatically, regardless of the directory from which `uvicorn` is launched. Keep that file local and use `GOOGLE_MAPS_GROUNDING_API_KEY` for the server-side Maps Grounding key; `GOOGLE_MAPS_API_KEY` remains supported as a backwards-compatible fallback.
-
-Run the City Data MCP in a second process before using `/investigate`:
-
-```bash
-uvicorn services.city_data_mcp.server:app --reload --port 8001
-```
-
-Configure `GEMINI_API_KEY` for the Gemini structured-output planner. Grounding MCP remains the place-search adapter; bicycle routes use the private Routes API adapter and are never exposed as a Gemini tool. See [docs/investigations.md](docs/investigations.md) and [ADR-004](docs/decisions/ADR-004-cityscope-google-routes-api.md).
-
-## Run the web app
-
-```bash
 cd apps/web
 npm install
+cd ../..
+```
+
+Create `.env.local` from [`.env.example`](.env.example) and add only the providers you intend to use. Browser configuration belongs in `apps/web/.env.local`; never place server credentials in a `NEXT_PUBLIC_*` variable.
+
+Start the three processes in separate terminals from the repository root:
+
+```bash
+# Terminal 1: deterministic City Data MCP
+.venv/bin/uvicorn services.city_data_mcp.server:app --reload --port 8001
+
+# Terminal 2: public API
+.venv/bin/uvicorn apps.api.app.main:app --reload --port 8000
+
+# Terminal 3: web app
+cd apps/web
 npm run dev
 ```
 
-Set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` for a live Google Map. Without it, the page shows a clearly labelled map placeholder while still rendering the activity list.
+Open the URL printed by Next.js. Check API configuration at `http://localhost:8000/health` and dataset readiness at `http://localhost:8000/ready`.
 
-The responsive investigation workspace keeps historical TfL evidence, current Google Maps context, and route provenance visually separate. Raw H3 and trace detail are available under the evidence disclosure rather than leading the consumer-facing result.
+### Configuration
 
-## Test
+Server-side configuration includes:
+
+- `GEMINI_API_KEY` for structured investigation planning;
+- `GOOGLE_MAPS_GROUNDING_API_KEY` for place search and endpoint resolution;
+- `GOOGLE_ROUTES_API_KEY` for bicycle routing;
+- `FIREBASE_PROJECT_ID` for token verification and saved investigations;
+- `CITYSCOPE_CITY_DATA_MCP_URL` for the private MCP endpoint.
+
+The web app uses separately restricted public configuration:
+
+- `NEXT_PUBLIC_CITYSCOPE_API_URL`;
+- `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`;
+- `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, and `NEXT_PUBLIC_FIREBASE_APP_ID`.
+
+Without a browser Maps key, CityScope keeps the ranked textual experience available and displays a labelled map placeholder. Missing server providers produce bounded degraded or partial states rather than ungrounded answers.
+
+## Repository Map
+
+| Path | Responsibility |
+| --- | --- |
+| `apps/web` | Next.js investigation workspace, map, Firebase client auth |
+| `apps/api` | FastAPI routes, policy boundary, agent orchestration, saved history |
+| `services/city_data_mcp` | Stateless MCP tools over deterministic city analytics |
+| `pipelines` | Source adapters, validation, H3 transforms, artifact builds |
+| `evals` | Deterministic agent regression cases and runner |
+| `docs` | Architecture decisions, deployment, data provenance, privacy |
+
+## Verification
 
 ```bash
-pytest
+pytest -q
+python -m evals.agent.runner --json-output /tmp/cityscope-eval-report.json
+
 cd apps/web
 npm test
 npm run test:e2e
 npm run build
 ```
 
-Run the Python dependency audit from the development environment:
+CI also runs Python and npm dependency audits and whitespace checks. Live Gemini, Maps, and Routes smoke tests are deliberately opt-in so routine test runs do not consume provider quota.
 
-```bash
-pip-audit
-```
+## Documentation
 
-The small fixture remains useful for fast tests. The production/demo dataset is the authoritative TfL May 2026 snapshot documented in [docs/data-foundation.md](docs/data-foundation.md). Large raw and generated artifacts are intentionally excluded from Git.
+- [Investigation model and guardrails](docs/investigations.md)
+- [Data foundation and provenance](docs/data-foundation.md)
+- [Cloud Run deployment runbook](docs/deployment.md)
+- [Hackathon demo flow](docs/hackathon-demo.md)
+- [Privacy and saved-investigation handling](docs/privacy.md)
+- [Architecture decisions](docs/decisions)
