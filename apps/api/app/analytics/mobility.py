@@ -138,7 +138,8 @@ class MobilityAnalytics:
             params.append(time_filter.time_of_day)
         where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
         sql = "SELECT trip_id, origin_h3, destination_h3 FROM read_parquet(?)" + where
-        return duckdb.sql(sql, params=params).df()
+        with duckdb.connect() as connection:
+            return connection.execute(sql, params).df()
 
     @staticmethod
     def _metric_values(frame: pd.DataFrame, metrics: Iterable[MetricName]) -> dict[str, dict[str, int | float]]:

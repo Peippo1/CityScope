@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from pipelines.london_cycling.build_fixture import main as build_fixture
+from apps.api.app import config
 from apps.api.app.main import app
 
 
@@ -29,6 +30,22 @@ def test_activity_limit_is_validated():
     response = TestClient(app).get("/cities/london/activity?limit=0")
 
     assert response.status_code == 422
+
+
+def test_local_nextjs_fallback_port_is_allowed_by_cors():
+    response = TestClient(app).get(
+        "/cities/london/activity?limit=1",
+        headers={"Origin": "http://localhost:3001"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3001"
+
+
+def test_production_origin_does_not_enable_local_cors_regex(monkeypatch):
+    monkeypatch.setenv("CITYSCOPE_WEB_ORIGIN", "https://cityscope.example")
+
+    assert config.configured_origin_regex() is None
 
 
 def test_investigation_request_rejects_unsupported_city_before_agent_execution():

@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from apps.api.app.auth import CurrentUser, get_current_user
-from apps.api.app.history import InMemoryInvestigationStore, get_history_store
+from apps.api.app.history import FirestoreInvestigationStore, InMemoryInvestigationStore, SavedInvestigationCreate, get_history_store
 from apps.api.app.main import app
 
 
@@ -46,3 +46,51 @@ def test_saved_investigations_require_a_verified_identity():
     response = client.get("/me/investigations")
     assert response.status_code == 401
 
+
+def test_firestore_operations_use_bounded_deadlines():
+    calls: list[tuple[str, float | None]] = []
+
+    class Snapshot:
+        exists = True
+
+        def to_dict(self):
+            return {"owner_uid": "judge-a", **created.model_dump(mode="json")}
+
+    class Document:
+        id = "firestore-record"
+
+        def set(self, value, timeout=None):
+            calls.append(("set", timeout))
+
+        def get(self, timeout=None):
+            calls.append(("get", timeout))
+            return Snapshot()
+
+        def delete(self, timeout=None):
+            calls.append(("delete", timeout))
+
+    class Collection:
+        def document(self, investigation_id=None):
+            return Document()
+
+        def where(self, *args, **kwargs):
+            return self
+
+        def stream(self, timeout=None):
+            calls.append(("stream", timeout))
+            return iter([Snapshot()])
+
+    class Client:
+        def collection(self, name):
+            return Collection()
+
+    store = FirestoreInvestigationStore.__new__(FirestoreInvestigationStore)
+    store.client = Client()
+    user = CurrentUser(uid="judge-a")
+    saved_payload = SavedInvestigationCreate.model_validate(payload())
+    created = store.create(user, saved_payload)
+
+    assert store.list(user)
+    assert store.get(user, created.id)
+    assert store.delete(user, created.id) is True
+    assert calls == [("set", 10.0), ("stream", 10.0), ("get", 10.0), ("get", 10.0), ("delete", 10.0)]

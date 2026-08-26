@@ -15,6 +15,7 @@ config.log_configuration_status()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.configured_origins(),
+    allow_origin_regex=config.configured_origin_regex(),
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Authorization"],

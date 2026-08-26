@@ -1,0 +1,17 @@
+.git
+.venv
+.pytest_cache
+**/__pycache__
+*.pyc
+*.egg-info
+.env
+.env.*
+**/.env.local
+**/.env.*.local
+apps/web/node_modules
+apps/web/.next
+apps/web/out
+apps/web/test-results
+apps/web/playwright-report
+data/raw
+data/quarantine

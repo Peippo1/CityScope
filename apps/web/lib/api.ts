@@ -3,20 +3,27 @@ import type { InvestigationRequest, InvestigationResult } from "../types/investi
 
 const API_URL = process.env.NEXT_PUBLIC_CITYSCOPE_API_URL ?? "http://localhost:8000";
 
+async function apiRequest<T>(path: string, init: RequestInit | undefined, failureMessage: string): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, init);
+  } catch {
+    throw new Error("CityScope API is unreachable. Check the API service and try again.");
+  }
+  if (!response.ok) throw new Error(`${failureMessage} (${response.status})`);
+  return response.json() as Promise<T>;
+}
+
 export async function getLondonActivity(): Promise<ActivityResponse> {
-  const response = await fetch(`${API_URL}/cities/london/activity`, { cache: "no-store" });
-  if (!response.ok) throw new Error("CityScope activity data could not be loaded");
-  return response.json() as Promise<ActivityResponse>;
+  return apiRequest("/cities/london/activity", { cache: "no-store" }, "CityScope activity data could not be loaded");
 }
 
 export async function investigate(request: InvestigationRequest): Promise<InvestigationResult> {
-  const response = await fetch(`${API_URL}/investigate`, {
+  return apiRequest("/investigate", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(request),
-  });
-  if (!response.ok) throw new Error("CityScope investigation could not be completed");
-  return response.json() as Promise<InvestigationResult>;
+  }, "CityScope investigation could not be completed");
 }
 
 export type SavedInvestigation = {
@@ -32,11 +39,9 @@ export type SavedInvestigation = {
 };
 
 export async function saveInvestigation(request: InvestigationRequest, result: InvestigationResult, idToken: string): Promise<SavedInvestigation> {
-  const response = await fetch(`${API_URL}/me/investigations`, {
+  return apiRequest("/me/investigations", {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${idToken}` },
     body: JSON.stringify({ request, result }),
-  });
-  if (!response.ok) throw new Error("CityScope could not save this investigation");
-  return response.json() as Promise<SavedInvestigation>;
+  }, "CityScope could not save this investigation");
 }

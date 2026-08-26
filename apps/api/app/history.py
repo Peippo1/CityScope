@@ -79,6 +79,7 @@ class InMemoryInvestigationStore:
 
 class FirestoreInvestigationStore:
     collection_name = "saved_investigations"
+    timeout_seconds = 10.0
 
     def __init__(self) -> None:
         try:
@@ -90,25 +91,37 @@ class FirestoreInvestigationStore:
     def create(self, user: CurrentUser, payload: SavedInvestigationCreate) -> SavedInvestigation:
         document = self.client.collection(self.collection_name).document()
         record = _record(payload, document.id)
-        document.set({"owner_uid": user.uid, **record.model_dump(mode="json")})
+        try:
+            document.set({"owner_uid": user.uid, **record.model_dump(mode="json")}, timeout=self.timeout_seconds)
+        except Exception:
+            raise HTTPException(status_code=503, detail="Saved investigations are temporarily unavailable") from None
         return record
 
     def list(self, user: CurrentUser) -> list[SavedInvestigation]:
-        documents = self.client.collection(self.collection_name).where("owner_uid", "==", user.uid).stream()
-        return sorted((SavedInvestigation.model_validate(document.to_dict()) for document in documents), key=lambda record: record.created_at, reverse=True)
+        try:
+            documents = self.client.collection(self.collection_name).where("owner_uid", "==", user.uid).stream(timeout=self.timeout_seconds)
+            return sorted((SavedInvestigation.model_validate(document.to_dict()) for document in documents), key=lambda record: record.created_at, reverse=True)
+        except Exception:
+            raise HTTPException(status_code=503, detail="Saved investigations are temporarily unavailable") from None
 
     def get(self, user: CurrentUser, investigation_id: str) -> SavedInvestigation | None:
-        document = self.client.collection(self.collection_name).document(investigation_id).get()
-        payload = document.to_dict() if document.exists else None
-        return SavedInvestigation.model_validate(payload) if payload and payload.get("owner_uid") == user.uid else None
+        try:
+            document = self.client.collection(self.collection_name).document(investigation_id).get(timeout=self.timeout_seconds)
+            payload = document.to_dict() if document.exists else None
+            return SavedInvestigation.model_validate(payload) if payload and payload.get("owner_uid") == user.uid else None
+        except Exception:
+            raise HTTPException(status_code=503, detail="Saved investigations are temporarily unavailable") from None
 
     def delete(self, user: CurrentUser, investigation_id: str) -> bool:
         document = self.client.collection(self.collection_name).document(investigation_id)
-        payload = document.get().to_dict()
-        if not payload or payload.get("owner_uid") != user.uid:
-            return False
-        document.delete()
-        return True
+        try:
+            payload = document.get(timeout=self.timeout_seconds).to_dict()
+            if not payload or payload.get("owner_uid") != user.uid:
+                return False
+            document.delete(timeout=self.timeout_seconds)
+            return True
+        except Exception:
+            raise HTTPException(status_code=503, detail="Saved investigations are temporarily unavailable") from None
 
 
 def get_history_store() -> InvestigationStore:

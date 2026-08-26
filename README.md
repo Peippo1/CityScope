@@ -76,7 +76,13 @@ cd ../..
 
 Create `.env.local` from [`.env.example`](.env.example) and add only the providers you intend to use. Browser configuration belongs in `apps/web/.env.local`; never place server credentials in a `NEXT_PUBLIC_*` variable.
 
-Start the three processes in separate terminals from the repository root:
+Start the complete local stack from the repository root:
+
+```bash
+python scripts/dev.py
+```
+
+The supervisor stops the whole stack if any service exits, preventing a web-only partial startup. It forwards only `NEXT_PUBLIC_*` values from the root `.env.local` to Next.js; server credentials are not passed to the web process. To run services independently, use three terminals:
 
 ```bash
 # Terminal 1: deterministic City Data MCP

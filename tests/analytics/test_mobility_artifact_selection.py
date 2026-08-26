@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import json
 
 import pandas as pd
@@ -28,3 +29,13 @@ def test_clean_checkout_uses_fixture_when_production_artifact_is_absent(tmp_path
 
     assert analytics.metadata_path.name == "london-cycling-fixture.json"
     assert analytics.find_hotspots("london", "total_activity", TimeFilter(), 1)[0]["value"] == 2
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(
+            executor.map(
+                lambda _: analytics.find_hotspots("london", "total_activity", TimeFilter(), 1),
+                range(32),
+            )
+        )
+
+    assert all(result[0]["value"] == 2 for result in results)

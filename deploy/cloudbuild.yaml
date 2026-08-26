@@ -1,0 +1,16 @@
+substitutions:
+  _DOCKERFILE: deploy/Dockerfile.api
+  _IMAGE: europe-west2-docker.pkg.dev/cityscope-506222/cityscope/api:latest
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --file
+      - ${_DOCKERFILE}
+      - --tag
+      - ${_IMAGE}
+      - .
+
+images:
+  - ${_IMAGE}

@@ -1,5 +1,66 @@
 # CityScope demo deployment runbook
 
+## Deployment topology
+
+- Firebase Hosting serves the static Next.js export.
+- A public Cloud Run service hosts the FastAPI API.
+- A private, internal-ingress Cloud Run service hosts City Data MCP.
+- Artifact Registry stores both container images in `europe-west2`.
+- Secret Manager supplies only server-side Gemini and Google API keys.
+
+Cloud Run, Artifact Registry, Cloud Build, and Secret Manager require billing on the GCP project. Link a billing account to `cityscope-506222` before running the one-time setup below.
+
+## One-time GCP setup
+
+```bash
+gcloud services enable \
+  run.googleapis.com \
+  artifactregistry.googleapis.com \
+  cloudbuild.googleapis.com \
+  secretmanager.googleapis.com \
+  --project cityscope-506222
+
+gcloud artifacts repositories create cityscope \
+  --repository-format docker \
+  --location europe-west2 \
+  --project cityscope-506222
+```
+
+Create separate least-privilege service accounts for the API and MCP before deploying. The API account needs `roles/run.invoker` on the MCP service and Firestore access; the MCP account does not need access to Firebase or provider secrets.
+
+## Build container images
+
+The generated production Parquet and metadata artifacts are part of both build contexts. Verify them before spending a remote build:
+
+```bash
+.venv/bin/python scripts/verify_deployment_artifact.py
+
+gcloud builds submit \
+  --config deploy/cloudbuild.yaml \
+  --substitutions _DOCKERFILE=deploy/Dockerfile.mcp,_IMAGE=europe-west2-docker.pkg.dev/cityscope-506222/cityscope/mcp:latest \
+  --project cityscope-506222
+
+gcloud builds submit \
+  --config deploy/cloudbuild.yaml \
+  --substitutions _DOCKERFILE=deploy/Dockerfile.api,_IMAGE=europe-west2-docker.pkg.dev/cityscope-506222/cityscope/api:latest \
+  --project cityscope-506222
+```
+
+Deploy MCP first with internal ingress and authentication required. Deploy the API second, granting its service account permission to invoke MCP and setting `CITYSCOPE_CITY_DATA_MCP_URL` plus `CITYSCOPE_CITY_DATA_MCP_ID_TOKEN_AUDIENCE` to the MCP service URL.
+
+## Publish Firebase Hosting
+
+Build the static web app only after the public API URL is known. The wrapper forwards `NEXT_PUBLIC_*` values from the root `.env.local` without passing server credentials to Next.js:
+
+```bash
+NEXT_PUBLIC_CITYSCOPE_API_URL=https://API_SERVICE_URL \
+  .venv/bin/python scripts/build_web.py
+
+npx firebase-tools deploy --only hosting --project cityscope-506222
+```
+
+The default Hosting URL is `https://cityscope-506222.web.app`. Add that origin to `CITYSCOPE_WEB_ORIGIN` on the API and confirm it appears in Firebase Authentication's authorized domains before the public smoke test.
+
 ## Required configuration
 
 Keep these server-only values in the API environment, never in the web app:
