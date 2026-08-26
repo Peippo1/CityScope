@@ -2,10 +2,27 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Loader } from "@googlemaps/js-api-loader";
+import type { FocusedMapPlace } from "../map/CityMap";
 
-type PlacesExplorerProps = { cityName: string; bounds: [number, number, number, number] };
+type PlacesExplorerProps = {
+  cityName: string;
+  bounds: [number, number, number, number];
+  onPlacesChange?: (places: FocusedMapPlace[]) => void;
+  onSelectPlace?: (place: FocusedMapPlace) => void;
+};
 
-export function PlacesExplorer({ cityName, bounds }: PlacesExplorerProps) {
+function toMapPlace(place: google.maps.places.Place): FocusedMapPlace | null {
+  if (!place.location) return null;
+  return {
+    place_id: place.id,
+    name: place.displayName ?? "Google Maps place",
+    latitude: place.location.lat(),
+    longitude: place.location.lng(),
+    maps_uri: place.googleMapsURI ?? undefined,
+  };
+}
+
+export function PlacesExplorer({ cityName, bounds, onPlacesChange, onSelectPlace }: PlacesExplorerProps) {
   const host = useRef<HTMLDivElement>(null);
   const searchRequest = useRef<google.maps.places.PlaceTextSearchRequestElement | null>(null);
   const [query, setQuery] = useState("cafes");
@@ -16,7 +33,7 @@ export function PlacesExplorer({ cityName, bounds }: PlacesExplorerProps) {
     const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (!host.current || !key) return;
     let cancelled = false;
-    const loader = new Loader({ apiKey: key, version: "weekly", libraries: ["places"] });
+    const loader = new Loader({ apiKey: key, version: "weekly", libraries: ["geometry", "places"] });
 
     loader.load().then(async (google) => {
       if (!host.current || cancelled) return;
@@ -30,15 +47,24 @@ export function PlacesExplorer({ cityName, bounds }: PlacesExplorerProps) {
       };
       search.append(request);
       search.append(document.createElement("gmp-place-all-content"));
-      search.addEventListener("gmp-select", ((event: google.maps.places.PlaceSelectEvent) => {
-        setSelectedPlace(event.place);
-      }) as EventListener);
+      search.addEventListener("gmp-load", () => {
+        if (cancelled) return;
+        onPlacesChange?.(search.places.map(toMapPlace).filter((place): place is FocusedMapPlace => place !== null));
+      });
+      search.addEventListener("gmp-select", (event: Event) => {
+        const place = (event as google.maps.places.PlaceSelectEvent).place;
+        const mapPlace = toMapPlace(place);
+        if (cancelled || !mapPlace) return;
+        setSelectedPlace(place);
+        onSelectPlace?.(mapPlace);
+      });
+      search.addEventListener("gmp-error", () => { if (!cancelled) setLoadError(true); });
       searchRequest.current = request;
       host.current.replaceChildren(search);
     }).catch(() => { if (!cancelled) setLoadError(true); });
 
     return () => { cancelled = true; host.current?.replaceChildren(); searchRequest.current = null; };
-  }, [cityName, bounds]);
+  }, [cityName, bounds, onPlacesChange, onSelectPlace]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

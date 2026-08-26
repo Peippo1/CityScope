@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getCityActivity, getCityComparison, getParisLiveNetwork, investigate } from "../../lib/api";
 import type { ActivityResponse, CityCapability, CityComparison, LiveNetwork } from "../../types/city";
 import type { InvestigationRequest, InvestigationResult } from "../../types/investigation";
-import { CityMap } from "../map/CityMap";
+import { CityMap, type FocusedMapPlace } from "../map/CityMap";
 import { H3ActivityLayer } from "../map/H3ActivityLayer";
 import { ActivityOverview } from "../visualization/ActivityOverview";
 import { DataFlowPanel } from "../visualization/DataFlowPanel";
@@ -54,6 +54,8 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [liveNetwork, setLiveNetwork] = useState<LiveNetwork | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
+  const [currentPlaces, setCurrentPlaces] = useState<FocusedMapPlace[]>([]);
+  const [focusedPlace, setFocusedPlace] = useState<FocusedMapPlace | null>(null);
 
   const loadActivity = useCallback(async () => {
     setActivityLoading(true);
@@ -134,7 +136,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
         <p>Explore matched historical cycling activity across four cities, then inspect Paris as separately labelled live network context.</p>
       </section>
 
-      <label className="city-switcher">City workspace<select value={selectedCity.id} onChange={(event) => { const city = cities.find((item) => item.id === event.target.value) ?? cities[0]; setSelectedCity(city); if (city.id === "paris") changeView("paris"); else changeView("explore"); }}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}{city.live_network ? " (live network)" : ""}</option>)}</select></label>
+      <label className="city-switcher">City workspace<select value={selectedCity.id} onChange={(event) => { const city = cities.find((item) => item.id === event.target.value) ?? cities[0]; setSelectedCity(city); setCurrentPlaces([]); setFocusedPlace(null); if (city.id === "paris") changeView("paris"); else changeView("explore"); }}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}{city.live_network ? " (live network)" : ""}</option>)}</select></label>
 
       {view === "compare" && <section className="standalone-workspace">{comparisonLoading && <div className="inline-loading" aria-live="polite">Calculating normalized May 2026 comparison...</div>}{comparison && <CityComparisonPanel comparison={comparison} metric={comparisonMetric} onMetricChange={(metric) => { setComparisonMetric(metric); void loadComparison(metric); }} />}{comparisonError && <div className="empty-state" role="alert"><p>{comparisonError}</p><button type="button" className="secondary-button" onClick={() => void loadComparison()}>Retry comparison</button></div>}</section>}
       {view === "paris" && <section className="standalone-workspace">{liveLoading && <div className="inline-loading" aria-live="polite">Loading current Paris station availability...</div>}{liveNetwork && <ParisLivePanel network={liveNetwork} />}{liveError && <div className="empty-state" role="alert"><p>{liveError}</p><button type="button" className="secondary-button" onClick={() => void loadParis()}>Retry Paris live network</button></div>}</section>}
@@ -151,16 +153,16 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
 
       <section className="visual-workspace" aria-label={`Interactive ${selectedCity.name} mobility visualizations`}>
         <section className="map-card" aria-labelledby="map-heading">
-          <div className="map-card-heading"><div><p className="eyebrow">Spatial view</p><h2 id="map-heading">{selectedCity.name} activity</h2></div><MapLegend hasPlaces={Boolean(investigation?.places.length)} hasRoute={Boolean(investigation?.route)} /></div>
+          <div className="map-card-heading"><div><p className="eyebrow">Spatial view</p><h2 id="map-heading">{selectedCity.name} activity</h2></div><MapLegend hasPlaces={currentPlaces.length > 0 || Boolean(investigation?.places.length)} hasRoute={Boolean(investigation?.route)} /></div>
           {activityLoading && <div className="map-skeleton" aria-live="polite"><span>Loading {selectedCity.name} activity...</span></div>}
           {activityError && !activityLoading && <div className="empty-state" role="alert"><h3>{selectedCity.name} activity is unavailable</h3><p>{activityError}</p><button type="button" className="secondary-button" onClick={() => void loadActivity()}>Retry {selectedCity.name} activity</button></div>}
-          {!activityLoading && !activityError && <CityMap cells={mapCells} places={investigation?.places} route={investigation?.route} selectedH3Cell={selectedH3Cell} onSelectH3Cell={setSelectedH3Cell} cityName={selectedCity.name} bounds={selectedCity.bounds} />}
+          {!activityLoading && !activityError && <CityMap cells={mapCells} places={[...(investigation?.places ?? []), ...currentPlaces]} focusedPlace={focusedPlace} route={investigation?.route} selectedH3Cell={selectedH3Cell} onSelectH3Cell={setSelectedH3Cell} cityName={selectedCity.name} bounds={selectedCity.bounds} />}
         </section>
 
         <div className="visual-sidebar">
           {activity && <ActivityOverview cells={activity.cells} selectedH3Cell={selectedH3Cell} onSelectH3Cell={setSelectedH3Cell} cityName={selectedCity.name} />}
           <div id="flow"><DataFlowPanel activityLoading={activityLoading} investigating={investigating} result={investigation} snapshotLabel={activity?.dataset_name ?? `${selectedCity.name} historical snapshot`} /></div>
-          <PlacesExplorer cityName={selectedCity.name} bounds={selectedCity.bounds} />
+          <PlacesExplorer cityName={selectedCity.name} bounds={selectedCity.bounds} onPlacesChange={setCurrentPlaces} onSelectPlace={setFocusedPlace} />
         </div>
       </section>
 
