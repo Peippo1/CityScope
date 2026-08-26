@@ -46,10 +46,24 @@ describe("InvestigationResultPanel", () => {
       places: [{ place_id: "place-cafe", name: "Example Café", latitude: 51.51, longitude: -0.115, maps_uri: "https://maps.google.com/example", category: "cafe", h3_cell: "89194ad3353ffff" }],
     }} onSuggestion={vi.fn()} />);
 
-    expect(screen.getByRole("heading", { name: "Historical TfL evidence" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Historical mobility evidence" })).toBeVisible();
     expect(screen.getByRole("heading", { name: "Current Google Maps context" })).toBeVisible();
-    expect(screen.getByText((_, node) => node?.textContent === "cafe · Place ID place-cafe")).toBeVisible();
+    expect(screen.getByText((_, node) => node?.textContent === "Cafe · Google Maps provider result")).toBeVisible();
     expect(screen.getByRole("link", { name: "View on Google Maps" })).toHaveAttribute("href", "https://maps.google.com/example");
+  });
+
+  it("shows each Maps place once when provider results repeat a place identifier", () => {
+    render(<InvestigationResultPanel result={{
+      ...routeResult,
+      route: undefined,
+      evidence: [],
+      places: [
+        { place_id: "repeat-place", name: "Repeated Cafe", latitude: 51.51, longitude: -0.115, category: "cafe", h3_cell: "89194ad3353ffff" },
+        { place_id: "repeat-place", name: "Repeated Cafe", latitude: 51.51, longitude: -0.115, category: "cafe", h3_cell: "89194ad3203ffff" },
+      ],
+    }} onSuggestion={vi.fn()} />);
+
+    expect(screen.getAllByText("Repeated Cafe")).toHaveLength(1);
   });
 
   it("labels unsupported outcomes without rendering credential values", () => {

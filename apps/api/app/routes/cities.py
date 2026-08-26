@@ -1,33 +1,53 @@
-import json
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
-from ..analytics.duckdb_reader import ActivityReader
-from ..schemas import ActivityResponse
+from pipelines.core.analytics_contract import TimeFilter
+
+from ..analytics.mobility import MobilityAnalytics
+from ..agent.live_mcp_client import CityLiveMcpClient
+from ..cities import CITIES, historical_city_ids
+from ..schemas import ActivityCell, ActivityResponse, CitiesResponse, CityCapability, CityComparisonResponse
+
 
 ROOT = Path(__file__).resolve().parents[4]
 router = APIRouter(prefix="/cities", tags=["cities"])
+ANALYTICS = MobilityAnalytics(ROOT)
+
+
+@router.get("", response_model=CitiesResponse)
+def list_cities() -> CitiesResponse:
+    return CitiesResponse(cities=[CityCapability(id=city.id, name=city.name, historical=city.historical, routes=city.routes, live_network=city.live_network, timezone=city.timezone, bounds=city.bounds) for city in CITIES.values()])
+
+
+@router.get("/compare", response_model=CityComparisonResponse)
+def compare_cities(cities: list[str] = Query(default=list(historical_city_ids())), metric: str = Query(default="trips_per_active_station_day")) -> CityComparisonResponse:
+    try:
+        return CityComparisonResponse(**ANALYTICS.compare_cities(cities, metric))
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/{city}/activity", response_model=ActivityResponse)
 def get_activity(city: str, limit: int = Query(default=100, ge=1, le=500)) -> ActivityResponse:
-    if city != "london":
-        raise HTTPException(status_code=404, detail="Only London is available in this vertical slice")
-    production_metadata = ROOT / "data" / "metadata" / "london-cycling-production.json"
-    fixture_metadata = ROOT / "data" / "metadata" / "london-cycling-fixture.json"
-    metadata_path = production_metadata if production_metadata.exists() else fixture_metadata
-    metadata = json.loads(metadata_path.read_text())
-    production_journeys = ROOT / "data" / "generated" / "london_cycling_production_journeys.parquet"
-    parquet = ROOT / "data" / "generated" / ("london_cycling_activity.parquet" if production_metadata.exists() and production_journeys.exists() else "london_cycling_fixture_activity.parquet")
-    if not parquet.exists():
-        raise HTTPException(status_code=503, detail="Dataset artifact is not built")
+    if city not in historical_city_ids():
+        raise HTTPException(status_code=404, detail="Historical activity is unavailable for this city")
+    try:
+        dataset = ANALYTICS.describe_dataset(city)
+        rows = ANALYTICS.find_hotspots(city, "total_activity", TimeFilter(), limit)
+    except (ValueError, FileNotFoundError) as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return ActivityResponse(
-        city=city,
-        dataset_name=metadata.get("dataset_name", metadata.get("dataset", "")),
-        observation_period=metadata["observation_period"],
-        attribution_text=metadata.get("attribution_text"),
-        historical_snapshot=metadata.get("historical_snapshot", True),
-        h3_resolution=metadata.get("h3_resolution", metadata.get("primary_h3_resolution", 9)),
-        cells=ActivityReader(parquet).activity(limit),
+        city=city, dataset_name=dataset["dataset_name"], observation_period="2026-05-01/2026-05-31",
+        attribution_text=dataset["attribution_text"], historical_snapshot=True, h3_resolution=dataset["h3_resolution"],
+        cells=[ActivityCell(h3_cell=row["h3_cell"], total_journeys=int(row["value"]), origin_journeys=0, destination_journeys=0) for row in rows],
     )
+
+
+@router.get("/paris/live-network")
+async def paris_live_network(limit: int = Query(default=25, ge=1, le=100)) -> dict:
+    """Expose current operational status through the isolated live-data MCP boundary."""
+    try:
+        return await CityLiveMcpClient().get_paris_status(limit)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Paris live network data is temporarily unavailable") from exc

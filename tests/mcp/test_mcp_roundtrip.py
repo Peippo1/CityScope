@@ -37,7 +37,7 @@ def test_streamable_http_client_server_round_trip():
                             {"request": {"city": "london", "metric": "total_activity", "limit": 2, "time_filter": {}}},
                         )
                         assert {tool.name for tool in tools.tools} == {
-                            "describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas"
+                            "describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "compare_cities"
                         }
                         assert hotspots.isError is False
                         assert hotspots.content

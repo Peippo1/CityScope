@@ -4,6 +4,7 @@ from apps.api.app.analytics.mobility import MobilityAnalytics
 
 from .schemas import (
     AreaMetricsRequest,
+    CompareCitiesRequest,
     CompareAreasRequest,
     DatasetMetadata,
     DatasetRequest,
@@ -50,3 +51,8 @@ def compare_areas(request: CompareAreasRequest) -> ToolEnvelope:
     evidence = [Evidence(metric=metric, value=group[metric], unit="journeys", source_aggregate="canonical_journey_h3_activity", filters_applied=filters, h3_cells=group["h3_cells"]) for group in groups for metric in request.metrics]
     layers = [MapLayer(h3_cell=cell, metric="area", value=1) for group in groups for cell in group["h3_cells"]]
     return ToolEnvelope(dataset=dataset, results=results, evidence=evidence, map_layers=layers, limitations=dataset.limitations)
+
+
+def compare_cities(request: CompareCitiesRequest) -> dict:
+    """Return normalized, matched-window metrics only; raw volume rankings are forbidden."""
+    return ANALYTICS.compare_cities(request.cities, request.metric)

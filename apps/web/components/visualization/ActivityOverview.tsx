@@ -4,9 +4,10 @@ type ActivityOverviewProps = {
   cells: ActivityCell[];
   selectedH3Cell: string | null;
   onSelectH3Cell: (h3Cell: string) => void;
+  cityName?: string;
 };
 
-export function ActivityOverview({ cells, selectedH3Cell, onSelectH3Cell }: ActivityOverviewProps) {
+export function ActivityOverview({ cells, selectedH3Cell, onSelectH3Cell, cityName = "London" }: ActivityOverviewProps) {
   const chartCells = cells.slice(0, 10);
   const peak = Math.max(...chartCells.map((cell) => cell.total_journeys), 1);
   const total = cells.reduce((sum, cell) => sum + cell.total_journeys, 0);
@@ -14,7 +15,7 @@ export function ActivityOverview({ cells, selectedH3Cell, onSelectH3Cell }: Acti
   return (
     <section className="activity-overview" aria-labelledby="activity-pulse-heading">
       <header className="panel-heading">
-        <div><p className="eyebrow">Activity pulse</p><h2 id="activity-pulse-heading">London at a glance</h2></div>
+        <div><p className="eyebrow">Activity pulse</p><h2 id="activity-pulse-heading">{cityName} at a glance</h2></div>
         <span className="live-label"><i aria-hidden="true" />Snapshot</span>
       </header>
       <dl className="activity-summary">
@@ -22,7 +23,7 @@ export function ActivityOverview({ cells, selectedH3Cell, onSelectH3Cell }: Acti
         <div><dt>Peak area</dt><dd>{peak.toLocaleString()}</dd></div>
         <div><dt>H3 areas</dt><dd>{cells.length}</dd></div>
       </dl>
-      <div className="bar-chart" role="group" aria-label="Top ten London cycling activity areas">
+      <div className="bar-chart" role="group" aria-label={`Top ten ${cityName} cycling activity areas`}>
         {chartCells.map((cell, index) => (
           <button
             type="button"

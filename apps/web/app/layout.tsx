@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "CityScope · London mobility explorer",
-  description: "Explore historical London cycling activity, nearby places, and bicycle routes with grounded evidence.",
+  title: "CityScope · Cross-city mobility intelligence",
+  description: "Compare historical bike-share activity across cities, nearby places, and bicycle routes with grounded evidence.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

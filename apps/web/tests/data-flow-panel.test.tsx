@@ -19,10 +19,11 @@ const result: InvestigationResult = {
 
 describe("DataFlowPanel", () => {
   it("shows completed request stages from the investigation trace", () => {
-    render(<DataFlowPanel activityLoading={false} investigating={false} result={result} />);
+    render(<DataFlowPanel activityLoading={false} investigating={false} result={result} snapshotLabel="Divvy Trips snapshot" />);
 
     expect(screen.getByRole("heading", { name: "Request flow" })).toBeVisible();
     expect(screen.getByText("City Data MCP").closest("li")).toHaveTextContent("42 ms");
     expect(screen.getByText("Visual answer").closest("li")).toHaveTextContent("Ready");
+    expect(screen.getByText("Divvy Trips snapshot")).toBeVisible();
   });
 });

@@ -2,11 +2,11 @@
 
 ## Judge story (2–3 minutes)
 
-1. Open the CityScope URL and point out the May 2026 TfL historical-snapshot notice.
-2. Ask where Saturday-morning cycling activity was highest; open the evidence disclosure to show the deterministic City Data MCP provenance.
-3. Ask which busy areas have few cafés; contrast the historical TfL panel with the separately labelled current Google Maps context.
-4. Ask for a bicycle route between King's Cross and Borough; show the Google Routes attribution, route warning, and deterministic waypoint rationale.
-5. If a live Maps, Routes, or Gemini provider is unavailable, show the explicit partial/error state rather than retrying in a loop.
+1. Open the CityScope URL and show the four-city May 2026 comparison. Point out that it uses normalized metrics, never raw trip totals.
+2. Select London, NYC, Chicago, or Washington, DC and ask where historical cycling activity was highest; open the evidence disclosure to show deterministic City Data MCP provenance.
+3. Select Paris live and show provider freshness, station availability, and the explicit statement that live availability is not historical trip demand.
+4. Return to London and ask which busy areas have few cafés, then request a bicycle route between King's Cross and Borough.
+5. If a live provider is unavailable, show the explicit partial/error state rather than retrying in a loop.
 
 ## Cloud Run topology
 

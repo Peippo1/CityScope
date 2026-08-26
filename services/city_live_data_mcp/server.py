@@ -1,0 +1,33 @@
+from contextlib import asynccontextmanager
+import os
+
+from fastapi import FastAPI
+from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
+
+from .schemas import LiveNetworkResponse, LiveStationRequest
+from .tools import get_live_station_status
+
+
+def transport_security_settings() -> TransportSecuritySettings:
+    hosts = [host.strip() for host in os.getenv("CITYSCOPE_LIVE_MCP_ALLOWED_HOSTS", "127.0.0.1:*,localhost:*,[::1]:*").split(",") if host.strip()]
+    return TransportSecuritySettings(enable_dns_rebinding_protection=True, allowed_hosts=hosts, allowed_origins=["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"])
+
+
+mcp = FastMCP("CityScope Live City Data", json_response=True, stateless_http=True, streamable_http_path="/", transport_security=transport_security_settings())
+
+
+@mcp.tool(name="get_live_station_status")
+async def get_live_station_status_tool(request: LiveStationRequest) -> LiveNetworkResponse:
+    """Return validated current Paris Vélib' availability from the fixed GBFS provider."""
+    return await get_live_station_status(request)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with mcp.session_manager.run():
+        yield
+
+
+app = FastAPI(title="CityScope Live City Data MCP", lifespan=lifespan)
+app.mount("/mcp", mcp.streamable_http_app())

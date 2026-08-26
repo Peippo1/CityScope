@@ -1,4 +1,4 @@
-import type { ActivityResponse } from "../types/city";
+import type { ActivityResponse, CitiesResponse, CityComparison, LiveNetwork } from "../types/city";
 import type { InvestigationRequest, InvestigationResult } from "../types/investigation";
 
 const API_URL = process.env.NEXT_PUBLIC_CITYSCOPE_API_URL ?? "http://localhost:8000";
@@ -14,8 +14,22 @@ async function apiRequest<T>(path: string, init: RequestInit | undefined, failur
   return response.json() as Promise<T>;
 }
 
-export async function getLondonActivity(): Promise<ActivityResponse> {
-  return apiRequest("/cities/london/activity", { cache: "no-store" }, "CityScope activity data could not be loaded");
+export async function getCityActivity(city = "london"): Promise<ActivityResponse> {
+  return apiRequest(`/cities/${city}/activity`, { cache: "no-store" }, "CityScope activity data could not be loaded");
+}
+
+export const getLondonActivity = () => getCityActivity("london");
+
+export async function getCities(): Promise<CitiesResponse> {
+  return apiRequest("/cities", { cache: "no-store" }, "CityScope cities could not be loaded");
+}
+
+export async function getCityComparison(metric = "trips_per_active_station_day"): Promise<CityComparison> {
+  return apiRequest(`/cities/compare?metric=${encodeURIComponent(metric)}`, { cache: "no-store" }, "CityScope comparison could not be loaded");
+}
+
+export async function getParisLiveNetwork(): Promise<LiveNetwork> {
+  return apiRequest("/cities/paris/live-network", { cache: "no-store" }, "Paris live network data could not be loaded");
 }
 
 export async function investigate(request: InvestigationRequest): Promise<InvestigationResult> {

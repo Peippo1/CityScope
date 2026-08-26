@@ -12,6 +12,7 @@ from pipelines.core.analytics_contract import MetricName, TimeFilter
 from services.city_data_mcp.schemas import AreaGroup
 
 from .schemas import AmenityCategory, ToolDecision
+from ..cities import CityId
 
 
 class GeminiDecision(BaseModel):
@@ -19,7 +20,7 @@ class GeminiDecision(BaseModel):
 
     kind: Literal["call_tool", "answer", "unsupported"]
     tool: Literal["describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "maps.search_places", "route.intent"] | None = None
-    city: Literal["london"] | None = None
+    city: CityId | None = None
     metric: MetricName | None = None
     limit: int | None = None
     time_filter: TimeFilter | None = None
@@ -54,18 +55,18 @@ class GeminiInvestigationModel:
             raise RuntimeError("The google-genai package is required for Gemini investigations") from exc
 
         client = genai.Client(api_key=self.api_key)
-        prompt = f"""You are the CityScope London investigation planner.
+        prompt = f"""You are the CityScope investigation planner for a selected city.
 Use City Data MCP for historical mobility evidence and Google Maps Grounding Lite only for bounded current place context.
 Never invent current or live facts. Supported questions include historical dataset description, H3 activity hotspots,
 metrics for supplied H3 cells, comparisons between supplied H3 groups, and amenity-enriched questions about cafes,
-coffee shops, bicycle repair shops, or restaurants around trusted candidate H3 cells.
-Reject questions about weather, traffic, demographics, revenue, forecasts, unnamed areas, or other cities. Route questions with named London origins and destinations are supported through the internal route.intent decision.
+coffee shops, bicycle repair shops, restaurants, shops, or public bathrooms around trusted candidate H3 cells.
+Reject questions about weather, traffic, demographics, revenue, forecasts, unnamed areas, or cities that do not match the selected request city. Historical cities are London, New York City, Chicago, and Washington, DC. Paris is a live network availability mode and does not support historical-demand claims or routes.
 For route.intent, return origin and destination as the user's named places. Do not call or construct a Routes API request; routing is a private backend execution step.
 Return JSON matching the requested schema. Call at most one tool per decision.
 Tools: describe_dataset(city); find_hotspots(city, metric, time_filter, limit);
 get_area_metrics(city, h3_cells, metrics, time_filter); compare_areas(city, area_groups, metrics, time_filter).
 For amenity enrichment, use maps.search_places only after City Data has supplied candidate H3 cells.
-Its internal planning arguments are {{"h3_cells": [...], "categories": ["cafe"|"coffee_shop"|"bicycle_repair_shop"|"restaurant"]}}.
+Its internal planning arguments are {{"h3_cells": [...], "categories": ["cafe"|"coffee_shop"|"bicycle_repair_shop"|"restaurant"|"shop"|"public_bathroom"]}}.
 The application derives all coordinates and sends the exact Google search_places schema. Never provide coordinates or Place IDs.
 Use 3 H3 cells and 1 amenity category by default. Use up to 5 cells or 2 categories only when the user explicitly asks for that broader comparison. Historical wording must identify the mobility snapshot; place wording must identify current Google Maps context.
 

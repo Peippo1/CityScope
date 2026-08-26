@@ -12,7 +12,7 @@ City data is abundant, but answering a practical question still involves too muc
 
 A normal chatbot can describe that workflow. CityScope is designed to carry it out.
 
-The first CityScope investigation domain is London cycling. A user can ask where historical cycle-hire activity was highest, compare busy areas with current amenities, or request a bicycle route between named locations. The application plans a bounded sequence of tools, executes deterministic analytics, and returns the evidence, map layers, route geometry, provenance, limitations, and a concise execution trace.
+CityScope now compares a matched May 2026 historical cohort: London, New York City, Chicago, and Washington, DC. A user can inspect normalized demand patterns, then drill into one city's H3 hotspots, nearby amenities, or a bicycle route. Paris is intentionally different: its Vélib' availability is live operational context, shown with freshness and never ranked beside historical trip demand.
 
 ## Why a bounded agent
 
@@ -28,7 +28,7 @@ The model decides what evidence is needed. It does not calculate journey totals,
 
 ## Building the data foundation
 
-The current dataset is a pinned May 2026 snapshot of TfL Santander Cycles journeys. The ingestion pipeline validates source records, reconciles station coordinates, quarantines unresolved records, assigns H3 resolution 9 cells, and writes checksummed Parquet plus metadata artifacts.
+Each historical city uses a pinned May 2026 trip snapshot. The ingestion pipeline validates source records, rejects invalid durations, missing coordinates, duplicate trip IDs, and out-of-window rows, assigns H3 resolution 9 cells, and writes checksummed Parquet plus metadata artifacts. Cross-city views use per-active-station demand, duration, time-pattern, and concentration metrics rather than raw journey totals.
 
 That snapshot is deliberately labelled as historical throughout the interface. CityScope does not present it as live cycling behaviour. Current place context and bicycle routes are shown as separate Google-backed sources, each with its own attribution and limitations.
 

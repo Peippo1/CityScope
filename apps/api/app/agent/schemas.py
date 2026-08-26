@@ -5,9 +5,10 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from pipelines.core.analytics_contract import MetricName, TimeFilter
+from ..cities import CityId
 from services.city_data_mcp.schemas import DatasetMetadata, Evidence, MapLayer
 
-AmenityCategory = Literal["cafe", "coffee_shop", "bicycle_repair_shop", "restaurant"]
+AmenityCategory = Literal["cafe", "coffee_shop", "bicycle_repair_shop", "restaurant", "shop", "public_bathroom"]
 
 
 class ConversationTurn(BaseModel):
@@ -22,7 +23,7 @@ class InvestigationContext(BaseModel):
 
 
 class InvestigationRequest(BaseModel):
-    city: Literal["london"] = "london"
+    city: CityId = "london"
     question: str = Field(min_length=1, max_length=500)
     context: InvestigationContext = Field(default_factory=InvestigationContext)
 

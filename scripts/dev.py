@@ -23,6 +23,7 @@ def process_specs() -> list[tuple[str, list[str], Path]]:
     python = sys.executable
     return [
         ("City Data MCP", [python, "-m", "uvicorn", "services.city_data_mcp.server:app", "--reload", "--port", "8001"], ROOT),
+        ("City Live Data MCP", [python, "-m", "uvicorn", "services.city_live_data_mcp.server:app", "--reload", "--port", "8002"], ROOT),
         ("CityScope API", [python, "-m", "uvicorn", "apps.api.app.main:app", "--reload", "--port", "8000"], ROOT),
         ("CityScope web", ["npm", "run", "dev"], ROOT / "apps" / "web"),
     ]

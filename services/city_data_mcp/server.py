@@ -5,8 +5,8 @@ from fastapi import FastAPI
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from .schemas import AreaMetricsRequest, CompareAreasRequest, DatasetRequest, HotspotsRequest, DatasetMetadata, ToolEnvelope
-from .tools import compare_areas, describe_dataset, find_hotspots, get_area_metrics
+from .schemas import AreaMetricsRequest, CompareAreasRequest, CompareCitiesRequest, DatasetRequest, HotspotsRequest, DatasetMetadata, ToolEnvelope
+from .tools import compare_areas, compare_cities, describe_dataset, find_hotspots, get_area_metrics
 
 
 def transport_security_settings() -> TransportSecuritySettings:
@@ -56,6 +56,12 @@ def find_hotspots_tool(request: HotspotsRequest) -> ToolEnvelope:
 def compare_areas_tool(request: CompareAreasRequest) -> ToolEnvelope:
     """Compare bounded H3 area groups using deterministic metrics."""
     return compare_areas(request)
+
+
+@mcp.tool(name="compare_cities")
+def compare_cities_tool(request: CompareCitiesRequest) -> dict:
+    """Compare two to four historical cities using normalized May 2026 metrics."""
+    return compare_cities(request)
 
 
 @asynccontextmanager

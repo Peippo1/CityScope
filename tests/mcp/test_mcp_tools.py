@@ -15,7 +15,7 @@ LONDON_CELL = latlng_to_cell(51.5074, -0.1278, 9)
 
 def test_server_discovers_exact_v1_tools():
     names = {tool.name for tool in mcp._tool_manager.list_tools()}
-    assert names == {"describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas"}
+    assert names == {"describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "compare_cities"}
 
 
 def test_tool_inputs_reject_invalid_city_cells_and_limits():

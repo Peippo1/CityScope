@@ -1,14 +1,14 @@
 import type { InvestigationResult } from "../../types/investigation";
 
-type DataFlowPanelProps = { activityLoading: boolean; investigating: boolean; result: InvestigationResult | null };
+type DataFlowPanelProps = { activityLoading: boolean; investigating: boolean; result: InvestigationResult | null; snapshotLabel: string };
 type FlowStatus = "waiting" | "active" | "complete" | "failed";
 
-export function DataFlowPanel({ activityLoading, investigating, result }: DataFlowPanelProps) {
+export function DataFlowPanel({ activityLoading, investigating, result, snapshotLabel }: DataFlowPanelProps) {
   const mcpTrace = result?.trace.find((event) => event.tool?.includes("city_data") || event.label.includes("City Data MCP"));
   const googleUsed = Boolean(result?.places.length || result?.route);
   const resultFailed = result?.status === "failed";
   const stages: { label: string; detail: string; status: FlowStatus }[] = [
-    { label: "TfL snapshot", detail: activityLoading ? "Loading" : "Ready", status: activityLoading ? "active" : "complete" },
+    { label: snapshotLabel, detail: activityLoading ? "Loading" : "Ready", status: activityLoading ? "active" : "complete" },
     { label: "CityScope API", detail: investigating ? "Reasoning" : result ? "Complete" : "Standing by", status: investigating ? "active" : result ? (resultFailed ? "failed" : "complete") : "waiting" },
     { label: "City Data MCP", detail: investigating ? "Querying" : mcpTrace?.latency_ms !== undefined ? `${mcpTrace.latency_ms} ms` : result ? "Not used" : "Waiting", status: investigating ? "active" : mcpTrace ? (mcpTrace.status === "failed" ? "failed" : "complete") : "waiting" },
     { label: "Google services", detail: investigating ? "On demand" : googleUsed ? (result?.route ? "Route ready" : `${result?.places.length ?? 0} places`) : "Not used", status: investigating ? "active" : googleUsed ? "complete" : "waiting" },

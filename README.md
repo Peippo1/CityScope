@@ -1,6 +1,6 @@
 # CityScope
 
-**Evidence-grounded geospatial intelligence for London cycling activity.**
+**Evidence-grounded bike-share intelligence across comparable cities.**
 
 [![CityScope checks](https://github.com/Peippo1/CityScope/actions/workflows/ci.yml/badge.svg)](https://github.com/Peippo1/CityScope/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
@@ -10,7 +10,7 @@
 ![Google Cloud](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run%20%2B%20Maps-4285F4?logo=googlecloud&logoColor=white)
 ![License](https://img.shields.io/badge/license-private-lightgrey)
 
-CityScope turns natural-language questions into bounded, traceable investigations over historical London cycling data. It combines deterministic H3 and DuckDB analytics with a guarded Gemini planning layer, current Google Maps context, bicycle routing, and user-owned investigation history.
+CityScope turns natural-language questions into bounded, traceable investigations over historical bike-share data. London, New York City, Chicago, and Washington, DC are compared through normalized May 2026 metrics; Paris is a separately labelled live Vélib' availability pilot. It combines deterministic H3 and DuckDB analytics with a guarded Gemini planning layer, current Google Maps context, bicycle routing, and user-owned investigation history.
 
 **[Open the live CityScope app](https://cityscope-506222.web.app)**
 
@@ -26,16 +26,18 @@ CityScope keeps the map, interactive activity chart, request flow, and investiga
   <img src="docs/assets/cityscope-mobile.png" width="320" alt="CityScope mobile investigation workspace" />
 </p>
 
-The current vertical slice can:
+The current cross-city slice can:
 
-- rank and compare historical cycling activity across H3 cells;
+- rank historical cycling activity across H3 cells in London, NYC, Chicago, and Washington, DC;
+- compare those four cities using trips per active station/day, median duration, peak-hour share, weekend share, and hotspot concentration;
+- show Paris live station availability as operational context without mixing it into historical demand rankings;
 - enrich trusted areas with current Google Maps place context;
 - compute deterministic bicycle routes through selected activity areas;
 - explore selectable activity charts and a request-flow view driven by real API trace state;
 - show source-tagged evidence, dataset provenance, limitations, and execution traces;
 - authenticate users with Google and save investigations through a Firebase-token-verified API.
 
-> CityScope currently covers a pinned May 2026 TfL cycling snapshot for London. It does not claim live cycling conditions, weather, traffic, forecasts, or support for other cities.
+> Historical comparisons use a matched May 2026 window and normalized metrics only. Paris availability is live operational data, not historical trip demand. CityScope does not claim live cycling conditions, weather, traffic, or forecasts.
 
 ## All Things Agentic Hackathon
 
@@ -72,13 +74,16 @@ The FastAPI service is the trust boundary. Browser Firestore access is denied; a
 ## Data Flow
 
 ```text
-TfL snapshot -> validate and normalize -> H3 aggregation -> Parquet -> DuckDB
+Official trip snapshots -> validate and normalize -> H3 aggregation -> Parquet -> DuckDB
                                                                |
 question -> guarded planner -> City Data MCP -------------------+
                           \-> Maps and Routes -> evidence-grounded result
+Paris GBFS -> City Live Data MCP -> labelled live-network context
 ```
 
 Generated artifacts retain checksums, reconciliation counts, observation period, source attribution, and snapshot metadata. Large raw and generated datasets are intentionally excluded from Git.
+
+> Local development uses clearly labelled deterministic fixtures for new cities until the official May 2026 source files are built with `pipelines.multicity.build_production`. Do not treat fixture comparisons as real findings.
 
 ## Quick Start
 
@@ -91,6 +96,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
 python -m pipelines.london_cycling.build_fixture
+python -m pipelines.multicity.build_fixture
 
 cd apps/web
 npm install
@@ -111,10 +117,13 @@ The supervisor stops the whole stack if any service exits, preventing a web-only
 # Terminal 1: deterministic City Data MCP
 .venv/bin/uvicorn services.city_data_mcp.server:app --reload --port 8001
 
-# Terminal 2: public API
+# Terminal 2: live Paris MCP
+.venv/bin/uvicorn services.city_live_data_mcp.server:app --reload --port 8002
+
+# Terminal 3: public API
 .venv/bin/uvicorn apps.api.app.main:app --reload --port 8000
 
-# Terminal 3: web app
+# Terminal 4: web app
 cd apps/web
 npm run dev
 ```
@@ -130,12 +139,16 @@ Server-side configuration includes:
 - `GOOGLE_ROUTES_API_KEY` for bicycle routing;
 - `FIREBASE_PROJECT_ID` for token verification and saved investigations;
 - `CITYSCOPE_CITY_DATA_MCP_URL` for the private MCP endpoint.
+- `CITYSCOPE_CITY_LIVE_DATA_MCP_URL` for the private Paris live-data MCP endpoint.
+- `CITYSCOPE_PARIS_ARCHIVE_BUCKET` for the hourly private GBFS archive job.
 
 The web app uses separately restricted public configuration:
 
 - `NEXT_PUBLIC_CITYSCOPE_API_URL`;
 - `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`;
 - `NEXT_PUBLIC_FIREBASE_API_KEY`, `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`, `NEXT_PUBLIC_FIREBASE_PROJECT_ID`, and `NEXT_PUBLIC_FIREBASE_APP_ID`.
+
+The browser Places explorer uses the same referrer-restricted browser key. In Google Cloud, enable Maps JavaScript API, Places UI Kit, and Places API (New) for that key. Places UI Kit results are current Google Places context and are intentionally separate from historical bike-share evidence.
 
 Without a browser Maps key, CityScope keeps the ranked textual experience available and displays a labelled map placeholder. Missing server providers produce bounded degraded or partial states rather than ungrounded answers.
 

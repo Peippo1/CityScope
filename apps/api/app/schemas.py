@@ -16,3 +16,34 @@ class ActivityResponse(BaseModel):
     historical_snapshot: bool = True
     h3_resolution: int
     cells: list[ActivityCell]
+
+
+class CityCapability(BaseModel):
+    id: str
+    name: str
+    historical: bool
+    routes: bool
+    live_network: bool
+    timezone: str
+    bounds: tuple[float, float, float, float]
+
+
+class CitiesResponse(BaseModel):
+    cities: list[CityCapability]
+
+
+class CityComparisonRow(BaseModel):
+    city: str
+    city_name: str
+    value: float
+    rank: int
+    snapshot_id: str
+    is_fixture: bool = False
+
+
+class CityComparisonResponse(BaseModel):
+    metric: str
+    calculation_basis: str
+    observation_period: str
+    cities: list[CityComparisonRow]
+    limitations: list[str]

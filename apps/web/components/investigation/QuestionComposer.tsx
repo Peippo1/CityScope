@@ -10,12 +10,18 @@ const EXAMPLE_QUESTIONS = [
     question: "Which of the busiest cycling areas have relatively few cafés nearby?",
   },
   {
+    label: "Find public bathrooms",
+    question: "Which busy cycling areas have public bathrooms nearby?",
+  },
+  {
     label: "Plan a bicycle route",
     question: "Plan a bicycle route between two busy cycling areas.",
   },
 ] as const;
 
 type QuestionComposerProps = {
+  cityName: string;
+  datasetName?: string | null;
   value: string;
   isSubmitting: boolean;
   error?: string | null;
@@ -23,7 +29,7 @@ type QuestionComposerProps = {
   onSubmit: () => void;
 };
 
-export function QuestionComposer({ value, isSubmitting, error, onChange, onSubmit }: QuestionComposerProps) {
+export function QuestionComposer({ cityName, datasetName, value, isSubmitting, error, onChange, onSubmit }: QuestionComposerProps) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (value.trim() && !isSubmitting) onSubmit();
@@ -34,7 +40,7 @@ export function QuestionComposer({ value, isSubmitting, error, onChange, onSubmi
       <div className="section-heading">
         <p className="eyebrow">Ask CityScope</p>
         <h2 id="investigate-heading">Where should your next ride take you?</h2>
-        <p>Explore a historical London cycling snapshot, nearby places, or a bicycle route.</p>
+        <p>Explore a historical {cityName} cycling snapshot, nearby places, or a bicycle route.</p>
       </div>
       <div className="prompt-list" aria-label="Example questions">
         {EXAMPLE_QUESTIONS.map((example) => (
@@ -58,7 +64,7 @@ export function QuestionComposer({ value, isSubmitting, error, onChange, onSubmi
             {isSubmitting ? "Investigating…" : "Investigate"}
           </button>
         </div>
-        <p id="question-help" className="helper-text">London only · based on May 2026 TfL cycling evidence</p>
+        <p id="question-help" className="helper-text">{cityName} only · based on May 2026 {datasetName ?? "mobility"} evidence</p>
         {error && <p id="investigation-error" className="inline-error" role="alert">{error}</p>}
       </form>
     </section>

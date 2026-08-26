@@ -1,0 +1,1 @@
+"""Chicago Divvy source adapter."""

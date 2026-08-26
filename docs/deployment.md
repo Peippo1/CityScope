@@ -4,7 +4,8 @@
 
 - Firebase Hosting serves the static Next.js export.
 - A public Cloud Run service hosts the FastAPI API.
-- An IAM-private Cloud Run service hosts City Data MCP. Its ingress is reachable, but only the API service account has `roles/run.invoker`.
+- An IAM-private Cloud Run service hosts deterministic City Data MCP. A separate IAM-private Cloud Run service hosts the live Paris MCP; only the API service account has `roles/run.invoker` on either service.
+- An hourly Cloud Scheduler-triggered Cloud Run job writes compressed Paris GBFS station snapshots to a private Cloud Storage bucket. It is the only identity allowed to write that bucket.
 - Artifact Registry stores both container images in `europe-west2`.
 - Secret Manager supplies only server-side Gemini and Google API keys.
 
@@ -18,6 +19,8 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
   secretmanager.googleapis.com \
+  cloudscheduler.googleapis.com \
+  storage.googleapis.com \
   --project cityscope-506222
 
 gcloud artifacts repositories create cityscope \
@@ -38,6 +41,11 @@ The generated production Parquet and metadata artifacts are part of both build c
 gcloud builds submit \
   --config deploy/cloudbuild.yaml \
   --substitutions _DOCKERFILE=deploy/Dockerfile.mcp,_IMAGE=europe-west2-docker.pkg.dev/cityscope-506222/cityscope/mcp:latest \
+  --project cityscope-506222
+
+gcloud builds submit \
+  --config deploy/cloudbuild.yaml \
+  --substitutions _DOCKERFILE=deploy/Dockerfile.live_mcp,_IMAGE=europe-west2-docker.pkg.dev/cityscope-506222/cityscope/live-mcp:latest \
   --project cityscope-506222
 
 gcloud builds submit \
@@ -69,20 +77,25 @@ Keep these server-only values in the API environment, never in the web app:
 - `GOOGLE_MAPS_GROUNDING_API_KEY` — Grounding MCP place resolution and search. `GOOGLE_MAPS_API_KEY` is a temporary server fallback.
 - `GOOGLE_ROUTES_API_KEY` — direct bicycle Routes API execution. `GOOGLE_MAPS_API_KEY` is a temporary server fallback.
 - `CITYSCOPE_CITY_DATA_MCP_URL` — City Data MCP endpoint.
+- `CITYSCOPE_CITY_LIVE_DATA_MCP_URL` — live Paris MCP endpoint.
+- `CITYSCOPE_CITY_LIVE_DATA_MCP_ID_TOKEN_AUDIENCE` — private live MCP Cloud Run service URL used to mint the API identity token.
+- `CITYSCOPE_PARIS_ARCHIVE_BUCKET` — private Cloud Storage bucket used only by the archive job.
 - `CITYSCOPE_WEB_ORIGIN` — exact browser origin allowed by API CORS.
 - `CITYSCOPE_TRUSTED_HOSTS` — comma-separated API Host header allowlist.
 - `CITYSCOPE_CITY_DATA_MCP_ID_TOKEN_AUDIENCE` — private MCP Cloud Run service URL.
 - `CITYSCOPE_MCP_ALLOWED_HOSTS` — exact MCP Cloud Run Host header allowlist used by MCP DNS-rebinding protection.
 - `FIREBASE_PROJECT_ID` — enables Firebase token verification and Firestore-backed saved investigations.
 
-The browser may receive only `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`. Restrict it in Google Cloud by HTTP referrer, enabled APIs, and quota. Do not put any server key in `NEXT_PUBLIC_*` variables.
+The browser may receive only `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`. Restrict it in Google Cloud by HTTP referrer, enabled APIs, and quota. For the map and Places explorer, enable Maps JavaScript API, Places UI Kit, and Places API (New) on this browser key. Do not put any server key in `NEXT_PUBLIC_*` variables. Places UI Kit is current user-facing context and must not be presented as historical mobility evidence.
 
 ## Local start
 
 ```bash
 python3 -m pip install -e '.[dev]'
 python3 -m pipelines.london_cycling.build_fixture
+python3 -m pipelines.multicity.build_fixture
 uvicorn services.city_data_mcp.server:app --port 8001
+uvicorn services.city_live_data_mcp.server:app --port 8002
 uvicorn apps.api.app.main:app --port 8000
 cd apps/web && npm ci && npm run dev
 ```

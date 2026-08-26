@@ -56,11 +56,11 @@ def test_gemini_defaults_to_hackathon_compatible_stable_model(monkeypatch) -> No
 
 class FakeMaps:
     def __init__(self, failure: Exception | None = None) -> None:
-        self.calls: list[tuple[str, str]] = []
+        self.calls: list[tuple[str, str, str]] = []
         self.failure = failure
 
-    async def search_places(self, category: str, cell: str) -> MapsSearchResult:
-        self.calls.append((category, cell))
+    async def search_places(self, category: str, cell: str, city: str = "london") -> MapsSearchResult:
+        self.calls.append((category, cell, city))
         if self.failure:
             raise self.failure
         return MapsSearchResult.model_validate({"places": [{
@@ -68,7 +68,7 @@ class FakeMaps:
             "maps_uri": "https://maps.google.com/example", "category": category, "h3_cell": cell,
         }]})
 
-    async def resolve_location(self, query: str) -> ResolvedPlace:
+    async def resolve_location(self, query: str, city: str = "london") -> ResolvedPlace:
         raise NotImplementedError
 
 
@@ -77,8 +77,8 @@ class RouteMaps(FakeMaps):
         super().__init__()
         self.resolution_calls: list[str] = []
 
-    async def resolve_location(self, query: str) -> ResolvedPlace:
-        self.resolution_calls.append(query)
+    async def resolve_location(self, query: str, city: str = "london") -> ResolvedPlace:
+        self.resolution_calls.append(f"{query}:{city}")
         if query == "King's Cross":
             return ResolvedPlace(name=query, place_id="place-origin", latitude=51.5308, longitude=-0.1238, maps_uri="https://maps.google.com/origin")
         return ResolvedPlace(name=query, place_id="place-destination", latitude=51.5033, longitude=-0.1195, maps_uri="https://maps.google.com/destination")
@@ -99,12 +99,12 @@ class ConcurrentMaps(FakeMaps):
         self.active = 0
         self.max_active = 0
 
-    async def search_places(self, category: str, cell: str) -> MapsSearchResult:
+    async def search_places(self, category: str, cell: str, city: str = "london") -> MapsSearchResult:
         self.active += 1
         self.max_active = max(self.max_active, self.active)
         await asyncio.sleep(0.02)
         self.active -= 1
-        return await super().search_places(category, cell)
+        return await super().search_places(category, cell, city)
 
 
 def test_agent_uses_mcp_and_returns_grounded_evidence() -> None:
@@ -168,13 +168,28 @@ def test_amenity_question_calls_city_data_before_maps_and_preserves_provenance()
 
     assert result.status == "answered"
     assert mcp.calls[0][0] == "find_hotspots"
-    assert maps.calls == [("cafe", "892a100d2d7ffff")]
+    assert maps.calls == [("cafe", "892a100d2d7ffff", "london")]
     assert any(item.source == "city_data" for item in result.evidence)
     assert any(item.source == "google_maps" for item in result.evidence)
     assert result.places[0].place_id == "place-cafe"
     assert result.amenity_analysis[0]["place_count"] == 1
     assert result.trace[1].tool == "city_data.find_hotspots"
     assert result.trace[2].tool == "maps.search_places"
+
+
+def test_amenity_search_uses_the_selected_city_for_maps_grounding() -> None:
+    mcp = FakeMcp()
+    maps = FakeMaps()
+    service = InvestigationService(mcp_client=mcp, maps_client=maps, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="find_hotspots", arguments={"city": "chicago", "metric": "starts", "limit": 1, "time_filter": {}}),
+        ToolDecision(kind="call_tool", tool="maps.search_places", arguments={"h3_cells": ["892a100d2d7ffff"], "categories": ["cafe"]}),
+        ToolDecision(kind="answer", answer="Chicago results are grounded locally."),
+    ]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(city="chicago", question="Which busy areas have few cafes?")))
+
+    assert result.status == "answered"
+    assert maps.calls == [("cafe", "892a100d2d7ffff", "chicago")]
 
 
 def test_amenity_enrichment_uses_three_by_one_default_and_parallel_calls() -> None:
@@ -224,7 +239,7 @@ def test_route_intent_executes_city_data_then_private_route_adapter_without_rout
     result = asyncio.run(service.investigate(InvestigationRequest(question="How can I cycle from King's Cross to Borough?")))
 
     assert result.status == "answered"
-    assert maps.resolution_calls == ["King's Cross", "Borough"]
+    assert maps.resolution_calls == ["King's Cross:london", "Borough:london"]
     assert mcp.calls == [("find_hotspots", {"city": "london", "metric": "total_activity", "limit": 10, "time_filter": {}})]
     assert route_service.calls == [("place-origin", "place-destination", 0)]
     assert result.route is not None and result.route.polyline == "encoded-route"

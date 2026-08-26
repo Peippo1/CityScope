@@ -1,0 +1,16 @@
+{
+  "city": "washington_dc",
+  "dataset_id": "washington_dc-fixture",
+  "dataset_name": "Capital Bikeshare trip history",
+  "snapshot_id": "2026-05-fixture",
+  "source_organisation": "Capital Bikeshare",
+  "source_url": "https://capitalbikeshare.com/system-data",
+  "observation_start": "2026-05-01T00:00:00Z",
+  "observation_end_exclusive": "2026-06-01T00:00:00Z",
+  "observation_period": "2026-05-01/2026-05-31",
+  "historical_snapshot": true,
+  "h3_resolution": 9,
+  "attribution_text": "Data provided by Capital Bikeshare",
+  "licence_terms_reference": "Fixture only; production source terms apply.",
+  "source_files": []
+}

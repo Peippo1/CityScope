@@ -1,6 +1,6 @@
 # CityScope privacy notice (POC)
 
-CityScope is a judge-facing London cycling investigation demo. Historical TfL activity is displayed as a May 2026 snapshot and is not live cycling behaviour.
+CityScope is a judge-facing bike-share intelligence demo. Historical London, NYC, Chicago, and Washington, DC activity is displayed as a matched May 2026 snapshot and is not live cycling behaviour. Paris Vélib' station status is current operational data and is not used for historical city comparisons.
 
 When Google sign-in and saved investigations are enabled, CityScope stores the signed-in Firebase user identifier, the submitted question, selected H3 areas, investigation status, a concise response summary, historical TfL evidence metadata, and the dataset snapshot identifier. Users can delete their own saved investigations.
 

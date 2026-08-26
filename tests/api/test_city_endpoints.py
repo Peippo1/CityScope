@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from pipelines.london_cycling.build_fixture import main as build_fixture
+from pipelines.multicity.build_fixture import main as build_multicity_fixture
 from apps.api.app import config
 from apps.api.app.main import app
 
@@ -18,6 +19,25 @@ def test_london_activity_endpoint_returns_typed_h3_activity():
     assert payload["historical_snapshot"] is True
     assert len(payload["cells"]) == 2
     assert payload["cells"][0]["total_journeys"] >= payload["cells"][1]["total_journeys"]
+
+
+def test_city_registry_and_normalized_comparison_endpoint():
+    build_multicity_fixture()
+    client = TestClient(app)
+    cities = client.get("/cities")
+    comparison = client.get("/cities/compare?metric=weekend_share")
+
+    assert cities.status_code == 200
+    assert {city["id"] for city in cities.json()["cities"]} == {"london", "new_york", "chicago", "washington_dc", "paris"}
+    assert comparison.status_code == 200
+    assert comparison.json()["metric"] == "weekend_share"
+    assert len(comparison.json()["cities"]) == 4
+
+
+def test_cross_city_endpoint_rejects_raw_counts():
+    build_multicity_fixture()
+    response = TestClient(app).get("/cities/compare?metric=total_activity")
+    assert response.status_code == 422
 
 
 def test_unknown_city_is_rejected():
@@ -48,8 +68,8 @@ def test_production_origin_does_not_enable_local_cors_regex(monkeypatch):
     assert config.configured_origin_regex() is None
 
 
-def test_investigation_request_rejects_unsupported_city_before_agent_execution():
-    response = TestClient(app).post("/investigate", json={"city": "paris", "question": "What are the hotspots?"})
+def test_investigation_request_rejects_unknown_city_before_agent_execution():
+    response = TestClient(app).post("/investigate", json={"city": "rome", "question": "What are the hotspots?"})
 
     assert response.status_code == 422
 

@@ -31,7 +31,7 @@ test("keeps historical evidence and current amenity context separate", async ({ 
   await page.goto("/");
   await page.getByRole("textbox", { name: "Question" }).fill("Which busy areas have few cafes nearby?");
   await page.getByRole("button", { name: "Investigate" }).click();
-  await expect(page.getByRole("heading", { name: "Historical TfL evidence" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Historical mobility evidence" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Current Google Maps context" })).toBeVisible();
   await expect(page.getByText("Example Cafe")).toBeVisible();
   await expect(page.getByRole("link", { name: "View on Google Maps" })).toHaveAttribute("href", /maps\.google\.com/);

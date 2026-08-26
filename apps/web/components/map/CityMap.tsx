@@ -15,9 +15,11 @@ type CityMapProps = {
   route?: Route;
   selectedH3Cell?: string | null;
   onSelectH3Cell?: (h3Cell: string) => void;
+  cityName?: string;
+  bounds?: [number, number, number, number];
 };
 
-export function CityMap({ cells, places = [], route, selectedH3Cell, onSelectH3Cell }: CityMapProps) {
+export function CityMap({ cells, places = [], route, selectedH3Cell, onSelectH3Cell, cityName = "London", bounds = [51.28, -0.52, 51.72, 0.34] }: CityMapProps) {
   const node = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -31,12 +33,12 @@ export function CityMap({ cells, places = [], route, selectedH3Cell, onSelectH3C
     loader.load().then((google) => {
       if (!node.current || cancelled) return;
       map.current = new google.maps.Map(node.current, {
-        center: { lat: 51.5074, lng: -0.1278 },
+        center: { lat: (bounds[0] + bounds[2]) / 2, lng: (bounds[1] + bounds[3]) / 2 },
         zoom: 12,
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
-        restriction: { latLngBounds: { north: 51.72, south: 51.28, west: -0.52, east: 0.34 }, strictBounds: false },
+        restriction: { latLngBounds: { north: bounds[2], south: bounds[0], west: bounds[1], east: bounds[3] }, strictBounds: false },
       });
       const max = Math.max(...cells.map((cell) => cell.total_journeys), 1);
       const polygons = cells.map((cell) => {
@@ -59,12 +61,12 @@ export function CityMap({ cells, places = [], route, selectedH3Cell, onSelectH3C
         const marker = new google.maps.Marker({
           position: { lat: place.latitude, lng: place.longitude },
           map: map.current,
-          title: place.name ?? place.place_id,
+          title: place.name ?? "Google Maps place",
           icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: "#f9ab00", fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 2 },
         });
         marker.addListener("click", () => {
           const content = document.createElement("div");
-          const label = place.name ?? place.place_id;
+          const label = place.name ?? "Google Maps place";
           if (place.maps_uri) {
             const link = document.createElement("a");
             link.href = place.maps_uri;
@@ -91,11 +93,11 @@ export function CityMap({ cells, places = [], route, selectedH3Cell, onSelectH3C
       cleanups.push(() => { polygons.forEach((polygon) => polygon.setMap(null)); markers.forEach((marker) => marker.setMap(null)); routeMarkers.forEach((marker) => marker.setMap(null)); routeLine?.setMap(null); infoWindow.close(); });
     }).catch(() => { if (!cancelled) setLoadError(true); });
     return () => { cancelled = true; cleanups.forEach((cleanup) => cleanup()); };
-  }, [cells, places, route, selectedH3Cell, onSelectH3Cell]);
+  }, [cells, places, route, selectedH3Cell, onSelectH3Cell, cityName, bounds]);
 
   if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
     return <div className="map-placeholder" role="img" aria-label="Google Maps preview unavailable until a browser API key is configured">Google Maps preview requires NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. The ranked activity values remain available beside this panel.</div>;
   }
   if (loadError) return <div className="map-placeholder" role="alert"><strong>Google Maps could not be loaded.</strong><span>The activity ranking and investigation evidence remain available in text.</span></div>;
-  return <div ref={node} className="map" aria-label="London cycling activity map" />;
+  return <div ref={node} className="map" aria-label={`${cityName} cycling activity map`} />;
 }

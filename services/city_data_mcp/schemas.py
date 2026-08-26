@@ -4,13 +4,15 @@ from h3 import is_valid_cell
 from pydantic import BaseModel, Field, field_validator
 from pipelines.core.analytics_contract import MetricName, TimeFilter
 
+HistoricalCityId = Literal["london", "new_york", "chicago", "washington_dc"]
+
 
 class DatasetRequest(BaseModel):
-    city: Literal["london"]
+    city: HistoricalCityId
 
 
 class AreaMetricsRequest(BaseModel):
-    city: Literal["london"]
+    city: HistoricalCityId
     h3_cells: list[str] = Field(min_length=1, max_length=50)
     metrics: list[MetricName] = Field(min_length=1, max_length=5)
     time_filter: TimeFilter = Field(default_factory=TimeFilter)
@@ -24,7 +26,7 @@ class AreaMetricsRequest(BaseModel):
 
 
 class HotspotsRequest(BaseModel):
-    city: Literal["london"]
+    city: HistoricalCityId
     metric: MetricName
     time_filter: TimeFilter = Field(default_factory=TimeFilter)
     limit: int = Field(default=10, ge=1, le=50)
@@ -43,10 +45,18 @@ class AreaGroup(BaseModel):
 
 
 class CompareAreasRequest(BaseModel):
-    city: Literal["london"]
+    city: HistoricalCityId
     area_groups: list[AreaGroup] = Field(min_length=2, max_length=8)
     metrics: list[MetricName] = Field(min_length=1, max_length=5)
     time_filter: TimeFilter = Field(default_factory=TimeFilter)
+
+
+ComparisonMetric = Literal["trips_per_active_station_day", "median_trip_duration_minutes", "peak_hour_share", "weekend_share", "hotspot_concentration"]
+
+
+class CompareCitiesRequest(BaseModel):
+    cities: list[HistoricalCityId] = Field(min_length=2, max_length=4)
+    metric: ComparisonMetric = "trips_per_active_station_day"
 
 
 class DatasetMetadata(BaseModel):

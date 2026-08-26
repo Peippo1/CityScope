@@ -9,6 +9,7 @@ from typing import Any
 from services.city_data_mcp.schemas import DatasetMetadata, Evidence, ToolEnvelope
 
 from .mcp_client import CityDataMcpClient
+from .live_mcp_client import CityLiveMcpClient
 from .model import GeminiInvestigationModel, InvestigationModel
 from .places import AmenitySearchPlan, GoogleMapsGroundingClient, deterministic_amenity_analysis, normalize_amenity_plan
 from .policy import ExecutionBudget, GuardrailPolicy, PolicyCode, PolicyDecision, PolicyOutcome
@@ -18,8 +19,9 @@ from .telemetry import TelemetryAdapter, TelemetryEvent, telemetry_from_env
 
 
 class InvestigationService:
-    def __init__(self, mcp_client: Any = None, maps_client: Any = None, model: InvestigationModel | None = None, route_service: RouteExecutor | None = None, policy: GuardrailPolicy | None = None, telemetry: TelemetryAdapter | None = None) -> None:
+    def __init__(self, mcp_client: Any = None, live_mcp_client: Any = None, maps_client: Any = None, model: InvestigationModel | None = None, route_service: RouteExecutor | None = None, policy: GuardrailPolicy | None = None, telemetry: TelemetryAdapter | None = None) -> None:
         self.mcp_client = mcp_client or CityDataMcpClient()
+        self.live_mcp_client = live_mcp_client or CityLiveMcpClient()
         self.maps_client = maps_client or GoogleMapsGroundingClient()
         self.model = model or GeminiInvestigationModel()
         self.route_service = route_service or GoogleRoutesService()
@@ -44,8 +46,10 @@ class InvestigationService:
         if gate.outcome != PolicyOutcome.ALLOW:
             self.record(iid, trace, kind="planning", label="Rejected request at the deterministic policy boundary", status="rejected", policy=gate)
             return self.finish(InvestigationResult(investigation_id=iid, status="unsupported", answer=gate.message, limitations=["No model or provider call was made."], trace=trace))
+        if request.city == "paris":
+            return await self._paris_live(iid, trace)
         self.record(iid, trace, kind="planning", label="Classify question and select a City Data MCP tool", status="completed", policy=gate)
-        context, tool_results = request.context.model_dump_json(), []
+        context, tool_results = json.dumps({"city": request.city, "context": request.context.model_dump(mode="json")}), []
         envelope = final = None
         places, external, map_results, analysis = [], [], {}, []
         while self.policy.check_model_round(budget).outcome == PolicyOutcome.ALLOW:
@@ -62,10 +66,15 @@ class InvestigationService:
             if gate.outcome != PolicyOutcome.ALLOW:
                 self.record(iid, trace, kind="tool_call", label="Rejected model decision", status="rejected", tool=decision.tool, policy=gate)
                 return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The requested operation was rejected.", limitations=[gate.message], trace=trace))
+            requested_city = decision.arguments.get("city")
+            if requested_city is not None and requested_city != request.city:
+                gate = PolicyDecision(outcome="reject", code=PolicyCode.UNSUPPORTED_CITY, message="Tool calls must stay within the selected city.")
+                self.record(iid, trace, kind="tool_call", label="Rejected cross-city tool request", status="rejected", tool=decision.tool, policy=gate)
+                return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The requested operation was rejected.", limitations=[gate.message], trace=trace))
             if decision.kind == "unsupported":
                 return self.finish(InvestigationResult(investigation_id=iid, status="unsupported", answer=decision.answer or "This question is unsupported.", limitations=["No unsupported tool was executed."], trace=trace))
             if decision.kind == "answer": break
-            if decision.tool == "route.intent": return await self._route(iid, decision, trace, budget)
+            if decision.tool == "route.intent": return await self._route(iid, request.city, decision, trace, budget)
             if decision.tool == "maps.search_places":
                 try:
                     plan = normalize_amenity_plan(request.question, AmenitySearchPlan.model_validate(decision.arguments))
@@ -79,7 +88,7 @@ class InvestigationService:
                     self.record(iid, trace, kind="tool_call", label="Rejected Maps enrichment", status="rejected", tool="maps.search_places", policy=gate)
                     return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The place search was rejected.", limitations=[gate.message], trace=trace))
                 async def search(cell: str, category: str):
-                    began = time.perf_counter(); result = await self.maps_client.search_places(category, cell)
+                    began = time.perf_counter(); result = await self.maps_client.search_places(category, cell, request.city)
                     return cell, category, result, round((time.perf_counter()-began)*1000)
                 try:
                     found = await asyncio.gather(*(search(c, a) for c in plan.h3_cells for a in plan.categories))
@@ -122,20 +131,36 @@ class InvestigationService:
         limitations = list(dict.fromkeys((envelope.limitations if envelope else []) + (["Google Maps place counts are current search context, not an exhaustive census."] if external else [])))
         return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=final.answer or "No answer was returned.", dataset=envelope.dataset if envelope else None, evidence=evidence, places=places, amenity_analysis=analysis, map_layers=envelope.map_layers if envelope else [], limitations=limitations, trace=trace, follow_up_suggestions=final.follow_up_suggestions))
 
-    async def _route(self, iid: str, decision: ToolDecision, trace: list[TraceEvent], budget: ExecutionBudget) -> InvestigationResult:
+    async def _paris_live(self, iid: str, trace: list[TraceEvent]) -> InvestigationResult:
+        started = time.perf_counter()
+        try:
+            status = await self.live_mcp_client.get_paris_status()
+        except Exception:
+            failure = self.policy.provider_error("Paris live network")
+            self.record(iid, trace, kind="tool_call", label="Paris live network unavailable", status="failed", provider="city_data", tool="city_live_data.get_live_station_status", policy=failure)
+            return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="Paris live network data is unavailable.", limitations=[failure.message], trace=trace))
+        stations = status.get("stations", [])
+        self.record(iid, trace, kind="tool_call", label="Called City Live Data MCP: get_live_station_status", status="completed", provider="city_data", tool="city_live_data.get_live_station_status", policy=self.policy.allow(), count=len(stations), ms=round((time.perf_counter()-started)*1000))
+        return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=f"Paris live network status returned {len(stations)} stations. This is current operational availability, not historical trip demand.", city_insights=[status], limitations=status.get("limitations", []), trace=trace))
+
+    async def _route(self, iid: str, city: str, decision: ToolDecision, trace: list[TraceEvent], budget: ExecutionBudget) -> InvestigationResult:
         gate = self.policy.reserve_route_resolution(budget)
         if gate.outcome != PolicyOutcome.ALLOW: return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Route resolution was rejected.",limitations=[gate.message],trace=trace))
         started=time.perf_counter()
-        try: resolved=await asyncio.gather(self.maps_client.resolve_location(decision.arguments["origin"]),self.maps_client.resolve_location(decision.arguments["destination"]))
+        try: resolved=await asyncio.gather(self.maps_client.resolve_location(decision.arguments["origin"], city),self.maps_client.resolve_location(decision.arguments["destination"], city))
         except Exception:
             failure=self.policy.provider_error("Google Maps Grounding Lite"); self.record(iid,trace,kind="tool_call",label="Google Maps location resolution unavailable",status="failed",provider="google_maps",tool="maps.search_places",policy=failure)
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="The route endpoints could not be resolved.",limitations=[failure.message],trace=trace))
         self.record(iid,trace,kind="tool_call",label="Resolved route endpoints with Google Maps Grounding MCP: search_places",status="completed",provider="google_maps",tool="maps.search_places",policy=gate,count=2,ms=round((time.perf_counter()-started)*1000),call=budget.maps_calls,limit=self.policy.max_maps_calls)
-        origin,destination=(x.as_location() for x in resolved); city_gate=self.policy.check_city_data_call(budget)
+        origin,destination=(x.as_location() for x in resolved); location_gate = self.policy.check_route_locations(city, [origin, destination])
+        if location_gate.outcome != PolicyOutcome.ALLOW:
+            self.record(iid,trace,kind="tool_call",label="Rejected route endpoints outside selected city",status="rejected",provider="google_maps",tool="maps.search_places",policy=location_gate)
+            return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="The route endpoints are outside the selected city.",limitations=[location_gate.message],trace=trace))
+        city_gate=self.policy.check_city_data_call(budget)
         if city_gate.outcome != PolicyOutcome.ALLOW:
             self.record(iid,trace,kind="tool_call",label="Rejected City Data route geography call",status="rejected",provider="city_data",tool="city_data.find_hotspots",policy=city_gate)
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Historical route geography was rejected.",limitations=[city_gate.message],trace=trace))
-        try: envelope=ToolEnvelope.model_validate(await self.mcp_client.call("find_hotspots",{"city":"london","metric":"total_activity","limit":10,"time_filter":{}}))
+        try: envelope=ToolEnvelope.model_validate(await self.mcp_client.call("find_hotspots",{"city":city,"metric":"total_activity","limit":10,"time_filter":{}}))
         except Exception:
             failure=self.policy.provider_error("City Data MCP")
             self.record(iid,trace,kind="tool_call",label="City Data route geography unavailable",status="failed",provider="city_data",tool="city_data.find_hotspots",policy=failure,call=budget.city_data_calls,limit=self.policy.max_city_data_calls)

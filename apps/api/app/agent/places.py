@@ -11,6 +11,7 @@ from mcp.client.streamable_http import streamable_http_client
 from pydantic import BaseModel, Field, field_validator
 
 from .. import config  # noqa: F401  # Load the project environment before reading it.
+from ..cities import CityId, get_city
 from .schemas import AmenityCategory, PlaceResult
 from .route_service import ResolvedPlace
 
@@ -24,10 +25,12 @@ MAX_PLACES_PER_SEARCH = 10
 MAX_MAPS_SEARCH_CALLS = MAX_CANDIDATE_CELLS * MAX_CATEGORIES
 
 CATEGORY_QUERY = {
-    "cafe": "cafes in London, UK",
-    "coffee_shop": "coffee shops in London, UK",
-    "bicycle_repair_shop": "bicycle repair shops in London, UK",
-    "restaurant": "restaurants in London, UK",
+    "cafe": "cafes",
+    "coffee_shop": "coffee shops",
+    "bicycle_repair_shop": "bicycle repair shops",
+    "restaurant": "restaurants",
+    "shop": "shops",
+    "public_bathroom": "public bathrooms",
 }
 
 
@@ -47,7 +50,7 @@ def normalize_amenity_plan(question: str, plan: AmenitySearchPlan) -> AmenitySea
     """Keep normal enrichment small; retain larger plans only when explicitly requested."""
     lowered = question.lower()
     explicit_multi_category = (
-        sum(term in lowered for term in ("cafe", "cafés", "coffee shop", "coffee shops", "bike repair", "bicycle repair", "restaurant")) >= 2
+        sum(term in lowered for term in ("cafe", "cafés", "coffee shop", "coffee shops", "bike repair", "bicycle repair", "restaurant", "shop", "bathroom", "restroom", "toilet")) >= 2
         or "both" in lowered
         or "and" in lowered and len(plan.categories) > 1
     )
@@ -88,10 +91,11 @@ def h3_centroid(cell: str) -> tuple[float, float]:
     return float(latitude), float(longitude)
 
 
-def google_search_arguments(category: AmenityCategory, cell: str) -> dict[str, Any]:
+def google_search_arguments(category: AmenityCategory, cell: str, city: CityId = "london") -> dict[str, Any]:
     latitude, longitude = h3_centroid(cell)
+    city_definition = get_city(city)
     return {
-        "text_query": CATEGORY_QUERY[category],
+        "text_query": f"{CATEGORY_QUERY[category]} in {city_definition.maps_location}",
         "location_bias": {
             "circle": {
                 "center": {"latitude": latitude, "longitude": longitude},
@@ -99,7 +103,7 @@ def google_search_arguments(category: AmenityCategory, cell: str) -> dict[str, A
             }
         },
         "language_code": "en",
-        "region_code": "GB",
+        "region_code": city_definition.region_code,
     }
 
 
@@ -111,10 +115,10 @@ class GoogleMapsGroundingClient:
         self.api_key = api_key or os.getenv("GOOGLE_MAPS_GROUNDING_API_KEY") or os.getenv("GOOGLE_MAPS_API_KEY")
         self.timeout_s = timeout_s
 
-    async def search_places(self, category: AmenityCategory, cell: str) -> MapsSearchResult:
+    async def search_places(self, category: AmenityCategory, cell: str, city: CityId = "london") -> MapsSearchResult:
         if not self.api_key:
             raise RuntimeError("GOOGLE_MAPS_GROUNDING_API_KEY is not configured")
-        arguments = google_search_arguments(category, cell)
+        arguments = google_search_arguments(category, cell, city)
         headers = {
             "X-Goog-Api-Key": self.api_key,
             "Accept": "application/json, text/event-stream",
@@ -132,12 +136,13 @@ class GoogleMapsGroundingClient:
                     payload = _structured_payload(result)
                     return parse_search_result(payload, category, cell)
 
-    async def resolve_location(self, query: str) -> ResolvedPlace:
+    async def resolve_location(self, query: str, city: CityId = "london") -> ResolvedPlace:
         """Resolve a named endpoint through Grounding search; never accept model coordinates."""
         if not self.api_key:
             raise RuntimeError("GOOGLE_MAPS_GROUNDING_API_KEY is not configured")
         headers = {"X-Goog-Api-Key": self.api_key, "Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
-        arguments = {"text_query": f"{query}, London, UK", "language_code": "en", "region_code": "GB"}
+        city_definition = get_city(city)
+        arguments = {"text_query": f"{query}, {city_definition.maps_location}", "language_code": "en", "region_code": city_definition.region_code}
         async with httpx.AsyncClient(headers=headers, timeout=self.timeout_s) as http_client:
             async with streamable_http_client(self.url, http_client=http_client) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=self.timeout_s)) as session:

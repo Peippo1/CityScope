@@ -36,12 +36,12 @@ class FakeCity:
 
 class FakeMaps:
     def __init__(self,failure=False): self.calls=[]; self.failure=failure
-    async def search_places(self,category,cell):
-        self.calls.append((category,cell))
+    async def search_places(self,category,cell,city="london"):
+        self.calls.append((category,cell,city))
         if self.failure: raise RuntimeError("provider details")
         return MapsSearchResult.model_validate({"places":[{"place_id":"ChIJeval","name":"Cafe","latitude":51.5,"longitude":-0.1,"maps_uri":"https://maps.google.com/eval","category":category,"h3_cell":cell}]})
-    async def resolve_location(self,name):
-        self.calls.append(("resolve",name)); return ResolvedPlace(name=name,place_id=f"place-{len(self.calls)}",latitude=51.50+len(self.calls)/100,longitude=-0.1,maps_uri="https://maps.google.com/eval")
+    async def resolve_location(self,name,city="london"):
+        self.calls.append(("resolve",name,city)); return ResolvedPlace(name=name,place_id=f"place-{len(self.calls)}",latitude=51.50+len(self.calls)/100,longitude=-0.1,maps_uri="https://maps.google.com/eval")
 
 
 class FakeRoutes:

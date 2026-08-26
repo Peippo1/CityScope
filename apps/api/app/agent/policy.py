@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from .places import MAX_MAPS_SEARCH_CALLS, AmenitySearchPlan
 from .schemas import InvestigationRequest, ToolDecision
+from ..cities import get_city
 
 
 class PolicyOutcome(StrEnum):
@@ -72,13 +73,24 @@ class GuardrailPolicy:
         return PolicyDecision(outcome=PolicyOutcome.ALLOW, code=PolicyCode.ALLOWED, message="Allowed by CityScope policy.")
 
     def check_request(self, request: InvestigationRequest) -> PolicyDecision:
-        if request.city != "london":
-            return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_CITY, message="CityScope currently supports London only.")
+        try:
+            city = get_city(request.city)
+        except ValueError:
+            return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_CITY, message="CityScope does not support this city.")
         words = set(re.findall(r"[a-z]+", request.question.lower()))
         if words & self.weather_terms:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_WEATHER, message="Weather is outside the current CityScope investigation boundary.")
         if words & self.unsupported_terms:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_DOMAIN, message="This question is outside the supported CityScope investigation scope.")
+        return self.allow()
+
+    def check_route_locations(self, city_id: str, locations: Iterable[Any]) -> PolicyDecision:
+        city = get_city(city_id)
+        if not city.routes:
+            return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message=f"Bicycle routing is unavailable for {city.name} in this release.")
+        south, west, north, east = city.bounds
+        if any(not (south <= float(location.latitude) <= north and west <= float(location.longitude) <= east) for location in locations):
+            return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message=f"Route endpoints must resolve within {city.name}.")
         return self.allow()
 
     def check_model_round(self, budget: ExecutionBudget) -> PolicyDecision:

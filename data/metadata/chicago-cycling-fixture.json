@@ -1,0 +1,16 @@
+{
+  "city": "chicago",
+  "dataset_id": "chicago-fixture",
+  "dataset_name": "Divvy Trips",
+  "snapshot_id": "2026-05-fixture",
+  "source_organisation": "City of Chicago",
+  "source_url": "https://data.cityofchicago.org/d/fg6s-gzvg",
+  "observation_start": "2026-05-01T00:00:00Z",
+  "observation_end_exclusive": "2026-06-01T00:00:00Z",
+  "observation_period": "2026-05-01/2026-05-31",
+  "historical_snapshot": true,
+  "h3_resolution": 9,
+  "attribution_text": "Data provided by the City of Chicago",
+  "licence_terms_reference": "Fixture only; production source terms apply.",
+  "source_files": []
+}

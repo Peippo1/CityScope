@@ -22,6 +22,16 @@ const investigation: InvestigationResult = {
   evidence: [], places: [], amenity_analysis: [], city_insights: [], map_layers: [], limitations: [], trace: [], follow_up_suggestions: [],
 };
 
+const comparison = {
+  metric: "trips_per_active_station_day", calculation_basis: "trips divided by active stations and days", observation_period: "2026-05-01/2026-05-31",
+  cities: [{ city: "london", city_name: "London", value: 1.2, rank: 1, snapshot_id: "2026-05", is_fixture: false }, { city: "new_york", city_name: "New York City", value: 0.9, rank: 2, snapshot_id: "2026-05", is_fixture: false }], limitations: ["Normalized only"],
+};
+
+const parisLive = {
+  city: "paris" as const, provider: "Vélib' Métropole GBFS", fetched_at: "2026-08-26T12:00:00Z", freshness: "fresh" as const, attribution_text: "Live station status provided by Vélib' Métropole.", source_url: "https://example.test/velib", limitations: ["Live only"],
+  stations: [{ station_id: "1", name: "Paris station", latitude: 48.85, longitude: 2.35, bikes_available: 4, docks_available: 7 }],
+};
+
 describe("CityScopeWorkspace", () => {
   it("lets a user retry activity loading without turning it into an investigation error", async () => {
     const user = userEvent.setup();
@@ -73,5 +83,26 @@ describe("CityScopeWorkspace", () => {
     await user.click(screen.getByRole("button", { name: "Retry investigation" }));
     expect(await screen.findByText(investigation.answer)).toBeVisible();
     expect(screen.queryByText("Investigation unavailable")).not.toBeInTheDocument();
+  });
+
+  it("shows a normalized four-city comparison without leaving the workspace", async () => {
+    const user = userEvent.setup();
+    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate: vi.fn(), getComparison: vi.fn().mockResolvedValue(comparison) }} />);
+
+    await user.click(screen.getByRole("button", { name: "Compare" }));
+
+    expect(await screen.findByRole("heading", { name: "Four-city comparison" })).toBeVisible();
+    expect(screen.getAllByText("New York City")).toHaveLength(2);
+    expect(screen.getByText(/never raw journey totals/i)).toBeVisible();
+  });
+
+  it("shows Paris as separate live network context", async () => {
+    const user = userEvent.setup();
+    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate: vi.fn(), getParisLive: vi.fn().mockResolvedValue(parisLive) }} />);
+
+    await user.click(screen.getByRole("button", { name: "Paris live" }));
+
+    expect(await screen.findByRole("heading", { name: "Paris Vélib' availability" })).toBeVisible();
+    expect(screen.getByText(/not comparable to the historical trip cohort/i)).toBeVisible();
   });
 });

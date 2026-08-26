@@ -1,5 +1,5 @@
 export type InvestigationRequest = {
-  city: "london";
+  city: "london" | "new_york" | "chicago" | "washington_dc" | "paris";
   question: string;
   context: { selected_h3_cells: string[]; previous_turns: { role: "user" | "assistant"; content: string }[]; evidence_summary?: string };
 };

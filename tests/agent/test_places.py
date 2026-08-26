@@ -32,6 +32,13 @@ def test_h3_centroid_and_google_wire_schema_are_deterministic() -> None:
     assert arguments["region_code"] == "GB"
 
 
+def test_google_search_arguments_follow_the_selected_city() -> None:
+    arguments = google_search_arguments("cafe", CELL, "chicago")
+
+    assert arguments["text_query"] == "cafes in Chicago, Illinois, USA"
+    assert arguments["region_code"] == "US"
+
+
 def test_maps_client_uses_server_credential_and_official_endpoint_defaults() -> None:
     client = GoogleMapsGroundingClient(api_key="server-only-test-key")
 

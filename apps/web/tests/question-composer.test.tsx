@@ -9,7 +9,7 @@ describe("QuestionComposer", () => {
     const user = userEvent.setup();
     function ComposerHarness() {
       const [value, setValue] = useState("");
-      return <QuestionComposer value={value} isSubmitting={false} onChange={setValue} onSubmit={vi.fn()} />;
+      return <QuestionComposer cityName="Chicago" datasetName="Divvy Trips" value={value} isSubmitting={false} onChange={setValue} onSubmit={vi.fn()} />;
     }
     render(<ComposerHarness />);
 
@@ -22,10 +22,10 @@ describe("QuestionComposer", () => {
 
   it("prevents blank and in-flight submissions", () => {
     const onSubmit = vi.fn();
-    const { rerender } = render(<QuestionComposer value="" isSubmitting={false} onChange={vi.fn()} onSubmit={onSubmit} />);
+    const { rerender } = render(<QuestionComposer cityName="London" value="" isSubmitting={false} onChange={vi.fn()} onSubmit={onSubmit} />);
     expect(screen.getByRole("button", { name: "Investigate" })).toBeDisabled();
 
-    rerender(<QuestionComposer value="Where are the hotspots?" isSubmitting={true} onChange={vi.fn()} onSubmit={onSubmit} />);
+    rerender(<QuestionComposer cityName="London" value="Where are the hotspots?" isSubmitting={true} onChange={vi.fn()} onSubmit={onSubmit} />);
     expect(screen.getByRole("button", { name: "Investigating…" })).toBeDisabled();
     expect(onSubmit).not.toHaveBeenCalled();
   });

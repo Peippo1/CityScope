@@ -6,7 +6,7 @@ This document is portfolio and submission copy. Review it against the final demo
 
 **Name:** CityScope
 
-**Tagline:** Evidence-grounded geospatial intelligence for exploring London cycling activity and planning better routes.
+**Tagline:** Evidence-grounded bike-share intelligence for comparing cities without inventing equivalence.
 
 **Recommended category:** Taskmaster
 
@@ -18,7 +18,7 @@ This document is portfolio and submission copy. Review it against the final demo
 
 ## Portfolio summary
 
-CityScope is an agentic geospatial intelligence application that turns a natural-language London mobility question into a bounded, visual investigation. Gemini 3.5 Flash selects from guarded tools; a deterministic City Data MCP queries H3-indexed TfL cycling aggregates; Google Maps supplies current place context; and Google Routes computes attributed bicycle routes. The result combines an interactive map, activity visualisations, evidence, limitations, and an execution trace. CityScope runs on Firebase Hosting, Firebase Authentication, Firestore, Cloud Run, Artifact Registry, and Secret Manager, with separate service identities and no provider credentials exposed to the browser.
+CityScope is an agentic geospatial intelligence application that turns a mobility question into a bounded, visual investigation. Its historical cohort covers London, New York City, Chicago, and Washington, DC through matched May 2026 trip data and normalized comparison metrics. A separate Paris Vélib' MCP supplies live station availability, visibly excluded from historical rankings. Gemini 3.5 Flash selects guarded tools; deterministic City Data MCP queries H3-indexed aggregates; Google Maps supplies current place context; and Google Routes computes attributed bicycle routes.
 
 ## Inspiration
 
@@ -26,7 +26,8 @@ City data analysis is still fragmented across downloads, notebooks, dashboards, 
 
 ## What it does
 
-- Answers bounded questions over a pinned May 2026 TfL Santander Cycles snapshot.
+- Compares four May 2026 bike-share systems by normalized demand, duration, peak-hour, weekend, and hotspot-concentration metrics rather than raw volume.
+- Shows Paris Vélib' live station availability with provider freshness and an explicit non-comparability boundary.
 - Ranks and compares H3-indexed cycling activity using deterministic DuckDB queries.
 - Enriches trusted areas with current Google Maps place context.
 - Resolves named endpoints and computes Google bicycle routes through bounded activity-informed waypoints.
