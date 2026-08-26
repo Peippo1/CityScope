@@ -11,6 +11,7 @@ apps/web/out/
 apps/web/test-results/
 apps/web/playwright-report/
 .firebase/
+firebase-debug.log*
 .env
 .env.local
 .env.*.local
