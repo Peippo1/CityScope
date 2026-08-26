@@ -21,6 +21,17 @@ def test_tfl_schema_and_duration_parser():
         parse_duration_seconds("0s")
 
 
+def test_tfl_timestamps_preserve_london_local_hour(tmp_path):
+    stations = tmp_path / "stations.json"
+    stations.write_text('[{"commonName":"A","lat":51.5,"lon":-0.1,"additionalProperties":[{"key":"TerminalName","value":"000001"}]},{"commonName":"B","lat":51.51,"lon":-0.11,"additionalProperties":[{"key":"TerminalName","value":"000002"}]}]')
+
+    canonical, quarantined = to_canonical([FIXTURE], stations)
+
+    assert quarantined.empty
+    assert str(canonical.iloc[0]["start_timestamp"]) == "2026-05-01 07:00:00+00:00"
+    assert canonical.iloc[0]["hour"] == 8
+
+
 def test_station_enrichment_reports_unmatched_ids():
     stations = pd.DataFrame([{
         "source_location_id": "000001",

@@ -1,0 +1,40 @@
+{
+  "city": "washington_dc",
+  "dataset_id": "capital-bikeshare-trip-history",
+  "dataset_name": "Capital Bikeshare May 2026 trip history",
+  "snapshot_id": "2026-05",
+  "source_organisation": "Capital Bikeshare",
+  "source_url": "https://capitalbikeshare.com/system-data",
+  "observation_start": "2026-05-01T04:00:00+00:00",
+  "observation_end_exclusive": "2026-06-01T04:00:00+00:00",
+  "observation_period": "2026-05-01/2026-05-31",
+  "observation_timezone": "America/New_York",
+  "historical_snapshot": true,
+  "h3_resolution": 9,
+  "attribution_text": "Data provided by Capital Bikeshare",
+  "licence_terms_reference": "Capital Bikeshare Data License Agreement",
+  "source_files": [
+    {
+      "file": "202605-capitalbikeshare-tripdata.zip",
+      "url": "https://s3.amazonaws.com/capitalbikeshare-data/202605-capitalbikeshare-tripdata.zip",
+      "sha256": "09af6b9d7bfdfeff084783f9397da7371e745bbf604ca3065fcdd50843078f9f"
+    }
+  ],
+  "reconciliation": {
+    "source_rows": 592555,
+    "accepted_rows": 588599,
+    "rejected_rows": 3956,
+    "exclusions_by_reason": {
+      "coordinates_outside_city": 3521,
+      "missing_coordinates": 371,
+      "outside_observation_window": 64
+    }
+  },
+  "quarantine_file": "washington_dc-cycling-production-exclusions.parquet",
+  "transformation_version": "cityscope-core-v3-lyft-trip-history-v1",
+  "generated_artifacts": {
+    "journeys": "washington_dc_cycling_production_journeys.parquet"
+  },
+  "generated_artifact_version": "4efb12a333024d09d5446a73db8d71dc6756c3ab54a4e8e5198b2d83a3ae8cec",
+  "generated_at": "2026-08-26T17:24:19.687128+00:00"
+}

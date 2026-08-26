@@ -1,0 +1,40 @@
+{
+  "city": "chicago",
+  "dataset_id": "divvy-trips",
+  "dataset_name": "Divvy May 2026 trip history",
+  "snapshot_id": "2026-05",
+  "source_organisation": "Divvy",
+  "source_url": "https://divvybikes.com/system-data",
+  "observation_start": "2026-05-01T05:00:00+00:00",
+  "observation_end_exclusive": "2026-06-01T05:00:00+00:00",
+  "observation_period": "2026-05-01/2026-05-31",
+  "observation_timezone": "America/Chicago",
+  "historical_snapshot": true,
+  "h3_resolution": 9,
+  "attribution_text": "Data provided by Divvy",
+  "licence_terms_reference": "Divvy Data License Agreement",
+  "source_files": [
+    {
+      "file": "202605-divvy-tripdata.zip",
+      "url": "https://divvy-tripdata.s3.amazonaws.com/202605-divvy-tripdata.zip",
+      "sha256": "880e4ff17b03e206ef8f06e5815fc6b520172bd6f0298682823007be99ce34b2"
+    }
+  ],
+  "reconciliation": {
+    "source_rows": 653704,
+    "accepted_rows": 653075,
+    "rejected_rows": 629,
+    "exclusions_by_reason": {
+      "coordinates_outside_city": 10,
+      "missing_coordinates": 584,
+      "outside_observation_window": 35
+    }
+  },
+  "quarantine_file": "chicago-cycling-production-exclusions.parquet",
+  "transformation_version": "cityscope-core-v3-lyft-trip-history-v1",
+  "generated_artifacts": {
+    "journeys": "chicago_cycling_production_journeys.parquet"
+  },
+  "generated_artifact_version": "c7162ab1a1a0c96ff407dacb2f6e7821b097719387fc06af310ea95d41322ce2",
+  "generated_at": "2026-08-26T17:24:20.458789+00:00"
+}

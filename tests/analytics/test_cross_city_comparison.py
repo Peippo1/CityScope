@@ -22,3 +22,12 @@ def test_cross_city_comparison_rejects_raw_count_metric():
         assert "Unsupported cross-city metric" in str(exc)
     else:
         raise AssertionError("raw activity totals must not be comparable")
+
+
+def test_hotspot_concentration_is_a_share_of_unique_trips():
+    build_multicity_fixture()
+    result = MobilityAnalytics(__import__("pathlib").Path(__file__).resolve().parents[2]).compare_cities(
+        ["london", "new_york", "chicago", "washington_dc"], "hotspot_concentration"
+    )
+
+    assert all(0 <= row["value"] <= 1 for row in result["cities"])

@@ -1,9 +1,11 @@
 import pandas as pd
 
 
-def add_temporal_features(frame: pd.DataFrame, timestamp_column: str = "start_timestamp") -> pd.DataFrame:
+def add_temporal_features(frame: pd.DataFrame, timestamp_column: str = "start_timestamp", timezone: str | None = None) -> pd.DataFrame:
     result = frame.copy()
     timestamps = pd.to_datetime(result[timestamp_column], utc=True)
+    if timezone:
+        timestamps = timestamps.dt.tz_convert(timezone)
     result["hour"] = timestamps.dt.hour
     result["weekday"] = timestamps.dt.day_name()
     result["is_weekend"] = timestamps.dt.dayofweek >= 5

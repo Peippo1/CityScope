@@ -125,7 +125,6 @@ class MobilityAnalytics:
             if metric == "weekend_share":
                 value = connection.execute("SELECT avg(CASE WHEN is_weekend THEN 1.0 ELSE 0.0 END) FROM read_parquet(?)", [str(journeys_path)]).fetchone()[0]
                 return round(float(value or 0), 4)
-            trip_count = connection.execute("SELECT count(*) FROM read_parquet(?)", [str(journeys_path)]).fetchone()[0]
             counts = connection.execute("""
                 SELECT h3_cell, count(DISTINCT trip_id) AS value FROM (
                     SELECT trip_id, origin_h3 AS h3_cell FROM read_parquet(?)
@@ -133,7 +132,15 @@ class MobilityAnalytics:
                     SELECT trip_id, destination_h3 AS h3_cell FROM read_parquet(?)
                 ) GROUP BY h3_cell ORDER BY value DESC, h3_cell ASC
             """, [str(journeys_path), str(journeys_path)]).fetchall()
-        return round(sum(row[1] for row in counts[:max(1, -(-len(counts) // 10))]) / max(int(trip_count), 1), 4)
+            top_cells = [row[0] for row in counts[:max(1, -(-len(counts) // 10))]]
+            trip_count, concentrated_trips = connection.execute("""
+                SELECT count(*), count(*) FILTER (
+                    WHERE origin_h3 IN (SELECT * FROM UNNEST(?))
+                       OR destination_h3 IN (SELECT * FROM UNNEST(?))
+                )
+                FROM read_parquet(?)
+            """, [top_cells, top_cells, str(journeys_path)]).fetchone()
+        return round(float(concentrated_trips) / max(int(trip_count), 1), 4)
 
     @staticmethod
     def _comparison_basis(metric: str) -> str:

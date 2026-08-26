@@ -1,6 +1,6 @@
 # Building CityScope: an agent that can reason about movement without inventing the city
 
-**CityScope combines Gemini, deterministic geospatial analytics, Google Maps, and Google Cloud to turn a London mobility question into a bounded, visual investigation.**
+**CityScope combines Gemini, deterministic geospatial analytics, Google Maps, and Google Cloud to turn cross-city mobility questions into bounded, visual investigations.**
 
 > I created this article for the purpose of entering CityScope in the All Things Agentic Hackathon.
 
@@ -28,7 +28,7 @@ The model decides what evidence is needed. It does not calculate journey totals,
 
 ## Building the data foundation
 
-Each historical city uses a pinned May 2026 trip snapshot. The ingestion pipeline validates source records, rejects invalid durations, missing coordinates, duplicate trip IDs, and out-of-window rows, assigns H3 resolution 9 cells, and writes checksummed Parquet plus metadata artifacts. Cross-city views use per-active-station demand, duration, time-pattern, and concentration metrics rather than raw journey totals.
+Each historical city uses a pinned May 2026 trip snapshot. The ingestion pipeline reads official archives in bounded chunks, interprets timestamps in the source city's local timezone, rejects invalid durations, missing coordinates, duplicate trip IDs, invalid H3 assignments, and out-of-window rows, then writes checksummed Parquet plus reasoned quarantine metadata. The verified cohort contains 4,680,767 accepted Citi Bike trips, 653,075 Divvy trips, 588,599 Capital Bikeshare trips, and 854,872 TfL trips. Cross-city views use per-active-station demand, duration, time-pattern, and unique-trip hotspot concentration rather than raw journey totals.
 
 That snapshot is deliberately labelled as historical throughout the interface. CityScope does not present it as live cycling behaviour. Current place context and bicycle routes are shown as separate Google-backed sources, each with its own attribution and limitations.
 

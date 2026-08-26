@@ -81,9 +81,9 @@ question -> guarded planner -> City Data MCP -------------------+
 Paris GBFS -> City Live Data MCP -> labelled live-network context
 ```
 
-Generated artifacts retain checksums, reconciliation counts, observation period, source attribution, and snapshot metadata. Large raw and generated datasets are intentionally excluded from Git.
+Generated artifacts retain checksums, per-reason reconciliation counts, local observation period, source attribution, and snapshot metadata. The production build accepts official CSV or ZIP archives in bounded chunks. Large raw, generated, and quarantine datasets are intentionally excluded from Git.
 
-> Local development uses clearly labelled deterministic fixtures for new cities until the official May 2026 source files are built with `pipelines.multicity.build_production`. Do not treat fixture comparisons as real findings.
+> A clean checkout uses clearly labelled deterministic fixtures until the official May 2026 source files are built with `pipelines.multicity.build_production`. The verified cohort build accepts 653,075 Chicago trips, 588,599 Washington, DC trips, and 4,680,767 New York trips; London contributes 854,872 accepted TfL trips. Fixture comparisons remain visibly labelled and must not be treated as findings.
 
 ## Quick Start
 

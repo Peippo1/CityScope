@@ -1,0 +1,39 @@
+{
+  "city": "new_york",
+  "dataset_id": "citibike-trip-history",
+  "dataset_name": "Citi Bike May 2026 trip history",
+  "snapshot_id": "2026-05",
+  "source_organisation": "Citi Bike",
+  "source_url": "https://citibikenyc.com/system-data",
+  "observation_start": "2026-05-01T04:00:00+00:00",
+  "observation_end_exclusive": "2026-06-01T04:00:00+00:00",
+  "observation_period": "2026-05-01/2026-05-31",
+  "observation_timezone": "America/New_York",
+  "historical_snapshot": true,
+  "h3_resolution": 9,
+  "attribution_text": "Data provided by Citi Bike",
+  "licence_terms_reference": "NYCBS Data Use Policy",
+  "source_files": [
+    {
+      "file": "202605-citibike-tripdata.zip",
+      "url": "https://s3.amazonaws.com/tripdata/202605-citibike-tripdata.zip",
+      "sha256": "b9461221fb7ce806d5274b046b4de46414a1d1116ba2bc46c6a870b7bda71adf"
+    }
+  ],
+  "reconciliation": {
+    "source_rows": 4694878,
+    "accepted_rows": 4680767,
+    "rejected_rows": 14111,
+    "exclusions_by_reason": {
+      "missing_coordinates": 13599,
+      "outside_observation_window": 512
+    }
+  },
+  "quarantine_file": "new_york-cycling-production-exclusions.parquet",
+  "transformation_version": "cityscope-core-v3-lyft-trip-history-v1",
+  "generated_artifacts": {
+    "journeys": "new_york_cycling_production_journeys.parquet"
+  },
+  "generated_artifact_version": "785508aa244cae7f3a294d50190541cdb3080a3c9b26bb418988819be3605553",
+  "generated_at": "2026-08-26T17:25:32.822899+00:00"
+}

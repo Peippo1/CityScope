@@ -17,8 +17,18 @@ TfL publishes Santander Cycle Hire journey data by week and documents journey ID
 
 TfL attribution is displayed in the application as: `Data provided by Transport for London`. Historical data is explicitly labelled as a snapshot and is not presented as live activity.
 
-## Citi Bike portability check
+## Matched US production snapshots
 
-The Citi Bike system publishes trip histories containing ride ID, timestamps, station IDs, coordinates, and member/casual status. The portability fixture maps these fields into the same canonical trip columns and preserves `rideable_type` and `member_casual` as source extensions. The shared temporal, H3, and aggregate functions process the fixture without NYC-specific branches.
+CityScope ingests the official May 2026 Citi Bike, Divvy, and Capital Bikeshare archives through one validated source-family adapter. ZIP members are read in bounded chunks. Source-local timestamps are localized using each city registry timezone before being converted to UTC for storage; hour, weekday, weekend, and May-window checks remain local to the city.
 
-Citi Bike data is subject to the NYCBS Data Use Policy. It is not exposed as a finished CityScope city in this slice.
+The verified builds reconcile as follows:
+
+| City | Source rows | Accepted | Rejected |
+| --- | ---: | ---: | ---: |
+| New York City | 4,694,878 | 4,680,767 | 14,111 |
+| Chicago | 653,704 | 653,075 | 629 |
+| Washington, DC | 592,555 | 588,599 | 3,956 |
+
+Rows are excluded for malformed timestamps, starts outside the May 1-31 local window, missing or out-of-city coordinates, non-positive durations, duplicate trip IDs, or invalid H3 assignments. Each exclusion has one reason in the city quarantine artifact and metadata manifest. Dockless trips with valid coordinates remain in mobility metrics; null station IDs remain null and therefore do not create a fake active station in the station-normalized denominator.
+
+The generated manifests pin the direct archive URL, archive SHA-256, artifact SHA-256, timezone, licence reference, transformation version, and exclusion counts. Citi Bike is governed by the NYCBS Data Use Policy, Divvy by the Divvy Data License Agreement, and Capital Bikeshare by its Data License Agreement.
