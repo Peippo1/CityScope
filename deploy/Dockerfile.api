@@ -14,7 +14,7 @@ COPY data/generated ./data/generated
 COPY data/metadata ./data/metadata
 
 RUN python -m pip install --no-cache-dir . && \
-    python scripts/verify_deployment_artifact.py && \
+    python -m scripts.verify_deployment_artifact && \
     adduser --disabled-password --gecos "" --uid 10001 cityscope
 
 USER cityscope
