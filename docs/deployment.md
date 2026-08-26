@@ -4,7 +4,7 @@
 
 - Firebase Hosting serves the static Next.js export.
 - A public Cloud Run service hosts the FastAPI API.
-- A private, internal-ingress Cloud Run service hosts City Data MCP.
+- An IAM-private Cloud Run service hosts City Data MCP. Its ingress is reachable, but only the API service account has `roles/run.invoker`.
 - Artifact Registry stores both container images in `europe-west2`.
 - Secret Manager supplies only server-side Gemini and Google API keys.
 
@@ -46,7 +46,7 @@ gcloud builds submit \
   --project cityscope-506222
 ```
 
-Deploy MCP first with internal ingress and authentication required. Deploy the API second, granting its service account permission to invoke MCP and setting `CITYSCOPE_CITY_DATA_MCP_URL` plus `CITYSCOPE_CITY_DATA_MCP_ID_TOKEN_AUDIENCE` to the MCP service URL.
+Deploy MCP first with authentication required and its exact Cloud Run hostnames in `deploy/mcp.env.yaml`. Use `all` ingress unless both services are attached to a VPC path that Cloud Run recognizes as internal. Deploy the API second, granting only its service account permission to invoke MCP. The non-secret API settings live in `deploy/api.env.yaml`; Secret Manager references are supplied separately during deployment.
 
 ## Publish Firebase Hosting
 
@@ -72,6 +72,7 @@ Keep these server-only values in the API environment, never in the web app:
 - `CITYSCOPE_WEB_ORIGIN` — exact browser origin allowed by API CORS.
 - `CITYSCOPE_TRUSTED_HOSTS` — comma-separated API Host header allowlist.
 - `CITYSCOPE_CITY_DATA_MCP_ID_TOKEN_AUDIENCE` — private MCP Cloud Run service URL.
+- `CITYSCOPE_MCP_ALLOWED_HOSTS` — exact MCP Cloud Run Host header allowlist used by MCP DNS-rebinding protection.
 - `FIREBASE_PROJECT_ID` — enables Firebase token verification and Firestore-backed saved investigations.
 
 The browser may receive only `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`. Restrict it in Google Cloud by HTTP referrer, enabled APIs, and quota. Do not put any server key in `NEXT_PUBLIC_*` variables.

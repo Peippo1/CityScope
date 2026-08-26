@@ -10,6 +10,7 @@ apps/web/.next/
 apps/web/out/
 apps/web/test-results/
 apps/web/playwright-report/
+.firebase/
 .env
 .env.local
 .env.*.local

@@ -1,12 +1,37 @@
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from .schemas import AreaMetricsRequest, CompareAreasRequest, DatasetRequest, HotspotsRequest, DatasetMetadata, ToolEnvelope
 from .tools import compare_areas, describe_dataset, find_hotspots, get_area_metrics
 
-mcp = FastMCP("CityScope City Data", json_response=True, stateless_http=True, streamable_http_path="/")
+
+def transport_security_settings() -> TransportSecuritySettings:
+    allowed_hosts = [
+        host.strip()
+        for host in os.getenv(
+            "CITYSCOPE_MCP_ALLOWED_HOSTS",
+            "127.0.0.1:*,localhost:*,[::1]:*",
+        ).split(",")
+        if host.strip()
+    ]
+    return TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts,
+        allowed_origins=["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"],
+    )
+
+
+mcp = FastMCP(
+    "CityScope City Data",
+    json_response=True,
+    stateless_http=True,
+    streamable_http_path="/",
+    transport_security=transport_security_settings(),
+)
 
 
 @mcp.tool(name="describe_dataset")
