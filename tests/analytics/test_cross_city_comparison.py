@@ -1,3 +1,7 @@
+import json
+
+import pandas as pd
+
 from pipelines.multicity.build_fixture import main as build_multicity_fixture
 from apps.api.app.analytics.mobility import MobilityAnalytics
 
@@ -31,3 +35,19 @@ def test_hotspot_concentration_is_a_share_of_unique_trips():
     )
 
     assert all(0 <= row["value"] <= 1 for row in result["cities"])
+
+
+def test_station_normalization_supports_original_london_fixture_schema(tmp_path):
+    generated = tmp_path / "data" / "generated"
+    metadata = tmp_path / "data" / "metadata"
+    generated.mkdir(parents=True)
+    metadata.mkdir(parents=True)
+    pd.DataFrame([
+        {"trip_id": "one", "origin_station_id": "A", "destination_station_id": "B"},
+        {"trip_id": "two", "origin_station_id": "A", "destination_station_id": "C"},
+    ]).to_parquet(generated / "london_cycling_journeys.parquet", index=False)
+    (metadata / "london-cycling-fixture.json").write_text(json.dumps({"snapshot_id": "2026-05-fixture"}))
+
+    value = MobilityAnalytics(tmp_path)._uncached_comparison_value("london", "trips_per_active_station_day")
+
+    assert value == round(2 / 3 / 31, 4)

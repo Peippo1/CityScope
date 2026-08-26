@@ -107,12 +107,13 @@ class MobilityAnalytics:
         _, journeys_path = self._dataset(city)
         with duckdb.connect() as connection:
             if metric == "trips_per_active_station_day":
-                trips, stations = connection.execute("""
+                origin_column, destination_column = self._station_id_columns(connection, journeys_path)
+                trips, stations = connection.execute(f"""
                     SELECT (SELECT count(*) FROM read_parquet(?)),
                     (SELECT count(*) FROM (
-                        SELECT DISTINCT origin_location_id AS station FROM read_parquet(?) WHERE origin_location_id IS NOT NULL
+                        SELECT DISTINCT "{origin_column}" AS station FROM read_parquet(?) WHERE "{origin_column}" IS NOT NULL
                         UNION
-                        SELECT DISTINCT destination_location_id AS station FROM read_parquet(?) WHERE destination_location_id IS NOT NULL
+                        SELECT DISTINCT "{destination_column}" AS station FROM read_parquet(?) WHERE "{destination_column}" IS NOT NULL
                     ))
                 """, [str(journeys_path), str(journeys_path), str(journeys_path)]).fetchone()
                 return round(float(trips) / max(int(stations), 1) / 31, 4)
@@ -141,6 +142,14 @@ class MobilityAnalytics:
                 FROM read_parquet(?)
             """, [top_cells, top_cells, str(journeys_path)]).fetchone()
         return round(float(concentrated_trips) / max(int(trip_count), 1), 4)
+
+    @staticmethod
+    def _station_id_columns(connection: duckdb.DuckDBPyConnection, journeys_path: Path) -> tuple[str, str]:
+        columns = {row[0] for row in connection.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(journeys_path)]).fetchall()}
+        for pair in (("origin_location_id", "destination_location_id"), ("origin_station_id", "destination_station_id")):
+            if set(pair).issubset(columns):
+                return pair
+        raise ValueError("Journey artifact is missing origin and destination station identifiers")
 
     @staticmethod
     def _comparison_basis(metric: str) -> str:
