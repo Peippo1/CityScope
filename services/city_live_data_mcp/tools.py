@@ -35,7 +35,7 @@ class VelibClient:
         information = {str(raw.get("station_id")): raw for raw in information_payload["data"]["stations"] if isinstance(raw, dict)}
         stations = [_station(raw, information.get(str(raw.get("station_id")))) for raw in payload["data"]["stations"]]
         stations = [station for station in stations if station is not None]
-        stations.sort(key=lambda station: (station.bikes_available, station.station_id))
+        stations.sort(key=_station_display_sort_key)
         now = datetime.now(UTC)
         return LiveNetworkResponse(
             city="paris", provider="Vélib' Métropole GBFS", provider_timestamp=provider_timestamp, fetched_at=now.isoformat(),
@@ -62,6 +62,10 @@ def _station(raw: Any, information: Any = None) -> LiveStation | None:
     if not isinstance(station_id, (str, int)) or not all(isinstance(value, (int, float)) for value in (latitude, longitude, bikes, docks)): return None
     if not (-90 <= float(latitude) <= 90 and -180 <= float(longitude) <= 180 and bikes >= 0 and docks >= 0): return None
     return LiveStation(station_id=str(station_id), name=raw.get("name") if isinstance(raw.get("name"), str) else None, latitude=float(latitude), longitude=float(longitude), bikes_available=int(bikes), docks_available=int(docks), last_reported=_int_or_none(raw.get("last_reported")))
+
+
+def _station_display_sort_key(station: LiveStation) -> tuple[int, int, str]:
+    return (-station.bikes_available, -station.docks_available, station.station_id)
 
 
 def _freshness(provider_timestamp: int | None, now: float) -> str:

@@ -250,7 +250,7 @@ ul, ol { margin-top: 0; }
 
 @media (max-width: 1100px) {
   .topbar { grid-template-columns: 1fr auto; }
-  .view-nav { display: none; }
+  .view-nav { grid-column: 1 / -1; grid-row: 2; justify-content: center; margin-top: -12px; padding-bottom: 8px; }
   .dashboard-intro { grid-template-columns: 1fr; gap: 12px; }
   .composer { grid-template-columns: 1fr; gap: 16px; }
   .composer > .section-heading, .composer > .prompt-list, .composer > form { grid-column: 1; grid-row: auto; }
@@ -262,6 +262,8 @@ ul, ol { margin-top: 0; }
 @media (max-width: 720px) {
   .app-shell { padding: 0 12px 32px; }
   .topbar { min-height: 64px; gap: 12px; }
+  .view-nav { justify-content: stretch; margin-top: -4px; }
+  .view-nav button { min-width: 0; flex: 1; padding-inline: 8px; }
   .brand { font-size: .94rem; }
   .account-email { display: none; }
   .account-actions .secondary-button { padding-inline: 10px; font-size: .78rem; }

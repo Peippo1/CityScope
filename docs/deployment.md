@@ -72,7 +72,9 @@ The demo project uses these provisioned resources:
 
 The collector joins the fixed official Vélib' `station_information` and `station_status` feeds by station ID, validates the merged rows, and archives every valid station. Objects are gzip-compressed and partitioned by UTC year/month/day/hour. The provider timestamp is part of the filename and uploads use a generation precondition, making retries idempotent for an unchanged provider snapshot. The archive remains trend-ineligible until a meaningful history exists.
 
-Deploy MCP first with authentication required and its exact Cloud Run hostnames in `deploy/mcp.env.yaml`. Use `all` ingress unless both services are attached to a VPC path that Cloud Run recognizes as internal. Deploy the API second, granting only its service account permission to invoke MCP. The non-secret API settings live in `deploy/api.env.yaml`; Secret Manager references are supplied separately during deployment.
+Deploy both MCP services with authentication required and their exact Cloud Run hostnames in `deploy/mcp.env.yaml` and `deploy/live-mcp.env.yaml`. The live MCP uses its own no-role runtime identity and the API identity receives `roles/run.invoker` on that service only. Use `all` ingress unless the services are attached to a VPC path that Cloud Run recognizes as internal. Deploy the API after both MCPs. The non-secret API settings live in `deploy/api.env.yaml`; Secret Manager references are supplied separately during deployment.
+
+Build the live MCP with `deploy/live-mcp.gcloudignore`. Its image contains only the live service and dependencies, not the historical Parquet cohort or archive snapshots.
 
 ## Publish Firebase Hosting
 

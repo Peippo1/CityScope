@@ -33,6 +33,11 @@ describe("PlacesExplorer", () => {
     render(<PlacesExplorer cityName="London" bounds={[51.28, -0.52, 51.72, 0.34]} onPlacesChange={onPlacesChange} onSelectPlace={onSelectPlace} />);
 
     await waitFor(() => expect(maps.searches).toHaveLength(1));
+    const content = maps.searches[0].querySelector("gmp-place-content-config");
+    expect(content).not.toBeNull();
+    expect(content?.querySelector("gmp-place-address")).not.toBeNull();
+    expect(content?.querySelector("gmp-place-rating")).not.toBeNull();
+    expect(maps.searches[0].querySelector("gmp-place-all-content")).toBeNull();
     const place = {
       id: "place-1",
       displayName: "City Cafe",

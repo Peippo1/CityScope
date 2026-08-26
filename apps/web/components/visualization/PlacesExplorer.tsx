@@ -45,8 +45,11 @@ export function PlacesExplorer({ cityName, bounds, onPlacesChange, onSelectPlace
       request.locationRestriction = {
         north: bounds[2], south: bounds[0], east: bounds[3], west: bounds[1],
       };
+      const content = document.createElement("gmp-place-content-config");
+      ["gmp-place-address", "gmp-place-type", "gmp-place-rating", "gmp-place-open-now-status", "gmp-place-attribution"]
+        .forEach((tagName) => content.append(document.createElement(tagName)));
       search.append(request);
-      search.append(document.createElement("gmp-place-all-content"));
+      search.append(content);
       search.addEventListener("gmp-load", () => {
         if (cancelled) return;
         onPlacesChange?.(search.places.map(toMapPlace).filter((place): place is FocusedMapPlace => place !== null));
