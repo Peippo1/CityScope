@@ -142,6 +142,8 @@ Server-side configuration includes:
 - `CITYSCOPE_CITY_LIVE_DATA_MCP_URL` for the private Paris live-data MCP endpoint.
 - `CITYSCOPE_PARIS_ARCHIVE_BUCKET` for the hourly private GBFS archive job.
 
+The Paris client joins Vélib's fixed official station-information and station-status feeds so names and coordinates remain separate from availability. The deployed collector archives full validated snapshots hourly to a private regional bucket; the UI still exposes no trend claim until the archive is sufficiently mature.
+
 The web app uses separately restricted public configuration:
 
 - `NEXT_PUBLIC_CITYSCOPE_API_URL`;

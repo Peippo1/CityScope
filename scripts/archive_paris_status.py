@@ -13,16 +13,21 @@ async def archive() -> str:
     bucket_name = os.getenv("CITYSCOPE_PARIS_ARCHIVE_BUCKET")
     if not bucket_name:
         raise RuntimeError("CITYSCOPE_PARIS_ARCHIVE_BUCKET is required")
-    result = await VelibClient().get_status(limit=100)
+    result = await VelibClient().get_status(limit=None)
     timestamp = datetime.now(UTC)
-    object_name = f"paris-velib/year={timestamp:%Y}/month={timestamp:%m}/day={timestamp:%d}/hour={timestamp:%H}/status.json.gz"
+    snapshot_id = result.provider_timestamp or int(timestamp.timestamp())
+    object_name = f"paris-velib/year={timestamp:%Y}/month={timestamp:%m}/day={timestamp:%d}/hour={timestamp:%H}/status-{snapshot_id}.json.gz"
     try:
+        from google.api_core.exceptions import PreconditionFailed
         from google.cloud import storage
     except ImportError as exc:
         raise RuntimeError("google-cloud-storage is required for archival jobs") from exc
     payload = gzip.compress(result.model_dump_json().encode("utf-8"))
     blob = storage.Client().bucket(bucket_name).blob(object_name)
-    blob.upload_from_string(payload, content_type="application/gzip")
+    try:
+        blob.upload_from_string(payload, content_type="application/gzip", if_generation_match=0)
+    except PreconditionFailed:
+        pass
     return object_name
 
 

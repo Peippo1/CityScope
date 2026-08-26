@@ -6,4 +6,6 @@ When Google sign-in and saved investigations are enabled, CityScope stores the s
 
 CityScope does not store Firebase ID tokens, API keys, request headers, raw Google Maps Grounding place payloads, or Google route geometry. Current Maps context and route results are generated for the active request and should be treated as temporary.
 
+The private Paris archive stores hourly compressed station-level bike and dock availability from the official Vélib' feeds. It contains no rider identity or trip history, is not browser-readable, and is not used for trend claims until a meaningful observation history exists.
+
 Provider credentials are server-only. Browser-visible Firebase and Maps configuration values are restricted public identifiers, not secrets.

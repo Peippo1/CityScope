@@ -6,7 +6,7 @@
 - A public Cloud Run service hosts the FastAPI API.
 - An IAM-private Cloud Run service hosts deterministic City Data MCP. A separate IAM-private Cloud Run service hosts the live Paris MCP; only the API service account has `roles/run.invoker` on either service.
 - An hourly Cloud Scheduler-triggered Cloud Run job writes compressed Paris GBFS station snapshots to a private Cloud Storage bucket. It is the only identity allowed to write that bucket.
-- Artifact Registry stores both container images in `europe-west2`.
+- Artifact Registry stores the API, MCP, live MCP, and collector images in `europe-west2`.
 - Secret Manager supplies only server-side Gemini and Google API keys.
 
 Cloud Run, Artifact Registry, Cloud Build, and Secret Manager require billing on the GCP project. Link a billing account to `cityscope-506222` before running the one-time setup below.
@@ -52,7 +52,25 @@ gcloud builds submit \
   --config deploy/cloudbuild.yaml \
   --substitutions _DOCKERFILE=deploy/Dockerfile.api,_IMAGE=europe-west2-docker.pkg.dev/cityscope-506222/cityscope/api:latest \
   --project cityscope-506222
+
+gcloud builds submit . \
+  --config deploy/cloudbuild.yaml \
+  --ignore-file deploy/paris-collector.gcloudignore \
+  --substitutions _DOCKERFILE=deploy/Dockerfile.paris_collector,_IMAGE=europe-west2-docker.pkg.dev/cityscope-506222/cityscope/paris-collector:latest \
+  --project cityscope-506222
 ```
+
+## Paris archive
+
+The demo project uses these provisioned resources:
+
+- bucket `cityscope-paris-velib-archive-506222`, regional `europe-west2`, uniform access, public access prevention;
+- Cloud Run job `cityscope-paris-collector`;
+- collector identity `cityscope-paris-collector@cityscope-506222.iam.gserviceaccount.com`, with bucket-level `roles/storage.objectCreator` only;
+- scheduler identity `cityscope-paris-scheduler@cityscope-506222.iam.gserviceaccount.com`, with `roles/run.invoker` on the collector job only;
+- Scheduler job `cityscope-paris-hourly`, running `0 * * * *` in UTC.
+
+The collector joins the fixed official Vélib' `station_information` and `station_status` feeds by station ID, validates the merged rows, and archives every valid station. Objects are gzip-compressed and partitioned by UTC year/month/day/hour. The provider timestamp is part of the filename and uploads use a generation precondition, making retries idempotent for an unchanged provider snapshot. The archive remains trend-ineligible until a meaningful history exists.
 
 Deploy MCP first with authentication required and its exact Cloud Run hostnames in `deploy/mcp.env.yaml`. Use `all` ingress unless both services are attached to a VPC path that Cloud Run recognizes as internal. Deploy the API second, granting only its service account permission to invoke MCP. The non-secret API settings live in `deploy/api.env.yaml`; Secret Manager references are supplied separately during deployment.
 

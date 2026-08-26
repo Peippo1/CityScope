@@ -1,0 +1,11 @@
+.git
+.venv
+apps/
+data/
+docs/
+pipelines/
+tests/
+apps/web/node_modules/
+__pycache__/
+*.pyc
+.env*
