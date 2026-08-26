@@ -12,15 +12,38 @@
 
 CityScope turns natural-language questions into bounded, traceable investigations over historical London cycling data. It combines deterministic H3 and DuckDB analytics with a guarded Gemini planning layer, current Google Maps context, bicycle routing, and user-owned investigation history.
 
+**[Open the live CityScope app](https://cityscope-506222.web.app)**
+
+## Product tour
+
+![CityScope London mobility workspace](docs/assets/cityscope-dashboard.png)
+
+CityScope keeps the map, interactive activity chart, request flow, and investigation controls in one workspace. Every visual separates the pinned historical TfL snapshot from current Google Maps context and Google bicycle routes.
+
+![CityScope bicycle route result from Kings Cross to Borough](docs/assets/cityscope-route-planning.png)
+
+<p align="center">
+  <img src="docs/assets/cityscope-mobile.png" width="320" alt="CityScope mobile investigation workspace" />
+</p>
+
 The current vertical slice can:
 
 - rank and compare historical cycling activity across H3 cells;
 - enrich trusted areas with current Google Maps place context;
 - compute deterministic bicycle routes through selected activity areas;
+- explore selectable activity charts and a request-flow view driven by real API trace state;
 - show source-tagged evidence, dataset provenance, limitations, and execution traces;
 - authenticate users with Google and save investigations through a Firebase-token-verified API.
 
 > CityScope currently covers a pinned May 2026 TfL cycling snapshot for London. It does not claim live cycling conditions, weather, traffic, forecasts, or support for other cities.
+
+## All Things Agentic Hackathon
+
+CityScope is being built for the [All Things Agentic Hackathon](https://allthingsagentichackathon.devpost.com/), using Gemini 3.5 Flash through the Google GenAI SDK and production services on Google Cloud. The recommended submission category is **Taskmaster**: one bounded investigation can classify a goal, query deterministic city analytics, resolve current places, compute a bicycle route, and return a traceable visual result.
+
+- [Read the build story](docs/blog/building-cityscope.md)
+- [Review the Devpost submission draft](docs/devpost-submission.md)
+- [Follow the four-minute demo plan](docs/hackathon-demo.md)
 
 ## Architecture
 

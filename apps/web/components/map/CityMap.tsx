@@ -45,10 +45,10 @@ export function CityMap({ cells, places = [], route, selectedH3Cell, onSelectH3C
         const polygon = new google.maps.Polygon({
           paths: path,
           map: map.current,
-          strokeColor: selected ? "#1d4ed8" : "#0f766e",
+          strokeColor: selected ? "#0b57d0" : "#137333",
           strokeOpacity: 0.9,
           strokeWeight: selected ? 3 : 1,
-          fillColor: selected ? "#2563eb" : "#14b8a6",
+          fillColor: selected ? "#4285f4" : "#34a853",
           fillOpacity: Math.min(0.82, 0.22 + 0.56 * (cell.total_journeys / max)),
         });
         polygon.addListener("click", () => onSelectH3Cell?.(cell.h3_cell));
@@ -60,7 +60,7 @@ export function CityMap({ cells, places = [], route, selectedH3Cell, onSelectH3C
           position: { lat: place.latitude, lng: place.longitude },
           map: map.current,
           title: place.name ?? place.place_id,
-          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: "#b45309", fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 2 },
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: "#f9ab00", fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 2 },
         });
         marker.addListener("click", () => {
           const content = document.createElement("div");
@@ -81,8 +81,8 @@ export function CityMap({ cells, places = [], route, selectedH3Cell, onSelectH3C
         return marker;
       });
       const decodedRoute = route ? google.maps.geometry.encoding.decodePath(route.polyline) : [];
-      const routeLine = route ? new google.maps.Polyline({ path: decodedRoute, map: map.current, strokeColor: "#2563eb", strokeOpacity: 0.95, strokeWeight: 5 }) : null;
-      const routeMarkers = route ? [route.origin, route.destination, ...route.waypoints].map((point, index) => new google.maps.Marker({ position: { lat: point.latitude, lng: point.longitude }, map: map.current, title: "name" in point ? point.name : `Historical activity waypoint ${index}`, icon: { path: google.maps.SymbolPath.CIRCLE, scale: index < 2 ? 8 : 6, fillColor: index === 0 ? "#15803d" : index === 1 ? "#b91c1c" : "#7c3aed", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 } })) : [];
+      const routeLine = route ? new google.maps.Polyline({ path: decodedRoute, map: map.current, strokeColor: "#1a73e8", strokeOpacity: 0.95, strokeWeight: 5 }) : null;
+      const routeMarkers = route ? [route.origin, route.destination, ...route.waypoints].map((point, index) => new google.maps.Marker({ position: { lat: point.latitude, lng: point.longitude }, map: map.current, title: "name" in point ? point.name : `Historical activity waypoint ${index}`, icon: { path: google.maps.SymbolPath.CIRCLE, scale: index < 2 ? 8 : 6, fillColor: index === 0 ? "#34a853" : index === 1 ? "#ea4335" : "#f9ab00", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 2 } })) : [];
       if (route && decodedRoute.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         decodedRoute.forEach((point) => bounds.extend(point));
