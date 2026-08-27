@@ -6,7 +6,7 @@ from pipelines.core.analytics_contract import TimeFilter
 
 from ..analytics.mobility import MobilityAnalytics
 from ..agent.live_mcp_client import CityLiveMcpClient
-from ..cities import CITIES, historical_city_ids
+from ..cities import CITIES, get_city, historical_city_ids
 from ..schemas import ActivityCell, ActivityResponse, CitiesResponse, CityCapability, CityComparisonResponse
 
 
@@ -26,6 +26,8 @@ def compare_cities(cities: list[str] = Query(default=list(historical_city_ids())
         return CityComparisonResponse(**ANALYTICS.compare_cities(cities, metric))
     except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Cross-city comparison is temporarily unavailable") from exc
 
 
 @router.get("/{city}/activity", response_model=ActivityResponse)
@@ -44,10 +46,16 @@ def get_activity(city: str, limit: int = Query(default=100, ge=1, le=500)) -> Ac
     )
 
 
-@router.get("/paris/live-network")
-async def paris_live_network(limit: int = Query(default=25, ge=1, le=100)) -> dict:
+@router.get("/{city}/live-network")
+async def live_network(city: str, limit: int = Query(default=25, ge=1, le=100)) -> dict:
     """Expose current operational status through the isolated live-data MCP boundary."""
     try:
-        return await CityLiveMcpClient().get_paris_status(limit)
+        definition = get_city(city)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Live network data is unavailable for this city") from exc
+    if not definition.live_network:
+        raise HTTPException(status_code=404, detail="Live network data is unavailable for this city")
+    try:
+        return await CityLiveMcpClient().get_status(city, limit)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail="Paris live network data is temporarily unavailable") from exc
+        raise HTTPException(status_code=503, detail=f"{definition.name} live network data is temporarily unavailable") from exc

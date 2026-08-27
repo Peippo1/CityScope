@@ -85,6 +85,17 @@ def test_google_result_parser_keeps_only_provider_identifiers_and_links() -> Non
     assert parsed.places[0].h3_cell == CELL
 
 
+def test_google_result_parser_rejects_places_outside_the_selected_city() -> None:
+    payload = {"places": [
+        {"id": "chicago", "location": {"latitude": 41.88, "longitude": -87.63}},
+        {"id": "london", "location": {"latitude": 51.5, "longitude": -0.1}},
+    ]}
+
+    parsed = parse_search_result(payload, "cafe", CELL, "chicago")
+
+    assert [place.place_id for place in parsed.places] == ["chicago"]
+
+
 def test_deterministic_amenity_analysis_ranks_raw_counts_without_composite_score() -> None:
     result = MapsSearchResult.model_validate({"places": [{
         "place_id": "abc", "latitude": 51.5, "longitude": -0.1, "category": "cafe", "h3_cell": CELL,

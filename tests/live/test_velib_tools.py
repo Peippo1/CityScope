@@ -1,4 +1,7 @@
-from services.city_live_data_mcp.tools import _freshness, _station, _station_display_sort_key
+import pytest
+
+from services.city_live_data_mcp.schemas import LiveStationRequest
+from services.city_live_data_mcp.tools import LIVE_PROVIDERS, _freshness, _station, _station_display_sort_key
 
 
 def test_velib_station_validation_rejects_malformed_provider_rows():
@@ -31,3 +34,17 @@ def test_velib_display_prioritizes_stations_with_available_bikes():
     ]
 
     assert [station.station_id for station in sorted(stations, key=_station_display_sort_key)] == ["fuller", "useful", "empty"]
+
+
+def test_live_provider_registry_uses_only_fixed_https_gbfs_endpoints():
+    assert set(LIVE_PROVIDERS) == {"new_york", "chicago", "washington_dc", "paris"}
+    for provider in LIVE_PROVIDERS.values():
+        assert provider.status_url.startswith("https://")
+        assert provider.information_url.startswith("https://")
+        assert "station_status.json" in provider.status_url
+        assert "station_information.json" in provider.information_url
+
+
+def test_live_station_request_rejects_unregistered_cities():
+    with pytest.raises(ValueError):
+        LiveStationRequest(city="london")

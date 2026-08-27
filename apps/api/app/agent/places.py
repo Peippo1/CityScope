@@ -134,7 +134,7 @@ class GoogleMapsGroundingClient:
                     if result.isError:
                         raise RuntimeError("Maps Grounding MCP search_places failed")
                     payload = _structured_payload(result)
-                    return parse_search_result(payload, category, cell)
+                    return parse_search_result(payload, category, cell, city)
 
     async def resolve_location(self, query: str, city: CityId = "london") -> ResolvedPlace:
         """Resolve a named endpoint through Grounding search; never accept model coordinates."""
@@ -176,7 +176,8 @@ def _structured_payload(result: Any) -> dict[str, Any]:
     raise RuntimeError("Maps Grounding MCP returned no structured search result")
 
 
-def parse_search_result(payload: dict[str, Any], category: AmenityCategory, h3_cell: str) -> MapsSearchResult:
+def parse_search_result(payload: dict[str, Any], category: AmenityCategory, h3_cell: str, city: CityId = "london") -> MapsSearchResult:
+    south, west, north, east = get_city(city).bounds
     parsed: list[PlaceResult] = []
     for raw in payload.get("places", [])[:MAX_PLACES_PER_SEARCH]:
         location = raw.get("location") or {}
@@ -187,12 +188,16 @@ def parse_search_result(payload: dict[str, Any], category: AmenityCategory, h3_c
         place_id = raw.get("id")
         if not place_id or latitude is None or longitude is None:
             continue
+        latitude = float(latitude)
+        longitude = float(longitude)
+        if not (south <= latitude <= north and west <= longitude <= east):
+            continue
         parsed.append(PlaceResult(
             place_id=place_id,
             resource_name=raw.get("place"),
             name=raw.get("displayName") or raw.get("name"),
-            latitude=float(latitude),
-            longitude=float(longitude),
+            latitude=latitude,
+            longitude=longitude,
             maps_uri=links.get("placeUrl"),
             attribution_title=attribution.get("title"),
             attribution_url=attribution.get("url"),

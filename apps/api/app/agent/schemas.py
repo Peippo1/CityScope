@@ -58,7 +58,7 @@ class InvestigationResult(BaseModel):
 
 class ToolDecision(BaseModel):
     kind: Literal["call_tool", "answer", "unsupported"]
-    tool: Literal["describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "maps.search_places", "route.intent"] | None = None
+    tool: Literal["describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "compare_cities", "maps.search_places", "route.intent"] | None = None
     arguments: dict[str, Any] = Field(default_factory=dict)
     answer: str | None = Field(default=None, max_length=1200)
     follow_up_suggestions: list[str] = Field(default_factory=list, max_length=3)

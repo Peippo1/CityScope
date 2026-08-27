@@ -1,15 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getCityActivity, getCityComparison, getParisLiveNetwork, investigate } from "../../lib/api";
-import type { ActivityResponse, CityCapability, CityComparison, LiveNetwork } from "../../types/city";
+import { getCities, getCityActivity, getCityComparison, getCityLiveNetwork, investigate } from "../../lib/api";
+import type { ActivityResponse, CitiesResponse, CityCapability, CityComparison, LiveNetwork } from "../../types/city";
 import type { InvestigationRequest, InvestigationResult } from "../../types/investigation";
 import { CityMap, type FocusedMapPlace } from "../map/CityMap";
 import { H3ActivityLayer } from "../map/H3ActivityLayer";
 import { ActivityOverview } from "../visualization/ActivityOverview";
 import { DataFlowPanel } from "../visualization/DataFlowPanel";
 import { CityComparisonPanel } from "../visualization/CityComparisonPanel";
-import { ParisLivePanel } from "../visualization/ParisLivePanel";
+import { LiveNetworkPanel } from "../visualization/ParisLivePanel";
 import { PlacesExplorer } from "../visualization/PlacesExplorer";
 import { AccountActions } from "./AccountActions";
 import { InvestigationResultPanel } from "./InvestigationResultPanel";
@@ -18,16 +18,17 @@ import { QuestionComposer } from "./QuestionComposer";
 type WorkspaceServices = {
   getActivity: (city?: string) => Promise<ActivityResponse>;
   investigate: (request: InvestigationRequest) => Promise<InvestigationResult>;
+  getCities?: () => Promise<CitiesResponse>;
   getComparison?: (metric?: string) => Promise<CityComparison>;
-  getParisLive?: () => Promise<LiveNetwork>;
+  getLive?: (city: string) => Promise<LiveNetwork>;
 };
 
-const defaultServices: WorkspaceServices = { getActivity: getCityActivity, investigate, getComparison: getCityComparison, getParisLive: getParisLiveNetwork };
-const cities: CityCapability[] = [
+const defaultServices: WorkspaceServices = { getCities, getActivity: getCityActivity, investigate, getComparison: getCityComparison, getLive: getCityLiveNetwork };
+const fallbackCities: CityCapability[] = [
   { id: "london", name: "London", historical: true, routes: true, live_network: false, timezone: "Europe/London", bounds: [51.28, -0.52, 51.72, 0.34] },
-  { id: "new_york", name: "New York City", historical: true, routes: true, live_network: false, timezone: "America/New_York", bounds: [40.49, -74.30, 40.92, -73.68] },
-  { id: "chicago", name: "Chicago", historical: true, routes: true, live_network: false, timezone: "America/Chicago", bounds: [41.64, -87.95, 42.08, -87.52] },
-  { id: "washington_dc", name: "Washington, DC", historical: true, routes: true, live_network: false, timezone: "America/New_York", bounds: [38.76, -77.25, 39.02, -76.85] },
+  { id: "new_york", name: "New York City", historical: true, routes: true, live_network: true, timezone: "America/New_York", bounds: [40.49, -74.30, 40.92, -73.68] },
+  { id: "chicago", name: "Chicago", historical: true, routes: true, live_network: true, timezone: "America/Chicago", bounds: [41.64, -87.95, 42.08, -87.52] },
+  { id: "washington_dc", name: "Washington, DC", historical: true, routes: true, live_network: true, timezone: "America/New_York", bounds: [38.76, -77.25, 39.02, -76.85] },
   { id: "paris", name: "Paris", historical: false, routes: false, live_network: true, timezone: "Europe/Paris", bounds: [48.75, 2.20, 48.95, 2.52] },
 ];
 
@@ -36,6 +37,7 @@ function messageFrom(reason: unknown, fallback: string) {
 }
 
 export function CityScopeWorkspace({ services = defaultServices }: { services?: WorkspaceServices }) {
+  const [cities, setCities] = useState<CityCapability[]>(fallbackCities);
   const [activity, setActivity] = useState<ActivityResponse | null>(null);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [activityLoading, setActivityLoading] = useState(true);
@@ -45,8 +47,8 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [investigating, setInvestigating] = useState(false);
   const [selectedH3Cell, setSelectedH3Cell] = useState<string | null>(null);
   const [submittedRequest, setSubmittedRequest] = useState<InvestigationRequest | null>(null);
-  const [selectedCity, setSelectedCity] = useState<CityCapability>(cities[0]);
-  const [view, setView] = useState<"explore" | "compare" | "paris">("explore");
+  const [selectedCity, setSelectedCity] = useState<CityCapability>(fallbackCities[0]);
+  const [view, setView] = useState<"explore" | "compare" | "live">("explore");
   const [comparison, setComparison] = useState<CityComparison | null>(null);
   const [comparisonMetric, setComparisonMetric] = useState("trips_per_active_station_day");
   const [comparisonError, setComparisonError] = useState<string | null>(null);
@@ -57,7 +59,24 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [currentPlaces, setCurrentPlaces] = useState<FocusedMapPlace[]>([]);
   const [focusedPlace, setFocusedPlace] = useState<FocusedMapPlace | null>(null);
 
+  useEffect(() => {
+    if (!services.getCities) return;
+    let cancelled = false;
+    void services.getCities().then(({ cities: registryCities }) => {
+      if (cancelled || registryCities.length === 0) return;
+      setCities(registryCities);
+      setSelectedCity((current) => registryCities.find((city) => city.id === current.id) ?? registryCities[0]);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [services]);
+
   const loadActivity = useCallback(async () => {
+    if (!selectedCity.historical) {
+      setActivity(null);
+      setActivityError(null);
+      setActivityLoading(false);
+      return;
+    }
     setActivityLoading(true);
     setActivityError(null);
     try {
@@ -67,7 +86,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     } finally {
       setActivityLoading(false);
     }
-  }, [services, selectedCity.id]);
+  }, [services, selectedCity.historical, selectedCity.id]);
 
   useEffect(() => { void loadActivity(); }, [loadActivity]);
 
@@ -100,18 +119,37 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     try { setComparison(await services.getComparison(metric)); } catch (reason) { setComparisonError(messageFrom(reason, "Comparison could not be loaded")); } finally { setComparisonLoading(false); }
   }, [comparisonMetric, services]);
 
-  const loadParis = useCallback(async () => {
-    if (!services.getParisLive) return;
+  const loadLive = useCallback(async () => {
+    if (!services.getLive || !selectedCity.live_network) return;
     setLiveError(null);
     setLiveLoading(true);
-    try { setLiveNetwork(await services.getParisLive()); } catch (reason) { setLiveError(messageFrom(reason, "Paris live network is unavailable")); } finally { setLiveLoading(false); }
-  }, [services]);
+    try { setLiveNetwork(await services.getLive(selectedCity.id)); } catch (reason) { setLiveError(messageFrom(reason, `${selectedCity.name} live network is unavailable`)); } finally { setLiveLoading(false); }
+  }, [selectedCity.id, selectedCity.live_network, selectedCity.name, services]);
 
-  const changeView = useCallback((next: "explore" | "compare" | "paris") => {
+  const changeView = useCallback((next: "explore" | "compare" | "live") => {
     setView(next);
     if (next === "compare" && !comparison) void loadComparison();
-    if (next === "paris" && !liveNetwork) void loadParis();
-  }, [comparison, liveNetwork, loadComparison, loadParis]);
+    if (next === "live" && (liveNetwork?.city !== selectedCity.id)) void loadLive();
+  }, [comparison, liveNetwork?.city, loadComparison, loadLive, selectedCity.id]);
+
+  const selectCity = useCallback((cityId: string) => {
+    const city = cities.find((item) => item.id === cityId);
+    if (!city) return;
+    setSelectedCity(city);
+    setCurrentPlaces([]);
+    setFocusedPlace(null);
+    setInvestigation(null);
+    setSubmittedRequest(null);
+    setSelectedH3Cell(null);
+    setLiveNetwork(null);
+    setLiveError(null);
+    if (city.live_network && !city.historical) setView("live");
+    else setView("explore");
+  }, [cities]);
+
+  useEffect(() => {
+    if (view === "live" && selectedCity.live_network && liveNetwork?.city !== selectedCity.id) void loadLive();
+  }, [liveNetwork?.city, loadLive, selectedCity.id, selectedCity.live_network, view]);
 
   const investigationCells = useMemo(() => investigation?.map_layers.map((layer) => ({
     h3_cell: layer.h3_cell,
@@ -126,20 +164,20 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span><span>CityScope</span>
         </a>
         <nav className="view-nav" aria-label="Workspace sections">
-          <button type="button" onClick={() => changeView("explore")} aria-pressed={view === "explore"}>Explore</button><button type="button" onClick={() => changeView("compare")} aria-pressed={view === "compare"}>Compare</button><button type="button" onClick={() => changeView("paris")} aria-pressed={view === "paris"}>Paris live</button>
+          <button type="button" onClick={() => changeView("explore")} aria-pressed={view === "explore"} disabled={!selectedCity.historical}>Explore</button><button type="button" onClick={() => changeView("compare")} aria-pressed={view === "compare"}>Compare</button><button type="button" onClick={() => changeView("live")} aria-pressed={view === "live"} disabled={!selectedCity.live_network}>Live network</button>
         </nav>
         <AccountActions request={submittedRequest} result={investigation} />
       </header>
 
       <section className="dashboard-intro" aria-labelledby="page-title">
         <div><p className="eyebrow">Cross-city bike-share intelligence</p><h1 id="page-title">Compare movement. Find patterns. Plan better routes.</h1></div>
-        <p>Explore matched historical cycling activity across four cities, then inspect Paris as separately labelled live network context.</p>
+        <p>Explore matched historical cycling activity across four cities, then inspect current station availability through separately labelled live networks.</p>
       </section>
 
-      <label className="city-switcher">City workspace<select value={selectedCity.id} onChange={(event) => { const city = cities.find((item) => item.id === event.target.value) ?? cities[0]; setSelectedCity(city); setCurrentPlaces([]); setFocusedPlace(null); if (city.id === "paris") changeView("paris"); else changeView("explore"); }}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}{city.live_network ? " (live network)" : ""}</option>)}</select></label>
+      <label className="city-switcher">City workspace<select value={selectedCity.id} onChange={(event) => selectCity(event.target.value)}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}{city.live_network && !city.historical ? " (live only)" : ""}</option>)}</select></label>
 
-      {view === "compare" && <section className="standalone-workspace">{comparisonLoading && <div className="inline-loading" aria-live="polite">Calculating normalized May 2026 comparison...</div>}{comparison && <CityComparisonPanel comparison={comparison} metric={comparisonMetric} onMetricChange={(metric) => { setComparisonMetric(metric); void loadComparison(metric); }} />}{comparisonError && <div className="empty-state" role="alert"><p>{comparisonError}</p><button type="button" className="secondary-button" onClick={() => void loadComparison()}>Retry comparison</button></div>}</section>}
-      {view === "paris" && <section className="standalone-workspace">{liveLoading && <div className="inline-loading" aria-live="polite">Loading current Paris station availability...</div>}{liveNetwork && <ParisLivePanel network={liveNetwork} />}{liveError && <div className="empty-state" role="alert"><p>{liveError}</p><button type="button" className="secondary-button" onClick={() => void loadParis()}>Retry Paris live network</button></div>}</section>}
+      {view === "compare" && <section className="standalone-workspace">{comparisonLoading && <div className="inline-loading" aria-live="polite">Calculating normalized May 2026 comparison...</div>}{comparison && <CityComparisonPanel comparison={comparison} metric={comparisonMetric} onMetricChange={(metric) => { setComparisonMetric(metric); void loadComparison(metric); }} onSelectCity={selectCity} />}{comparisonError && <div className="empty-state" role="alert"><p>{comparisonError}</p><button type="button" className="secondary-button" onClick={() => void loadComparison()}>Retry comparison</button></div>}</section>}
+      {view === "live" && <section className="standalone-workspace">{liveLoading && <div className="inline-loading" aria-live="polite">Loading current {selectedCity.name} station availability...</div>}{liveNetwork?.city === selectedCity.id && <LiveNetworkPanel cityName={selectedCity.name} bounds={selectedCity.bounds} network={liveNetwork} />}{liveError && <div className="empty-state" role="alert"><p>{liveError}</p><button type="button" className="secondary-button" onClick={() => void loadLive()}>Retry {selectedCity.name} live network</button></div>}</section>}
 
       {view === "explore" && activity && <aside className="snapshot-banner" aria-label="Historical dataset notice">
         <span className="source-badge source-badge--historical">Historical snapshot</span>

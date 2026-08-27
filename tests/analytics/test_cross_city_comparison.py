@@ -51,3 +51,10 @@ def test_station_normalization_supports_original_london_fixture_schema(tmp_path)
     value = MobilityAnalytics(tmp_path)._uncached_comparison_value("london", "trips_per_active_station_day")
 
     assert value == round(2 / 3 / 31, 4)
+
+
+def test_duckdb_spill_directory_is_writable_in_a_non_root_container():
+    with MobilityAnalytics._connect() as connection:
+        configured = connection.execute("SELECT current_setting('temp_directory')").fetchone()[0]
+
+    assert configured == "/tmp/cityscope-duckdb"

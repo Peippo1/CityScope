@@ -23,15 +23,18 @@ class CityLiveMcpClient:
             headers["Authorization"] = f"Bearer {await asyncio.to_thread(fetch_id_token, Request(), audience)}"
         return httpx.AsyncClient(headers=headers, timeout=20)
 
-    async def get_paris_status(self, limit: int = 25) -> dict[str, Any]:
+    async def get_status(self, city: str, limit: int = 25) -> dict[str, Any]:
         async with await self._http_client() as client:
             async with streamable_http_client(self.url, http_client=client) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=20)) as session:
                     await session.initialize()
-                    result = await session.call_tool("get_live_station_status", {"request": {"city": "paris", "limit": limit}})
+                    result = await session.call_tool("get_live_station_status", {"request": {"city": city, "limit": limit}})
         if result.isError: raise RuntimeError("City Live Data MCP tool failed")
         structured = getattr(result, "structuredContent", None)
         if isinstance(structured, dict):
             payload = structured.get("result", structured)
             if isinstance(payload, dict): return payload
         raise RuntimeError("City Live Data MCP returned no structured result")
+
+    async def get_paris_status(self, limit: int = 25) -> dict[str, Any]:
+        return await self.get_status("paris", limit)

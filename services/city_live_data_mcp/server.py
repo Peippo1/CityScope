@@ -19,7 +19,7 @@ mcp = FastMCP("CityScope Live City Data", json_response=True, stateless_http=Tru
 
 @mcp.tool(name="get_live_station_status")
 async def get_live_station_status_tool(request: LiveStationRequest) -> LiveNetworkResponse:
-    """Return validated current Paris Vélib' availability from the fixed GBFS provider."""
+    """Return validated availability from the selected city's fixed GBFS provider."""
     return await get_live_station_status(request)
 
 

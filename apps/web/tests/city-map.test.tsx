@@ -52,4 +52,12 @@ describe("CityMap", () => {
     expect(maps.setZoom).toHaveBeenCalledWith(15);
     expect(maps.Marker).toHaveBeenCalledWith(expect.objectContaining({ title: "Rest stop" }));
   });
+
+  it("renders live station markers with an explicit map label", async () => {
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY = "browser-test-key";
+    render(<CityMap cells={[]} places={[{ place_id: "station-1", name: "Station 1 · 5 bikes · 8 docks", latitude: 40.75, longitude: -73.98 }]} cityName="New York City" bounds={[40.49, -74.30, 40.92, -73.68]} ariaLabel="New York City live bike-share station map" />);
+
+    expect(await screen.findByLabelText("New York City live bike-share station map")).toBeVisible();
+    await waitFor(() => expect(maps.Marker).toHaveBeenCalledWith(expect.objectContaining({ title: "Station 1 · 5 bikes · 8 docks" })));
+  });
 });

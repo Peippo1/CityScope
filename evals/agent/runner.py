@@ -31,6 +31,8 @@ class FakeCity:
     async def call(self,tool,args):
         self.calls.append((tool,args))
         if self.failure: raise RuntimeError("credential=TEST_SENTINEL_DO_NOT_EXPOSE" if self.secret else "provider details")
+        if tool=="compare_cities":
+            return {"metric":args["metric"],"calculation_basis":"normalized basis","observation_period":"2026-05-01/2026-05-31","cities":[{"city":city,"city_name":city,"value":index+0.5,"rank":index+1,"snapshot_id":"2026-05","is_fixture":False} for index,city in enumerate(args["cities"])],"limitations":["Normalized metrics only."]}
         return fixture()["dataset"] if tool=="describe_dataset" else fixture()
 
 
@@ -58,6 +60,8 @@ def decisions(scenario):
     answer=ToolDecision(kind="answer",answer="Grounded answer.")
     if scenario=="dataset": return [ToolDecision(kind="call_tool",tool="describe_dataset",arguments={"city":"london"}),answer]
     if scenario in {"historical"}: return [hot,answer]
+    if scenario=="comparison": return [ToolDecision(kind="call_tool",tool="compare_cities",arguments={"cities":["london","new_york","chicago","washington_dc"],"metric":"hotspot_concentration"}),answer]
+    if scenario=="raw_comparison": return [ToolDecision(kind="call_tool",tool="compare_cities",arguments={"cities":["london","new_york"],"metric":"total_activity"})]
     if scenario in {"amenity","maps_failure"}: return [hot,maps,answer]
     if scenario=="maps_first": return [maps]
     if scenario=="untrusted_h3": return [ToolDecision(kind="call_tool",tool="maps.search_places",arguments={"h3_cells":["892a100d2d3ffff"],"categories":["cafe"]})]

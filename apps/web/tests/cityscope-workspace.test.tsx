@@ -32,6 +32,21 @@ const parisLive = {
   stations: [{ station_id: "1", name: "Paris station", latitude: 48.85, longitude: 2.35, bikes_available: 4, docks_available: 7 }],
 };
 
+const newYorkLive = {
+  ...parisLive,
+  city: "new_york" as const,
+  provider: "Citi Bike GBFS",
+  attribution_text: "Live station status provided by Citi Bike.",
+  stations: [{ station_id: "nyc-1", name: "Broadway & W 25 St", latitude: 40.744, longitude: -73.989, bikes_available: 9, docks_available: 5 }],
+};
+
+const registry = {
+  cities: [
+    { id: "london" as const, name: "London", historical: true, routes: true, live_network: false, timezone: "Europe/London", bounds: [51.28, -0.52, 51.72, 0.34] as [number, number, number, number] },
+    { id: "new_york" as const, name: "New York City", historical: true, routes: true, live_network: true, timezone: "America/New_York", bounds: [40.49, -74.30, 40.92, -73.68] as [number, number, number, number] },
+  ],
+};
+
 describe("CityScopeWorkspace", () => {
   it("lets a user retry activity loading without turning it into an investigation error", async () => {
     const user = userEvent.setup();
@@ -94,15 +109,45 @@ describe("CityScopeWorkspace", () => {
     expect(await screen.findByRole("heading", { name: "Four-city comparison" })).toBeVisible();
     expect(screen.getAllByText("New York City")).toHaveLength(2);
     expect(screen.getByText(/never raw journey totals/i)).toBeVisible();
+    expect(screen.getAllByText("Verified production artifact · 2026-05")).toHaveLength(2);
+  });
+
+  it("loads the city registry from the API and drills from comparison into city activity", async () => {
+    const user = userEvent.setup();
+    const getActivity = vi.fn().mockImplementation(async (city) => ({ ...activity, city, dataset_name: city === "new_york" ? "Citi Bike Trips" : "TfL Cycling" }));
+    render(<CityScopeWorkspace services={{ getCities: vi.fn().mockResolvedValue(registry), getActivity, investigate: vi.fn(), getComparison: vi.fn().mockResolvedValue(comparison) }} />);
+
+    expect(await screen.findByRole("option", { name: "New York City" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Compare" }));
+    await user.click(await screen.findByRole("button", { name: "Open New York City activity" }));
+
+    expect(screen.getByRole("combobox", { name: "City workspace" })).toHaveValue("new_york");
+    expect(await screen.findByRole("heading", { name: "New York City activity" })).toBeVisible();
+    expect(getActivity).toHaveBeenCalledWith("new_york");
   });
 
   it("shows Paris as separate live network context", async () => {
     const user = userEvent.setup();
-    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate: vi.fn(), getParisLive: vi.fn().mockResolvedValue(parisLive) }} />);
+    const getActivity = vi.fn().mockResolvedValue(activity);
+    render(<CityScopeWorkspace services={{ getActivity, investigate: vi.fn(), getLive: vi.fn().mockResolvedValue(parisLive) }} />);
 
-    await user.click(screen.getByRole("button", { name: "Paris live" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "City workspace" }), "paris");
 
-    expect(await screen.findByRole("heading", { name: "Paris Vélib' availability" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "Paris Vélib' Métropole GBFS availability" })).toBeVisible();
     expect(screen.getByText(/not comparable to the historical trip cohort/i)).toBeVisible();
+    expect(getActivity).not.toHaveBeenCalledWith("paris");
+  });
+
+  it("switches a historical cohort city into its own live station map", async () => {
+    const user = userEvent.setup();
+    const getLive = vi.fn().mockResolvedValue(newYorkLive);
+    render(<CityScopeWorkspace services={{ getCities: vi.fn().mockResolvedValue(registry), getActivity: vi.fn().mockResolvedValue(activity), investigate: vi.fn(), getLive }} />);
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: "City workspace" }), "new_york");
+    await user.click(screen.getByRole("button", { name: "Live network" }));
+
+    expect(await screen.findByRole("heading", { name: "New York City Citi Bike GBFS availability" })).toBeVisible();
+    expect(screen.getByText("Broadway & W 25 St")).toBeVisible();
+    expect(getLive).toHaveBeenCalledWith("new_york");
   });
 });

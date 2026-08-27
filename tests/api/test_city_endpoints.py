@@ -1,15 +1,23 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+import pytest
 
 from pipelines.london_cycling.build_fixture import main as build_fixture
 from pipelines.multicity.build_fixture import main as build_multicity_fixture
 from apps.api.app import config
 from apps.api.app.main import app
+from apps.api.app.agent.live_mcp_client import CityLiveMcpClient
+from apps.api.app.routes.cities import ANALYTICS
+
+
+@pytest.fixture(scope="module", autouse=True)
+def city_fixtures():
+    build_fixture()
+    build_multicity_fixture()
 
 
 def test_london_activity_endpoint_returns_typed_h3_activity():
-    build_fixture()
     response = TestClient(app).get("/cities/london/activity?limit=2")
 
     assert response.status_code == 200
@@ -22,7 +30,6 @@ def test_london_activity_endpoint_returns_typed_h3_activity():
 
 
 def test_city_registry_and_normalized_comparison_endpoint():
-    build_multicity_fixture()
     client = TestClient(app)
     cities = client.get("/cities")
     comparison = client.get("/cities/compare?metric=weekend_share")
@@ -32,16 +39,56 @@ def test_city_registry_and_normalized_comparison_endpoint():
     assert comparison.status_code == 200
     assert comparison.json()["metric"] == "weekend_share"
     assert len(comparison.json()["cities"]) == 4
+    live_cities = {city["id"] for city in cities.json()["cities"] if city["live_network"]}
+    assert live_cities == {"new_york", "chicago", "washington_dc", "paris"}
+
+
+@pytest.mark.parametrize("city", ["london", "new_york", "chicago", "washington_dc"])
+def test_every_historical_city_exposes_activity(city):
+    response = TestClient(app).get(f"/cities/{city}/activity?limit=1")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["city"] == city
+    assert payload["historical_snapshot"] is True
+    assert len(payload["cells"]) == 1
 
 
 def test_cross_city_endpoint_rejects_raw_counts():
-    build_multicity_fixture()
     response = TestClient(app).get("/cities/compare?metric=total_activity")
     assert response.status_code == 422
 
 
+def test_cross_city_runtime_failure_is_sanitized(monkeypatch):
+    monkeypatch.setattr(ANALYTICS, "compare_cities", lambda *_: (_ for _ in ()).throw(RuntimeError("private database path")))
+
+    response = TestClient(app).get("/cities/compare?metric=weekend_share")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Cross-city comparison is temporarily unavailable"
+    assert "private database path" not in response.text
+
+
 def test_unknown_city_is_rejected():
     response = TestClient(app).get("/cities/paris/activity")
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("city", ["new_york", "chicago", "washington_dc", "paris"])
+def test_live_network_endpoint_dispatches_to_the_selected_fixed_provider(monkeypatch, city):
+    async def fake_status(self, selected_city, limit):
+        return {"city": selected_city, "stations": [], "limit": limit}
+
+    monkeypatch.setattr(CityLiveMcpClient, "get_status", fake_status)
+    response = TestClient(app).get(f"/cities/{city}/live-network?limit=7")
+
+    assert response.status_code == 200
+    assert response.json() == {"city": city, "stations": [], "limit": 7}
+
+
+def test_live_network_endpoint_rejects_a_historical_only_city():
+    response = TestClient(app).get("/cities/london/live-network")
 
     assert response.status_code == 404
 

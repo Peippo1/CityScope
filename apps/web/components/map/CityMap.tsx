@@ -19,9 +19,10 @@ type CityMapProps = {
   onSelectH3Cell?: (h3Cell: string) => void;
   cityName?: string;
   bounds?: [number, number, number, number];
+  ariaLabel?: string;
 };
 
-export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cell, onSelectH3Cell, cityName = "London", bounds = [51.28, -0.52, 51.72, 0.34] }: CityMapProps) {
+export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cell, onSelectH3Cell, cityName = "London", bounds = [51.28, -0.52, 51.72, 0.34], ariaLabel }: CityMapProps) {
   const node = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -111,5 +112,5 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
     return <div className="map-placeholder" role="img" aria-label="Google Maps preview unavailable until a browser API key is configured">Google Maps preview requires NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. The ranked activity values remain available beside this panel.</div>;
   }
   if (loadError) return <div className="map-placeholder" role="alert"><strong>Google Maps could not be loaded.</strong><span>The activity ranking and investigation evidence remain available in text.</span></div>;
-  return <div ref={node} className="map" aria-label={`${cityName} cycling activity map`} />;
+  return <div ref={node} className="map" aria-label={ariaLabel ?? `${cityName} cycling activity map`} />;
 }

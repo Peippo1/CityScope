@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 from services.city_data_mcp.schemas import DatasetMetadata, Evidence, ToolEnvelope
+from ..schemas import CityComparisonResponse
 
 from .mcp_client import CityDataMcpClient
 from .live_mcp_client import CityLiveMcpClient
@@ -51,7 +52,7 @@ class InvestigationService:
         self.record(iid, trace, kind="planning", label="Classify question and select a City Data MCP tool", status="completed", policy=gate)
         context, tool_results = json.dumps({"city": request.city, "context": request.context.model_dump(mode="json")}), []
         envelope = final = None
-        places, external, map_results, analysis = [], [], {}, []
+        places, external, map_results, analysis, city_insights, comparison_evidence, comparison_limitations = [], [], {}, [], [], [], []
         while self.policy.check_model_round(budget).outcome == PolicyOutcome.ALLOW:
             started = time.perf_counter()
             try:
@@ -67,7 +68,7 @@ class InvestigationService:
                 self.record(iid, trace, kind="tool_call", label="Rejected model decision", status="rejected", tool=decision.tool, policy=gate)
                 return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The requested operation was rejected.", limitations=[gate.message], trace=trace))
             requested_city = decision.arguments.get("city")
-            if requested_city is not None and requested_city != request.city:
+            if decision.tool != "compare_cities" and requested_city is not None and requested_city != request.city:
                 gate = PolicyDecision(outcome="reject", code=PolicyCode.UNSUPPORTED_CITY, message="Tool calls must stay within the selected city.")
                 self.record(iid, trace, kind="tool_call", label="Rejected cross-city tool request", status="rejected", tool=decision.tool, policy=gate)
                 return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The requested operation was rejected.", limitations=[gate.message], trace=trace))
@@ -110,26 +111,32 @@ class InvestigationService:
                 started = time.perf_counter()
                 try:
                     raw = await self.mcp_client.call(decision.tool, decision.arguments)
-                    if decision.tool == "describe_dataset":
+                    if decision.tool == "compare_cities":
+                        comparison = CityComparisonResponse.model_validate(raw)
+                        city_insights = [comparison.model_dump(mode="json")]
+                        comparison_limitations = comparison.limitations
+                        comparison_evidence = [Evidence(metric=comparison.metric, value=row.value, unit="normalized value", source_aggregate="cross_city_canonical_trips", filters_applied={"observation_period": comparison.observation_period}, h3_cells=[], category=row.city_name) for row in comparison.cities]
+                    elif decision.tool == "describe_dataset":
                         dataset = DatasetMetadata.model_validate(raw); envelope = ToolEnvelope(dataset=dataset, results=[], evidence=[], map_layers=[], limitations=dataset.limitations)
                     else: envelope = ToolEnvelope.model_validate(raw)
                 except Exception:
                     failure = self.policy.provider_error("City Data MCP")
                     self.record(iid, trace, kind="tool_call", label="City Data MCP unavailable", status="failed", provider="city_data", tool=f"city_data.{decision.tool}", policy=failure)
                     return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="City Data could not answer this investigation.", limitations=[failure.message], trace=trace))
-                tool_results.append({"source":"city_data", **envelope.model_dump(mode="json")})
-                self.record(iid, trace, kind="tool_call", label=f"Called City Data MCP: {decision.tool}", status="completed", provider="city_data", tool=f"city_data.{decision.tool}", policy=gate, count=len(envelope.results), ms=round((time.perf_counter()-started)*1000), call=budget.city_data_calls, limit=self.policy.max_city_data_calls)
+                tool_results.append({"source":"city_data", **(comparison.model_dump(mode="json") if decision.tool == "compare_cities" else envelope.model_dump(mode="json"))})
+                result_count = len(comparison.cities) if decision.tool == "compare_cities" else len(envelope.results)
+                self.record(iid, trace, kind="tool_call", label=f"Called City Data MCP: {decision.tool}", status="completed", provider="city_data", tool=f"city_data.{decision.tool}", policy=gate, count=result_count, ms=round((time.perf_counter()-started)*1000), call=budget.city_data_calls, limit=self.policy.max_city_data_calls)
             context = json.dumps({"request":request.context.model_dump(mode="json"),"available_evidence":tool_results}, default=str)
-        if not envelope and not places:
+        if not envelope and not places and not city_insights:
             return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The investigation did not produce a grounded result.", limitations=["A grounded result is required."], trace=trace))
         if not final or final.kind != "answer":
             gate = PolicyDecision(outcome="fail", code=PolicyCode.TOOL_ROUND_LIMIT, message="The bounded model/tool round limit was reached.")
             self.record(iid, trace, kind="planning", label="Stopped at the bounded model/tool round limit", status="rejected", policy=gate, limit=self.policy.max_model_rounds)
             return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The investigation exceeded its bounded tool-call budget.", limitations=[gate.message], trace=trace))
         self.record(iid, trace, kind="synthesis", label="Synthesize an evidence-grounded answer", status="completed", policy=self.policy.allow())
-        evidence = (envelope.evidence if envelope else []) + [Evidence.model_validate(x) for x in external]
-        limitations = list(dict.fromkeys((envelope.limitations if envelope else []) + (["Google Maps place counts are current search context, not an exhaustive census."] if external else [])))
-        return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=final.answer or "No answer was returned.", dataset=envelope.dataset if envelope else None, evidence=evidence, places=places, amenity_analysis=analysis, map_layers=envelope.map_layers if envelope else [], limitations=limitations, trace=trace, follow_up_suggestions=final.follow_up_suggestions))
+        evidence = (envelope.evidence if envelope else []) + comparison_evidence + [Evidence.model_validate(x) for x in external]
+        limitations = list(dict.fromkeys((envelope.limitations if envelope else []) + comparison_limitations + (["Google Maps place counts are current search context, not an exhaustive census."] if external else [])))
+        return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=final.answer or "No answer was returned.", dataset=envelope.dataset if envelope else None, evidence=evidence, places=places, amenity_analysis=analysis, city_insights=city_insights, map_layers=envelope.map_layers if envelope else [], limitations=limitations, trace=trace, follow_up_suggestions=final.follow_up_suggestions))
 
     async def _paris_live(self, iid: str, trace: list[TraceEvent]) -> InvestigationResult:
         started = time.perf_counter()

@@ -35,6 +35,12 @@ class FakeMcp:
 
     async def call(self, tool: str, arguments: dict) -> dict:
         self.calls.append((tool, arguments))
+        if tool == "compare_cities":
+            return {
+                "metric": arguments["metric"], "calculation_basis": "normalized basis", "observation_period": "2026-05-01/2026-05-31",
+                "cities": [{"city": city, "city_name": city.replace("_", " ").title(), "value": index + 0.5, "rank": index + 1, "snapshot_id": "2026-05", "is_fixture": False} for index, city in enumerate(arguments["cities"])],
+                "limitations": ["Normalized metrics only."],
+            }
         if tool == "describe_dataset":
             return envelope()["dataset"]
         return envelope()
@@ -119,6 +125,23 @@ def test_agent_uses_mcp_and_returns_grounded_evidence() -> None:
     assert result.evidence[0].value == 7
     assert result.map_layers[0].h3_cell == "892a100d2d7ffff"
     assert len(result.trace) == 3
+
+
+def test_agent_executes_a_normalized_cross_city_comparison() -> None:
+    mcp = FakeMcp()
+    service = InvestigationService(mcp_client=mcp, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="compare_cities", arguments={"cities": ["london", "new_york", "chicago", "washington_dc"], "metric": "hotspot_concentration"}),
+        ToolDecision(kind="answer", answer="The matched cohort comparison is complete."),
+    ]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(question="How concentrated is bike-share demand across the four cities?")))
+
+    assert result.status == "answered"
+    assert mcp.calls[0][0] == "compare_cities"
+    assert len(result.city_insights[0]["cities"]) == 4
+    assert {item.metric for item in result.evidence} == {"hotspot_concentration"}
+    assert {item.category for item in result.evidence} == {"London", "New York", "Chicago", "Washington Dc"}
+    assert "Normalized metrics only." in result.limitations
 
 
 def test_agent_rejects_unsupported_question_without_mcp_call() -> None:

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from .places import MAX_MAPS_SEARCH_CALLS, AmenitySearchPlan
 from .schemas import InvestigationRequest, ToolDecision
 from ..cities import get_city
+from services.city_data_mcp.schemas import CompareCitiesRequest
 
 
 class PolicyOutcome(StrEnum):
@@ -61,7 +62,7 @@ class GuardrailPolicy:
     max_routes_calls = 2
     max_route_waypoints = 2
     allowed_tools = {
-        "describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas",
+        "describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "compare_cities",
         "maps.search_places", "route.intent",
     }
     weather_terms = {"weather", "forecast", "temperature", "rain", "rainfall", "wind"}
@@ -108,7 +109,12 @@ class GuardrailPolicy:
             if set(decision.arguments) - {"origin", "destination"}:
                 return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.MODEL_COORDINATES_FORBIDDEN, message="Route coordinates and provider payloads must be selected by trusted backend code.")
             if not all(isinstance(decision.arguments.get(key), str) and decision.arguments[key].strip() for key in ("origin", "destination")):
-                return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message="A bicycle route requires named London origins and destinations.")
+                return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message="A bicycle route requires named origins and destinations in the selected city.")
+        if decision.tool == "compare_cities":
+            try:
+                CompareCitiesRequest.model_validate(decision.arguments)
+            except ValueError:
+                return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_DOMAIN, message="Cross-city comparisons require two to four cohort cities and one normalized metric.")
         return self.allow()
 
     def check_city_data_call(self, budget: ExecutionBudget) -> PolicyDecision:

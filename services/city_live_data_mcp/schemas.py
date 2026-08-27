@@ -5,8 +5,11 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+LiveCityId = Literal["new_york", "chicago", "washington_dc", "paris"]
+
+
 class LiveStationRequest(BaseModel):
-    city: Literal["paris"] = "paris"
+    city: LiveCityId = "paris"
     limit: int = Field(default=25, ge=1, le=100)
 
 
@@ -21,7 +24,7 @@ class LiveStation(BaseModel):
 
 
 class LiveNetworkResponse(BaseModel):
-    city: Literal["paris"]
+    city: LiveCityId
     provider: str
     provider_timestamp: int | None = None
     fetched_at: str

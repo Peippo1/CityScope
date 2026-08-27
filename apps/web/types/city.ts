@@ -36,7 +36,7 @@ export type CityComparison = {
 };
 
 export type LiveNetwork = {
-  city: "paris";
+  city: "new_york" | "chicago" | "washington_dc" | "paris";
   provider: string;
   provider_timestamp?: number | null;
   fetched_at: string;

@@ -105,7 +105,7 @@ class MobilityAnalytics:
 
     def _uncached_comparison_value(self, city: str, metric: str) -> float:
         _, journeys_path = self._dataset(city)
-        with duckdb.connect() as connection:
+        with self._connect() as connection:
             if metric == "trips_per_active_station_day":
                 origin_column, destination_column = self._station_id_columns(connection, journeys_path)
                 trips, stations = connection.execute(f"""
@@ -167,7 +167,13 @@ class MobilityAnalytics:
         elif time_filter.weekend is False: conditions.append("NOT is_weekend")
         if time_filter.time_of_day: conditions.append("time_of_day IN (SELECT * FROM UNNEST(?))"); params.append(time_filter.time_of_day)
         where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
-        with duckdb.connect() as connection: return connection.execute("SELECT * FROM read_parquet(?)" + where, params).df()
+        with self._connect() as connection: return connection.execute("SELECT * FROM read_parquet(?)" + where, params).df()
+
+    @staticmethod
+    def _connect() -> duckdb.DuckDBPyConnection:
+        connection = duckdb.connect()
+        connection.execute("SET temp_directory='/tmp/cityscope-duckdb'")
+        return connection
 
     @staticmethod
     def _metric_values(frame: pd.DataFrame, metrics: Iterable[MetricName]) -> dict[str, dict[str, int | float]]:

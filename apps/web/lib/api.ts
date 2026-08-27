@@ -28,9 +28,11 @@ export async function getCityComparison(metric = "trips_per_active_station_day")
   return apiRequest(`/cities/compare?metric=${encodeURIComponent(metric)}`, { cache: "no-store" }, "CityScope comparison could not be loaded");
 }
 
-export async function getParisLiveNetwork(): Promise<LiveNetwork> {
-  return apiRequest("/cities/paris/live-network", { cache: "no-store" }, "Paris live network data could not be loaded");
+export async function getCityLiveNetwork(city: string): Promise<LiveNetwork> {
+  return apiRequest(`/cities/${city}/live-network?limit=100`, { cache: "no-store" }, "Live network data could not be loaded");
 }
+
+export const getParisLiveNetwork = () => getCityLiveNetwork("paris");
 
 export async function investigate(request: InvestigationRequest): Promise<InvestigationResult> {
   return apiRequest("/investigate", {

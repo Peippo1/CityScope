@@ -12,7 +12,7 @@ City data is abundant, but answering a practical question still involves too muc
 
 A normal chatbot can describe that workflow. CityScope is designed to carry it out.
 
-CityScope now compares a matched May 2026 historical cohort: London, New York City, Chicago, and Washington, DC. A user can inspect normalized demand patterns, then drill into one city's H3 hotspots, nearby amenities, or a bicycle route. Paris is intentionally different: its Vélib' availability is live operational context, shown with freshness and never ranked beside historical trip demand.
+CityScope now compares a matched May 2026 historical cohort: London, New York City, Chicago, and Washington, DC. A user can inspect normalized demand patterns, then drill into one city's H3 hotspots, nearby amenities, or a bicycle route. NYC, Chicago, DC, and Paris also have a separate live mode: fixed official GBFS feeds show station availability and freshness, but are never ranked beside historical trip demand.
 
 ## Why a bounded agent
 
@@ -56,6 +56,7 @@ The route planner does more than draw a line between two endpoints. It can score
 The latest interface rewrite moves the product away from a chat-first layout. The main screen now combines:
 
 - an interactive Google Map with selectable H3 activity cells;
+- a city-aware live map with current bike and dock availability;
 - a colour-coded activity chart linked to map selection;
 - a real request-flow view driven by API trace state;
 - natural-language investigation and route controls;
@@ -73,6 +74,8 @@ CityScope is deployed across intentionally separate trust boundaries:
 - Firestore stores user-owned saved investigations through the API only.
 - A public Cloud Run service hosts FastAPI.
 - An IAM-protected Cloud Run service hosts City Data MCP.
+- A second IAM-protected service hosts fixed-provider City Live Data MCP.
+- Cloud Scheduler runs the private hourly Paris archive pilot.
 - Artifact Registry stores the API and MCP images.
 - Secret Manager supplies server-only provider credentials.
 
@@ -90,7 +93,7 @@ The current release proves the investigation loop. The next iterations will focu
 
 - explicit route origin and destination controls alongside natural language;
 - additional time filters and comparative visualisations;
-- carefully sourced near-real-time feeds, always labelled separately from historical evidence;
+- enough archived observations to support carefully bounded Paris availability trends;
 - richer saved-investigation history and shareable reports;
 - evaluation cases for multi-turn clarification and longer-running investigations;
 - a public write-up and four-minute demo for the hackathon submission.

@@ -10,7 +10,7 @@
 ![Google Cloud](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run%20%2B%20Maps-4285F4?logo=googlecloud&logoColor=white)
 ![License](https://img.shields.io/badge/license-private-lightgrey)
 
-CityScope turns natural-language questions into bounded, traceable investigations over historical bike-share data. London, New York City, Chicago, and Washington, DC are compared through normalized May 2026 metrics; Paris is a separately labelled live Vélib' availability pilot. It combines deterministic H3 and DuckDB analytics with a guarded Gemini planning layer, current Google Maps context, bicycle routing, and user-owned investigation history.
+CityScope turns natural-language questions into bounded, traceable investigations over bike-share data. London, New York City, Chicago, and Washington, DC are compared through normalized May 2026 metrics. New York, Chicago, Washington, DC, and Paris also expose separately labelled current station availability through fixed official GBFS providers. It combines deterministic H3 and DuckDB analytics with a guarded Gemini planning layer, current Google Maps context, bicycle routing, and user-owned investigation history.
 
 **[Open the live CityScope app](https://cityscope-506222.web.app)**
 
@@ -18,7 +18,7 @@ CityScope turns natural-language questions into bounded, traceable investigation
 
 ![CityScope London mobility workspace](docs/assets/cityscope-dashboard.png)
 
-CityScope keeps the map, interactive activity chart, request flow, and investigation controls in one workspace. Every visual separates the pinned historical TfL snapshot from current Google Maps context and Google bicycle routes.
+CityScope keeps the map, interactive activity chart, request flow, and investigation controls in one workspace. Every visual separates pinned historical trip snapshots from current GBFS station availability, Google Maps context, and Google bicycle routes.
 
 ![CityScope bicycle route result from Kings Cross to Borough](docs/assets/cityscope-route-planning.png)
 
@@ -30,14 +30,14 @@ The current cross-city slice can:
 
 - rank historical cycling activity across H3 cells in London, NYC, Chicago, and Washington, DC;
 - compare those four cities using trips per active station/day, median duration, peak-hour share, weekend share, and hotspot concentration;
-- show Paris live station availability as operational context without mixing it into historical demand rankings;
+- switch NYC, Chicago, Washington, DC, and Paris into live station maps without mixing availability into historical demand rankings;
 - enrich trusted areas with current Google Maps place context;
 - compute deterministic bicycle routes through selected activity areas;
 - explore selectable activity charts and a request-flow view driven by real API trace state;
 - show source-tagged evidence, dataset provenance, limitations, and execution traces;
 - authenticate users with Google and save investigations through a Firebase-token-verified API.
 
-> Historical comparisons use a matched May 2026 window and normalized metrics only. Paris availability is live operational data, not historical trip demand. CityScope does not claim live cycling conditions, weather, traffic, or forecasts.
+> Historical comparisons use a matched May 2026 window and normalized metrics only. Station availability is live operational data, not historical trip demand. CityScope does not claim live cycling conditions, weather, traffic, or forecasts.
 
 ## All Things Agentic Hackathon
 
@@ -65,8 +65,10 @@ flowchart LR
     api -.->|"Place context"| maps["Maps Grounding Lite"]
     api -.->|"Bicycle route"| routes["Google Routes API"]
 
-    tfl["TfL snapshots"] --> pipeline["Validation + H3 pipeline"]
+    sources["TfL + Citi Bike + Divvy + Capital Bikeshare"] --> pipeline["Validation + H3 pipeline"]
     pipeline --> data
+    gbfs["Fixed official GBFS feeds"] --> live["City Live Data MCP"]
+    live --> api
 ```
 
 The FastAPI service is the trust boundary. Browser Firestore access is denied; authenticated history operations pass a Firebase ID token to the API, which verifies ownership before reading or writing Firestore. The City Data MCP remains deterministic and private behind the API.
@@ -78,7 +80,7 @@ Official trip snapshots -> validate and normalize -> H3 aggregation -> Parquet -
                                                                |
 question -> guarded planner -> City Data MCP -------------------+
                           \-> Maps and Routes -> evidence-grounded result
-Paris GBFS -> City Live Data MCP -> labelled live-network context
+Official GBFS -> City Live Data MCP -> validated, labelled live-network context
 ```
 
 Generated artifacts retain checksums, per-reason reconciliation counts, local observation period, source attribution, and snapshot metadata. The production build accepts official CSV or ZIP archives in bounded chunks. Large raw, generated, and quarantine datasets are intentionally excluded from Git.
@@ -117,7 +119,7 @@ The supervisor stops the whole stack if any service exits, preventing a web-only
 # Terminal 1: deterministic City Data MCP
 .venv/bin/uvicorn services.city_data_mcp.server:app --reload --port 8001
 
-# Terminal 2: live Paris MCP
+# Terminal 2: live GBFS MCP
 .venv/bin/uvicorn services.city_live_data_mcp.server:app --reload --port 8002
 
 # Terminal 3: public API
@@ -139,10 +141,10 @@ Server-side configuration includes:
 - `GOOGLE_ROUTES_API_KEY` for bicycle routing;
 - `FIREBASE_PROJECT_ID` for token verification and saved investigations;
 - `CITYSCOPE_CITY_DATA_MCP_URL` for the private MCP endpoint.
-- `CITYSCOPE_CITY_LIVE_DATA_MCP_URL` for the private Paris live-data MCP endpoint.
+- `CITYSCOPE_CITY_LIVE_DATA_MCP_URL` for the private live-data MCP endpoint.
 - `CITYSCOPE_PARIS_ARCHIVE_BUCKET` for the hourly private GBFS archive job.
 
-The Paris client joins Vélib's fixed official station-information and station-status feeds so names and coordinates remain separate from availability. The deployed collector archives full validated snapshots hourly to a private regional bucket; the UI still exposes no trend claim until the archive is sufficiently mature.
+The live MCP joins fixed official station-information and station-status feeds for Citi Bike, Divvy, Capital Bikeshare, and Vélib'. Paris remains the archive pilot: its deployed collector stores full validated snapshots hourly in a private regional bucket, and the UI exposes no trend claim until the archive is sufficiently mature.
 
 The web app uses separately restricted public configuration:
 
@@ -178,6 +180,8 @@ npm run build
 ```
 
 CI also runs Python and npm dependency audits and whitespace checks. Live Gemini, Maps, and Routes smoke tests are deliberately opt-in so routine test runs do not consume provider quota.
+
+The scheduled `cohort-source-monitor` validates monthly that the pinned production manifests still describe one matched snapshot and that every official source remains reachable. It does not silently replace the evidence window; promoting a new common month requires the same ingestion, reconciliation, checksum, and review gates as May 2026.
 
 ## Documentation
 

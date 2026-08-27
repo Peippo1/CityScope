@@ -42,7 +42,7 @@ export function InvestigationResultPanel({ result, onSuggestion }: { result: Inv
         <SourceBadge kind="historical" />
         <h3 id="historical-heading">Historical mobility evidence</h3>
         {result.dataset && <p className="observation-period">{result.dataset.dataset_name} · {result.dataset.observation_start} to {result.dataset.observation_end}</p>}
-        <ul className="metric-list">{historicalEvidence.map((item, index) => <li key={`${item.metric}-${index}`}><strong>{item.value.toLocaleString()}</strong><span>{item.unit} · {item.metric.replaceAll("_", " ")}</span></li>)}</ul>
+        <ul className="metric-list">{historicalEvidence.map((item, index) => <li key={`${item.metric}-${item.category ?? index}`}><strong>{item.value.toLocaleString()}</strong><span>{item.category ? `${item.category} · ` : ""}{item.unit} · {item.metric.replaceAll("_", " ")}</span></li>)}</ul>
       </section>}
 
       {(currentEvidence.length > 0 || places.length > 0) && <section aria-labelledby="current-heading" className="insight-card">

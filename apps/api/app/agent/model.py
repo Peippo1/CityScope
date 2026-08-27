@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from .. import config  # noqa: F401  # Load the project environment before reading it.
 from pipelines.core.analytics_contract import MetricName, TimeFilter
-from services.city_data_mcp.schemas import AreaGroup
+from services.city_data_mcp.schemas import AreaGroup, ComparisonMetric, HistoricalCityId
 
 from .schemas import AmenityCategory, ToolDecision
 from ..cities import CityId
@@ -19,8 +19,10 @@ class GeminiDecision(BaseModel):
     """Gemini-compatible schema with no arbitrary additionalProperties maps."""
 
     kind: Literal["call_tool", "answer", "unsupported"]
-    tool: Literal["describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "maps.search_places", "route.intent"] | None = None
+    tool: Literal["describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "compare_cities", "maps.search_places", "route.intent"] | None = None
     city: CityId | None = None
+    cities: list[HistoricalCityId] | None = None
+    comparison_metric: ComparisonMetric | None = None
     metric: MetricName | None = None
     limit: int | None = None
     time_filter: TimeFilter | None = None
@@ -64,7 +66,9 @@ Reject questions about weather, traffic, demographics, revenue, forecasts, unnam
 For route.intent, return origin and destination as the user's named places. Do not call or construct a Routes API request; routing is a private backend execution step.
 Return JSON matching the requested schema. Call at most one tool per decision.
 Tools: describe_dataset(city); find_hotspots(city, metric, time_filter, limit);
-get_area_metrics(city, h3_cells, metrics, time_filter); compare_areas(city, area_groups, metrics, time_filter).
+get_area_metrics(city, h3_cells, metrics, time_filter); compare_areas(city, area_groups, metrics, time_filter);
+compare_cities(cities, comparison_metric). Cross-city comparison accepts two to four historical cities and only these normalized metrics:
+trips_per_active_station_day, median_trip_duration_minutes, peak_hour_share, weekend_share, hotspot_concentration. Never rank raw totals.
 For amenity enrichment, use maps.search_places only after City Data has supplied candidate H3 cells.
 Its internal planning arguments are {{"h3_cells": [...], "categories": ["cafe"|"coffee_shop"|"bicycle_repair_shop"|"restaurant"|"shop"|"public_bathroom"]}}.
 The application derives all coordinates and sends the exact Google search_places schema. Never provide coordinates or Place IDs.
@@ -84,7 +88,8 @@ Previous tool results: {json.dumps(tool_results, default=str)}
             key: value
             for key, value in {
                 "city": decision.city,
-                "metric": decision.metric,
+                "cities": decision.cities,
+                "metric": decision.comparison_metric or decision.metric,
                 "limit": decision.limit,
                 "time_filter": decision.time_filter.model_dump(mode="json") if decision.time_filter else None,
                 "h3_cells": decision.h3_cells,
