@@ -1,9 +1,12 @@
 import json
+from io import BytesIO
 
 import pytest
+from urllib.error import HTTPError
 
 from apps.api.app.artifacts import HISTORICAL_COHORT
-from scripts.check_cohort_sources import validate_manifests
+from scripts import check_cohort_sources
+from scripts.check_cohort_sources import probe, probe_sources, validate_manifests
 
 
 def _write_manifest(root, city, snapshot="2026-05"):
@@ -31,3 +34,50 @@ def test_cohort_source_monitor_returns_pinned_provenance(tmp_path):
 
     assert result["snapshot_id"] == "2026-05"
     assert len(result["sources"]) == 4
+
+
+class _Response:
+    status = 200
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return None
+
+
+def test_probe_falls_back_to_bounded_get_when_head_returns_404(monkeypatch):
+    requests = []
+
+    def fake_urlopen(request, timeout):
+        requests.append(request)
+        if request.get_method() == "HEAD":
+            raise HTTPError(request.full_url, 404, "not supported", {}, BytesIO())
+        return _Response()
+
+    monkeypatch.setattr(check_cohort_sources, "urlopen", fake_urlopen)
+
+    assert probe("https://example.test/status") == 200
+    assert [request.get_method() for request in requests] == ["HEAD", "GET"]
+    assert requests[1].get_header("Range") == "bytes=0-0"
+
+
+def test_probe_sources_reports_every_failure(monkeypatch):
+    def fake_probe(url):
+        if "chicago" in url:
+            raise HTTPError(url, 404, "missing", {}, BytesIO())
+        return 200
+
+    monkeypatch.setattr(check_cohort_sources, "probe", fake_probe)
+    sources = [
+        {"city": "london", "url": "https://example.test/london", "sha256": "a" * 64},
+        {"city": "chicago", "url": "https://example.test/chicago", "sha256": "b" * 64},
+        {"city": "new_york", "url": "https://example.test/new-york", "sha256": "c" * 64},
+    ]
+
+    results, healthy = probe_sources(sources)
+
+    assert not healthy
+    assert len(results) == 3
+    assert results[1]["error"].startswith("HTTPError:")
+    assert results[2]["status"] == 200

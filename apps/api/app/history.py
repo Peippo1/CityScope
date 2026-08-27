@@ -3,22 +3,24 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Protocol
+from typing import Literal, Protocol
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .agent.schemas import InvestigationRequest, InvestigationResult
 from .auth import CurrentUser
 
 
 class SavedInvestigationCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     request: InvestigationRequest
     result: InvestigationResult
 
 
 class SavedInvestigation(BaseModel):
     id: str
+    record_type: Literal["historical_investigation", "historical_comparison"] = "historical_investigation"
     question: str = Field(max_length=500)
     selected_h3_cells: list[str] = Field(max_length=50)
     status: str
@@ -26,6 +28,8 @@ class SavedInvestigation(BaseModel):
     dataset_snapshot_id: str | None = None
     dataset_name: str | None = None
     historical_evidence: list[dict] = Field(default_factory=list)
+    comparison_metric: str | None = None
+    comparison_cities: list[str] = Field(default_factory=list, max_length=4)
     created_at: datetime
 
 
@@ -39,8 +43,13 @@ class InvestigationStore(Protocol):
 def _record(payload: SavedInvestigationCreate, investigation_id: str | None = None) -> SavedInvestigation:
     result = payload.result
     historical_evidence = [item.model_dump(mode="json") for item in result.evidence if item.source == "city_data"]
+    if payload.request.city == "paris" or (result.city_insights and not historical_evidence):
+        raise HTTPException(status_code=422, detail="Live network availability is ephemeral and cannot be saved as an investigation.")
+    comparison_evidence = [item for item in historical_evidence if item.get("source_aggregate") == "cross_city_canonical_trips"]
+    record_type: Literal["historical_investigation", "historical_comparison"] = "historical_comparison" if comparison_evidence else "historical_investigation"
     return SavedInvestigation(
         id=investigation_id or str(uuid.uuid4()),
+        record_type=record_type,
         question=payload.request.question,
         selected_h3_cells=payload.request.context.selected_h3_cells,
         status=result.status,
@@ -48,6 +57,8 @@ def _record(payload: SavedInvestigationCreate, investigation_id: str | None = No
         dataset_snapshot_id=result.dataset.snapshot_id if result.dataset else None,
         dataset_name=result.dataset.dataset_name if result.dataset else None,
         historical_evidence=historical_evidence,
+        comparison_metric=comparison_evidence[0]["metric"] if comparison_evidence else None,
+        comparison_cities=[item["category"] for item in comparison_evidence if item.get("category")],
         created_at=datetime.now(timezone.utc),
     )
 

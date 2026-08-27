@@ -12,6 +12,7 @@ import { CityComparisonPanel } from "../visualization/CityComparisonPanel";
 import { LiveNetworkPanel } from "../visualization/ParisLivePanel";
 import { PlacesExplorer } from "../visualization/PlacesExplorer";
 import { AccountActions } from "./AccountActions";
+import { ComparisonQuestionComposer } from "./ComparisonQuestionComposer";
 import { InvestigationResultPanel } from "./InvestigationResultPanel";
 import { QuestionComposer } from "./QuestionComposer";
 
@@ -24,6 +25,13 @@ type WorkspaceServices = {
 };
 
 const defaultServices: WorkspaceServices = { getCities, getActivity: getCityActivity, investigate, getComparison: getCityComparison, getLive: getCityLiveNetwork };
+const comparisonMetrics = new Set([
+  "trips_per_active_station_day",
+  "median_trip_duration_minutes",
+  "peak_hour_share",
+  "weekend_share",
+  "hotspot_concentration",
+]);
 const fallbackCities: CityCapability[] = [
   { id: "london", name: "London", historical: true, routes: true, live_network: false, timezone: "Europe/London", bounds: [51.28, -0.52, 51.72, 0.34] },
   { id: "new_york", name: "New York City", historical: true, routes: true, live_network: true, timezone: "America/New_York", bounds: [40.49, -74.30, 40.92, -73.68] },
@@ -53,6 +61,10 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [comparisonMetric, setComparisonMetric] = useState("trips_per_active_station_day");
   const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonQuestion, setComparisonQuestion] = useState("");
+  const [comparisonInvestigation, setComparisonInvestigation] = useState<InvestigationResult | null>(null);
+  const [comparisonInvestigationError, setComparisonInvestigationError] = useState<string | null>(null);
+  const [comparisonInvestigating, setComparisonInvestigating] = useState(false);
   const [liveNetwork, setLiveNetwork] = useState<LiveNetwork | null>(null);
   const [liveError, setLiveError] = useState<string | null>(null);
   const [liveLoading, setLiveLoading] = useState(false);
@@ -119,6 +131,32 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     try { setComparison(await services.getComparison(metric)); } catch (reason) { setComparisonError(messageFrom(reason, "Comparison could not be loaded")); } finally { setComparisonLoading(false); }
   }, [comparisonMetric, services]);
 
+  const submitComparisonQuestion = useCallback(async () => {
+    const trimmedQuestion = comparisonQuestion.trim();
+    if (!trimmedQuestion || comparisonInvestigating) return;
+    setComparisonInvestigating(true);
+    setComparisonInvestigationError(null);
+    try {
+      const request = {
+        city: "london",
+        question: trimmedQuestion,
+        context: { selected_h3_cells: [], previous_turns: [], evidence_summary: "Cross-city comparison mode; normalized metrics only." },
+      } satisfies InvestigationRequest;
+      const result = await services.investigate(request);
+      const selectedMetric = result.evidence.find((item) => item.source === "city_data")?.metric;
+      if (selectedMetric && comparisonMetrics.has(selectedMetric) && selectedMetric !== comparisonMetric) {
+        setComparisonMetric(selectedMetric);
+        void loadComparison(selectedMetric);
+      }
+      setSubmittedRequest(request);
+      setComparisonInvestigation(result);
+    } catch (reason: unknown) {
+      setComparisonInvestigationError(messageFrom(reason, "Cross-city investigation could not be completed"));
+    } finally {
+      setComparisonInvestigating(false);
+    }
+  }, [comparisonInvestigating, comparisonMetric, comparisonQuestion, loadComparison, services]);
+
   const loadLive = useCallback(async () => {
     if (!services.getLive || !selectedCity.live_network) return;
     setLiveError(null);
@@ -166,7 +204,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
         <nav className="view-nav" aria-label="Workspace sections">
           <button type="button" onClick={() => changeView("explore")} aria-pressed={view === "explore"} disabled={!selectedCity.historical}>Explore</button><button type="button" onClick={() => changeView("compare")} aria-pressed={view === "compare"}>Compare</button><button type="button" onClick={() => changeView("live")} aria-pressed={view === "live"} disabled={!selectedCity.live_network}>Live network</button>
         </nav>
-        <AccountActions request={submittedRequest} result={investigation} />
+        <AccountActions request={view === "live" ? null : submittedRequest} result={view === "compare" ? comparisonInvestigation : investigation} />
       </header>
 
       <section className="dashboard-intro" aria-labelledby="page-title">
@@ -176,7 +214,13 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
 
       <label className="city-switcher">City workspace<select value={selectedCity.id} onChange={(event) => selectCity(event.target.value)}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}{city.live_network && !city.historical ? " (live only)" : ""}</option>)}</select></label>
 
-      {view === "compare" && <section className="standalone-workspace">{comparisonLoading && <div className="inline-loading" aria-live="polite">Calculating normalized May 2026 comparison...</div>}{comparison && <CityComparisonPanel comparison={comparison} metric={comparisonMetric} onMetricChange={(metric) => { setComparisonMetric(metric); void loadComparison(metric); }} onSelectCity={selectCity} />}{comparisonError && <div className="empty-state" role="alert"><p>{comparisonError}</p><button type="button" className="secondary-button" onClick={() => void loadComparison()}>Retry comparison</button></div>}</section>}
+      {view === "compare" && <section className={`standalone-workspace comparison-workspace${comparisonInvestigation ? " has-agent-result" : ""}`}>
+        <ComparisonQuestionComposer value={comparisonQuestion} isSubmitting={comparisonInvestigating} error={comparisonInvestigationError} onChange={setComparisonQuestion} onSubmit={() => void submitComparisonQuestion()} />
+        {comparisonLoading && <div className="inline-loading" aria-live="polite">Calculating normalized May 2026 comparison...</div>}
+        {comparison && <CityComparisonPanel comparison={comparison} metric={comparisonMetric} onMetricChange={(metric) => { setComparisonMetric(metric); void loadComparison(metric); }} onSelectCity={selectCity} />}
+        {comparisonError && <div className="empty-state" role="alert"><p>{comparisonError}</p><button type="button" className="secondary-button" onClick={() => void loadComparison()}>Retry comparison</button></div>}
+        {comparisonInvestigation && <div className="comparison-agent-result"><InvestigationResultPanel result={comparisonInvestigation} onSuggestion={setComparisonQuestion} /></div>}
+      </section>}
       {view === "live" && <section className="standalone-workspace">{liveLoading && <div className="inline-loading" aria-live="polite">Loading current {selectedCity.name} station availability...</div>}{liveNetwork?.city === selectedCity.id && <LiveNetworkPanel cityName={selectedCity.name} bounds={selectedCity.bounds} network={liveNetwork} />}{liveError && <div className="empty-state" role="alert"><p>{liveError}</p><button type="button" className="secondary-button" onClick={() => void loadLive()}>Retry {selectedCity.name} live network</button></div>}</section>}
 
       {view === "explore" && activity && <aside className="snapshot-banner" aria-label="Historical dataset notice">

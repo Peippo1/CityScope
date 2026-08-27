@@ -10,6 +10,7 @@ from apps.api.app.agent.places import MapsSearchResult
 from apps.api.app.agent.model import GeminiInvestigationModel
 from apps.api.app.agent.route_service import ResolvedPlace, RouteDetails
 from apps.api.app.agent.service import InvestigationService
+from apps.api.app import config
 from services.city_data_mcp.schemas import DatasetMetadata, Evidence, MapLayer, ToolEnvelope
 
 
@@ -54,10 +55,35 @@ class FakeModel:
         return next(self.decisions)
 
 
+class SlowModel:
+    async def decide(self, question: str, context: str, tool_results: list[dict]) -> ToolDecision:
+        await asyncio.sleep(0.05)
+        return ToolDecision(kind="answer", answer="Too late")
+
+
+class FakeLiveMcp:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def get_paris_status(self) -> dict:
+        self.calls += 1
+        return {"stations": [], "limitations": []}
+
+
 def test_gemini_defaults_to_hackathon_compatible_stable_model(monkeypatch) -> None:
     monkeypatch.delenv("CITYSCOPE_GEMINI_MODEL", raising=False)
 
     assert GeminiInvestigationModel(api_key="test").model_name == "gemini-3.5-flash"
+
+
+def test_model_timeout_returns_a_sanitized_failure(monkeypatch) -> None:
+    monkeypatch.setattr(config, "MODEL_TIMEOUT_SECONDS", 0.01)
+
+    result = asyncio.run(InvestigationService(model=SlowModel()).investigate(InvestigationRequest(question="Where are the cycling hotspots?")))
+
+    assert result.status == "failed"
+    assert result.answer == "The investigation could not be planned."
+    assert result.trace[-1].policy_code == "provider_unavailable"
 
 
 class FakeMaps:
@@ -123,6 +149,18 @@ def test_agent_uses_mcp_and_returns_grounded_evidence() -> None:
     assert result.status == "answered"
     assert mcp.calls[0][0] == "find_hotspots"
     assert result.evidence[0].value == 7
+
+
+def test_historical_hotspot_answer_uses_tool_evidence_not_model_claims() -> None:
+    service = InvestigationService(mcp_client=FakeMcp(), model=FakeModel([
+        ToolDecision(kind="call_tool", tool="find_hotspots", arguments={"city": "london", "metric": "starts", "limit": 5, "time_filter": {}}),
+        ToolDecision(kind="answer", answer="The top cell has 999,999 starts."),
+    ]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(question="Where are the cycling hotspots?")))
+
+    assert "999,999" not in result.answer
+    assert "7 journeys" in result.answer
     assert result.map_layers[0].h3_cell == "892a100d2d7ffff"
     assert len(result.trace) == 3
 
@@ -142,6 +180,19 @@ def test_agent_executes_a_normalized_cross_city_comparison() -> None:
     assert {item.metric for item in result.evidence} == {"hotspot_concentration"}
     assert {item.category for item in result.evidence} == {"London", "New York", "Chicago", "Washington Dc"}
     assert "Normalized metrics only." in result.limitations
+    assert "London ranks first" in result.answer
+    assert result.evidence[0].unit == "share"
+
+
+def test_paris_historical_demand_is_rejected_without_live_provider_call() -> None:
+    live = FakeLiveMcp()
+    service = InvestigationService(live_mcp_client=live, model=FakeModel([]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(city="paris", question="Rank Paris against London by historical demand in May 2026.")))
+
+    assert result.status == "unsupported"
+    assert live.calls == 0
+    assert result.trace[0].policy_code == "unsupported_mode"
 
 
 def test_agent_rejects_unsupported_question_without_mcp_call() -> None:

@@ -9,9 +9,17 @@ from .routes.investigations import router as investigations_router
 from .routes.history import router as history_router
 from . import config
 from .artifacts import verify_deployment_artifact
+from .middleware import SecurityBoundaryMiddleware
 
-app = FastAPI(title="CityScope API", version="0.1.0")
+app = FastAPI(
+    title="CityScope API",
+    version="0.1.0",
+    docs_url=None if config.is_production() else "/docs",
+    redoc_url=None if config.is_production() else "/redoc",
+    openapi_url=None if config.is_production() else "/openapi.json",
+)
 config.log_configuration_status()
+app.add_middleware(SecurityBoundaryMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.configured_origins(),

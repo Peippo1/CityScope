@@ -26,7 +26,7 @@ City data analysis is still fragmented across downloads, notebooks, dashboards, 
 
 ## What it does
 
-- Compares four May 2026 bike-share systems by normalized demand, duration, peak-hour, weekend, and hotspot-concentration metrics rather than raw volume.
+- Lets the agent answer four-city questions by selecting one approved normalized demand, duration, peak-hour, weekend, or hotspot-concentration metric rather than ranking raw volume.
 - Maps current station availability for NYC, Chicago, Washington, DC, and Paris with provider freshness and an explicit non-comparability boundary.
 - Ranks and compares H3-indexed cycling activity using deterministic DuckDB queries.
 - Enriches trusted areas with current Google Maps place context.
@@ -53,7 +53,8 @@ The Next.js frontend is statically exported to Firebase Hosting. A FastAPI servi
 - Added deterministic agent evaluations, provider fakes, dependency audits, and browser accessibility tests to CI.
 - Produced a real Kings Cross-to-Borough bicycle route with historically active waypoint rationale.
 - Kept historical, current-place, and route evidence visibly separate throughout the product.
-- Added clickable normalized comparisons, city drill-down, live station maps, and judge-visible production/fixture status.
+- Added agent-submitted normalized comparisons, deterministic finding cards, city drill-down, live station maps, and judge-visible production/fixture status.
+- Bound a precomputed five-metric matrix to source artifact fingerprints for fast cold comparison reads with a deterministic Parquet fallback.
 
 ## What we learned
 

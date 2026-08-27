@@ -59,6 +59,23 @@ class CompareCitiesRequest(BaseModel):
     metric: ComparisonMetric = "trips_per_active_station_day"
 
 
+class CityComparisonRow(BaseModel):
+    city: HistoricalCityId
+    city_name: str
+    value: float
+    rank: int
+    snapshot_id: str
+    is_fixture: bool = False
+
+
+class CityComparisonResponse(BaseModel):
+    metric: ComparisonMetric
+    calculation_basis: str
+    observation_period: str
+    cities: list[CityComparisonRow]
+    limitations: list[str]
+
+
 class DatasetMetadata(BaseModel):
     city: str
     dataset_id: str

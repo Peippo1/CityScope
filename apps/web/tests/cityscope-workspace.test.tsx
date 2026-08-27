@@ -22,6 +22,17 @@ const investigation: InvestigationResult = {
   evidence: [], places: [], amenity_analysis: [], city_insights: [], map_layers: [], limitations: [], trace: [], follow_up_suggestions: [],
 };
 
+const comparisonInvestigation: InvestigationResult = {
+  ...investigation,
+  investigation_id: "comparison-test",
+  answer: "Chicago ranks first for hotspot concentration across the matched cohort.",
+  evidence: [
+    { source: "city_data", metric: "hotspot_concentration", value: 0.8212, unit: "share", source_aggregate: "cross_city_canonical_trips", h3_cells: [], category: "Chicago" },
+  ],
+  trace: [{ kind: "tool_call", label: "Called City Data MCP: compare_cities", status: "completed", tool: "city_data.compare_cities", latency_ms: 18 }],
+  limitations: ["Raw trip totals are intentionally excluded from cross-city rankings."],
+};
+
 const comparison = {
   metric: "trips_per_active_station_day", calculation_basis: "trips divided by active stations and days", observation_period: "2026-05-01/2026-05-31",
   cities: [{ city: "london", city_name: "London", value: 1.2, rank: 1, snapshot_id: "2026-05", is_fixture: false }, { city: "new_york", city_name: "New York City", value: 0.9, rank: 2, snapshot_id: "2026-05", is_fixture: false }], limitations: ["Normalized only"],
@@ -110,6 +121,28 @@ describe("CityScopeWorkspace", () => {
     expect(screen.getAllByText("New York City")).toHaveLength(2);
     expect(screen.getByText(/never raw journey totals/i)).toBeVisible();
     expect(screen.getAllByText("Verified production artifact · 2026-05")).toHaveLength(2);
+  });
+
+  it("runs a comparison question through the bounded investigation flow", async () => {
+    const user = userEvent.setup();
+    const investigate = vi.fn().mockResolvedValue(comparisonInvestigation);
+    const getComparison = vi.fn().mockResolvedValue(comparison);
+    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate, getComparison }} />);
+
+    await user.click(screen.getByRole("button", { name: "Compare" }));
+    await user.click(await screen.findByRole("button", { name: "Compare hotspot concentration" }));
+    await user.click(screen.getByRole("button", { name: "Ask across cities" }));
+
+    expect(investigate).toHaveBeenCalledWith(expect.objectContaining({
+      city: "london",
+      question: expect.stringMatching(/London.*New York City.*Chicago.*Washington, DC/i),
+      context: { selected_h3_cells: [], previous_turns: [], evidence_summary: "Cross-city comparison mode; normalized metrics only." },
+    }));
+    expect(await screen.findByText(comparisonInvestigation.answer)).toBeVisible();
+    expect(getComparison).toHaveBeenCalledWith("hotspot_concentration");
+    expect(screen.getByText("82.1%")).toBeVisible();
+    await user.click(screen.getByText("Evidence & methodology"));
+    expect(screen.getByText(/Called City Data MCP: compare_cities/)).toBeVisible();
   });
 
   it("loads the city registry from the API and drills from comparison into city activity", async () => {

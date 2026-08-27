@@ -10,6 +10,19 @@ const baseInvestigation = {
   investigation_id: "test-investigation", status: "answered", answer: "The route connects two London locations.", dataset: { dataset_name: "TfL Cycling", observation_start: "2026-05-01", observation_end: "2026-05-31", historical: true, attribution_text: "TfL" }, evidence: [], places: [], amenity_analysis: [], city_insights: [], map_layers: [], limitations: [], trace: [], follow_up_suggestions: [],
 };
 
+const comparison = {
+  metric: "trips_per_active_station_day",
+  calculation_basis: "completed trips divided by active origin/destination stations and 31 observation days",
+  observation_period: "2026-05-01/2026-05-31",
+  cities: [
+    { city: "new_york", city_name: "New York City", value: 64.4166, rank: 1, snapshot_id: "2026-05", is_fixture: false },
+    { city: "london", city_name: "London", value: 34.6874, rank: 2, snapshot_id: "2026-05", is_fixture: false },
+    { city: "washington_dc", city_name: "Washington, DC", value: 25.6582, rank: 3, snapshot_id: "2026-05", is_fixture: false },
+    { city: "chicago", city_name: "Chicago", value: 13.7692, rank: 4, snapshot_id: "2026-05", is_fixture: false },
+  ],
+  limitations: ["Raw trip totals are intentionally excluded from cross-city rankings."],
+};
+
 test.beforeEach(async ({ page }) => {
   await page.route("**/cities/london/activity", (route) => route.fulfill({ json: activity }));
 });
@@ -45,6 +58,28 @@ test("shows accessible API failure state", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "London activity is unavailable" })).toBeVisible();
   await expect(page.getByText("CityScope activity data could not be loaded")).toBeVisible();
   await expect(page.getByRole("button", { name: "Retry London activity" })).toBeVisible();
+});
+
+test("submits a bounded cross-city agent question and shows its evidence trace", async ({ page }) => {
+  await page.route("**/cities/compare?*", (route) => route.fulfill({ json: comparison }));
+  await page.route("**/investigate", (route) => route.fulfill({ json: {
+    ...baseInvestigation,
+    answer: "New York City ranks first for trips per active station per day in the matched May 2026 cohort.",
+    evidence: comparison.cities.map((city) => ({ source: "city_data", metric: comparison.metric, value: city.value, unit: "trips/station/day", source_aggregate: "cross_city_canonical_trips", h3_cells: [], category: city.city_name })),
+    limitations: comparison.limitations,
+    trace: [{ kind: "tool_call", label: "Called City Data MCP: compare_cities", status: "completed", tool: "city_data.compare_cities", latency_ms: 4 }],
+  } }));
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Compare", exact: true }).click();
+  await page.getByRole("button", { name: "Compare demand intensity" }).click();
+  await page.getByRole("button", { name: "Ask across cities" }).click();
+
+  await expect(page.getByText(/New York City ranks first/)).toBeVisible();
+  await page.getByText("Evidence & methodology").click();
+  await expect(page.getByText(/Called City Data MCP: compare_cities/)).toBeVisible();
+  await expect(page.getByText(/Raw trip totals are intentionally excluded/)).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
 });
 
 test("is usable without a browser Maps key and has no serious accessibility violations", async ({ page }) => {

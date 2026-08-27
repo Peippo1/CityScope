@@ -1,0 +1,59 @@
+{
+  "generated_at": "2026-08-27T09:47:42.088931+00:00",
+  "metrics": {
+    "hotspot_concentration": {
+      "chicago": 0.8212,
+      "london": 0.4584,
+      "new_york": 0.6219,
+      "washington_dc": 0.7419
+    },
+    "median_trip_duration_minutes": {
+      "chicago": 9.5472,
+      "london": 13.5833,
+      "new_york": 9.4404,
+      "washington_dc": 9.0088
+    },
+    "peak_hour_share": {
+      "chicago": 0.4141,
+      "london": 0.4498,
+      "new_york": 0.4106,
+      "washington_dc": 0.416
+    },
+    "trips_per_active_station_day": {
+      "chicago": 13.7692,
+      "london": 34.6874,
+      "new_york": 64.4166,
+      "washington_dc": 25.6582
+    },
+    "weekend_share": {
+      "chicago": 0.3333,
+      "london": 0.2878,
+      "new_york": 0.2699,
+      "washington_dc": 0.3217
+    }
+  },
+  "observation_period": "2026-05-01/2026-05-31",
+  "schema_version": 1,
+  "source_fingerprints": {
+    "chicago": {
+      "artifact_name": "chicago_cycling_production_journeys.parquet",
+      "artifact_version": "c7162ab1a1a0c96ff407dacb2f6e7821b097719387fc06af310ea95d41322ce2",
+      "snapshot_id": "2026-05"
+    },
+    "london": {
+      "artifact_name": "london_cycling_production_journeys.parquet",
+      "artifact_version": "91f3e28af0918cba5e09a68c960e80252a1d0996400791fbefbea931a8f69d27",
+      "snapshot_id": "2026-05"
+    },
+    "new_york": {
+      "artifact_name": "new_york_cycling_production_journeys.parquet",
+      "artifact_version": "785508aa244cae7f3a294d50190541cdb3080a3c9b26bb418988819be3605553",
+      "snapshot_id": "2026-05"
+    },
+    "washington_dc": {
+      "artifact_name": "washington_dc_cycling_production_journeys.parquet",
+      "artifact_version": "4efb12a333024d09d5446a73db8d71dc6756c3ab54a4e8e5198b2d83a3ae8cec",
+      "snapshot_id": "2026-05"
+    }
+  }
+}

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from mcp.server.fastmcp import FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
 
-from .schemas import AreaMetricsRequest, CompareAreasRequest, CompareCitiesRequest, DatasetRequest, HotspotsRequest, DatasetMetadata, ToolEnvelope
+from .schemas import AreaMetricsRequest, CityComparisonResponse, CompareAreasRequest, CompareCitiesRequest, DatasetRequest, HotspotsRequest, DatasetMetadata, ToolEnvelope
 from .tools import compare_areas, compare_cities, describe_dataset, find_hotspots, get_area_metrics
 
 
@@ -59,7 +59,7 @@ def compare_areas_tool(request: CompareAreasRequest) -> ToolEnvelope:
 
 
 @mcp.tool(name="compare_cities")
-def compare_cities_tool(request: CompareCitiesRequest) -> dict:
+def compare_cities_tool(request: CompareCitiesRequest) -> CityComparisonResponse:
     """Compare two to four historical cities using normalized May 2026 metrics."""
     return compare_cities(request)
 

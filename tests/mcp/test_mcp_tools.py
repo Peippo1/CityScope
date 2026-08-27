@@ -5,9 +5,9 @@ import pytest
 from h3 import latlng_to_cell
 from pydantic import ValidationError
 
-from services.city_data_mcp.schemas import AreaMetricsRequest, CompareAreasRequest, HotspotsRequest, TimeFilter
+from services.city_data_mcp.schemas import AreaMetricsRequest, CompareAreasRequest, CompareCitiesRequest, HotspotsRequest, TimeFilter
 from services.city_data_mcp.server import mcp
-from services.city_data_mcp.tools import compare_areas, find_hotspots, get_area_metrics
+from services.city_data_mcp.tools import compare_areas, compare_cities, find_hotspots, get_area_metrics
 
 
 LONDON_CELL = latlng_to_cell(51.5074, -0.1278, 9)
@@ -60,3 +60,14 @@ def test_compare_areas_returns_relative_difference():
 
     assert len(result.results[0]["groups"]) == 2
     assert "starts" in result.results[0]["relative_difference"]
+
+
+def test_compare_cities_returns_a_typed_normalized_response():
+    result = compare_cities(CompareCitiesRequest(
+        cities=["london", "chicago"],
+        metric="hotspot_concentration",
+    ))
+
+    assert result.metric == "hotspot_concentration"
+    assert len(result.cities) == 2
+    assert all(not row.is_fixture for row in result.cities)

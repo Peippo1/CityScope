@@ -10,6 +10,13 @@ function placeLabel(category: string) {
   return category.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
+function evidenceValue(value: number, unit: string) {
+  if (unit === "share") {
+    return `${(value * 100).toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+  }
+  return value.toLocaleString();
+}
+
 function SourceBadge({ kind }: { kind: "historical" | "current" | "route" }) {
   const labels = { historical: "Historical mobility evidence", current: "Current Google Maps context", route: "Google bicycle route" };
   return <span className={`source-badge source-badge--${kind}`}>{labels[kind]}</span>;
@@ -42,13 +49,13 @@ export function InvestigationResultPanel({ result, onSuggestion }: { result: Inv
         <SourceBadge kind="historical" />
         <h3 id="historical-heading">Historical mobility evidence</h3>
         {result.dataset && <p className="observation-period">{result.dataset.dataset_name} · {result.dataset.observation_start} to {result.dataset.observation_end}</p>}
-        <ul className="metric-list">{historicalEvidence.map((item, index) => <li key={`${item.metric}-${item.category ?? index}`}><strong>{item.value.toLocaleString()}</strong><span>{item.category ? `${item.category} · ` : ""}{item.unit} · {item.metric.replaceAll("_", " ")}</span></li>)}</ul>
+        <ul className="metric-list">{historicalEvidence.map((item, index) => <li key={`${item.metric}-${item.category ?? index}`}><strong>{evidenceValue(item.value, item.unit)}</strong><span>{item.category ? `${item.category} · ` : ""}{item.unit} · {item.metric.replaceAll("_", " ")}</span></li>)}</ul>
       </section>}
 
       {(currentEvidence.length > 0 || places.length > 0) && <section aria-labelledby="current-heading" className="insight-card">
         <SourceBadge kind="current" />
         <h3 id="current-heading">Current Google Maps context</h3>
-        {currentEvidence.length > 0 && <ul className="metric-list">{currentEvidence.map((item, index) => <li key={`${item.metric}-${index}`}><strong>{item.value.toLocaleString()}</strong><span>{item.unit} · {item.category ?? item.metric.replaceAll("_", " ")}</span></li>)}</ul>}
+        {currentEvidence.length > 0 && <ul className="metric-list">{currentEvidence.map((item, index) => <li key={`${item.metric}-${index}`}><strong>{evidenceValue(item.value, item.unit)}</strong><span>{item.unit} · {item.category ?? item.metric.replaceAll("_", " ")}</span></li>)}</ul>}
         {places.length > 0 && <ul className="place-list">{places.map((place) => <li key={place.place_id}><div><strong>{place.name ?? placeLabel(place.category)}</strong><span>{placeLabel(place.category)} · Google Maps provider result</span></div><span className="place-actions">{place.maps_uri && <a href={place.maps_uri} target="_blank" rel="noreferrer">View on Google Maps</a>}{place.attribution_url && place.attribution_url !== place.maps_uri && <a href={place.attribution_url} target="_blank" rel="noreferrer">Google source</a>}</span></li>)}</ul>}
       </section>}
 

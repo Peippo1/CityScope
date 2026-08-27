@@ -2,7 +2,8 @@ __pycache__/
 .pytest_cache/
 .venv/
 *.pyc
-data/generated/
+data/generated/*
+!data/generated/cross_city_comparison.json
 data/raw/
 data/quarantine/
 apps/web/node_modules/

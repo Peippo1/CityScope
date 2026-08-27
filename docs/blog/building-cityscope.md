@@ -56,6 +56,8 @@ The route planner does more than draw a line between two endpoints. It can score
 The latest interface rewrite moves the product away from a chat-first layout. The main screen now combines:
 
 - an interactive Google Map with selectable H3 activity cells;
+- a cross-city question composer that exposes the agent's bounded `compare_cities` trace;
+- deterministic leader, cohort-range, and closest-pair findings for each approved metric;
 - a city-aware live map with current bike and dock availability;
 - a colour-coded activity chart linked to map selection;
 - a real request-flow view driven by API trace state;
@@ -80,6 +82,8 @@ CityScope is deployed across intentionally separate trust boundaries:
 - Secret Manager supplies server-only provider credentials.
 
 The browser never receives Gemini, Maps Grounding, Routes, or service-account credentials. Cloud Run service-to-service calls use an identity token, and only the API service account can invoke the MCP service.
+
+To keep the first comparison responsive on a cold Cloud Run instance, the artifact build also produces a small five-metric matrix. It is accepted only when all four snapshot IDs, artifact names, and provenance checksums match the active cohort. If that validation fails, CityScope falls back to the canonical Parquet calculation rather than serving stale values.
 
 ## What we learned
 

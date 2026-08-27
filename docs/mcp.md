@@ -1,13 +1,14 @@
 # City Data MCP
 
-CityScope exposes four deterministic analytics tools through a small MCP server:
+CityScope exposes five deterministic analytics tools through a small MCP server:
 
 - `describe_dataset`
 - `get_area_metrics`
 - `find_hotspots`
 - `compare_areas`
+- `compare_cities`
 
-The server is a thin protocol adapter. It validates typed inputs, delegates to `MobilityAnalytics`, and returns a structured envelope containing dataset metadata, evidence, map layers, and limitations. It does not contain SQL, table names, source-specific rules, Places calls, or agent behavior.
+The server is a thin protocol adapter. It validates typed inputs, delegates to `MobilityAnalytics`, and returns typed structured content. Single-city tools return an envelope containing dataset metadata, evidence, map layers, and limitations. `compare_cities` returns a normalized ranking, calculation basis, shared observation window, and comparability limitations. It does not contain SQL, table names, source-specific rules, Places calls, or agent behavior.
 
 ## Local server
 
@@ -32,7 +33,7 @@ The Streamable HTTP endpoint is `http://localhost:8001/mcp/`. The official Pytho
 }
 ```
 
-Every analytical response has this shape:
+Single-city analytical responses have this shape:
 
 ```json
 {

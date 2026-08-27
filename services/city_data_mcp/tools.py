@@ -5,6 +5,7 @@ from apps.api.app.analytics.mobility import MobilityAnalytics
 from .schemas import (
     AreaMetricsRequest,
     CompareCitiesRequest,
+    CityComparisonResponse,
     CompareAreasRequest,
     DatasetMetadata,
     DatasetRequest,
@@ -53,6 +54,6 @@ def compare_areas(request: CompareAreasRequest) -> ToolEnvelope:
     return ToolEnvelope(dataset=dataset, results=results, evidence=evidence, map_layers=layers, limitations=dataset.limitations)
 
 
-def compare_cities(request: CompareCitiesRequest) -> dict:
+def compare_cities(request: CompareCitiesRequest) -> CityComparisonResponse:
     """Return normalized, matched-window metrics only; raw volume rankings are forbidden."""
-    return ANALYTICS.compare_cities(request.cities, request.metric)
+    return CityComparisonResponse.model_validate(ANALYTICS.compare_cities(request.cities, request.metric))

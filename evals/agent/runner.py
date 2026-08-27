@@ -54,6 +54,11 @@ class FakeRoutes:
         return RouteDetails(distance_m=2000,duration_seconds=800,polyline="encoded",origin=origin,destination=destination,waypoints=waypoints)
 
 
+class FakeLive:
+    def __init__(self): self.calls=0
+    async def get_paris_status(self): self.calls+=1; return {"stations":[],"limitations":[]}
+
+
 def decisions(scenario):
     hot=ToolDecision(kind="call_tool",tool="find_hotspots",arguments={"city":"london","metric":"starts","limit":3,"time_filter":{}})
     maps=ToolDecision(kind="call_tool",tool="maps.search_places",arguments={"h3_cells":[CELL],"categories":["cafe"]})
@@ -73,12 +78,12 @@ def decisions(scenario):
 
 
 async def evaluate(case):
-    scenario=case["scenario"]; model=FakeModel(decisions(scenario)); city=FakeCity(scenario in {"city_failure","secret_failure"},scenario=="secret_failure"); maps=FakeMaps(scenario=="maps_failure"); routes=FakeRoutes(scenario=="route_failure")
+    scenario=case["scenario"]; model=FakeModel(decisions(scenario)); city=FakeCity(scenario in {"city_failure","secret_failure"},scenario=="secret_failure"); maps=FakeMaps(scenario=="maps_failure"); routes=FakeRoutes(scenario=="route_failure"); live=FakeLive()
     context={"selected_h3_cells":[CELL]} if scenario=="untrusted_h3" else {}
-    result=await InvestigationService(mcp_client=city,maps_client=maps,model=model,route_service=routes,telemetry=OffTelemetryAdapter()).investigate(InvestigationRequest(question=case["question"],context=context))
+    result=await InvestigationService(mcp_client=city,live_mcp_client=live,maps_client=maps,model=model,route_service=routes,telemetry=OffTelemetryAdapter()).investigate(InvestigationRequest(city=case.get("city","london"),question=case["question"],context=context))
     sequence=[x.tool for x in result.trace if x.kind=="tool_call" and x.tool]
     sources={x.source for x in result.evidence}; codes={x.policy_code for x in result.trace if x.policy_code}
-    calls={"gemini":model.calls,"city_data":len(city.calls),"google_maps":len(maps.calls),"google_routes":len(routes.calls)}
+    calls={"gemini":model.calls,"city_data":len(city.calls),"google_maps":len(maps.calls),"google_routes":len(routes.calls),"city_live":live.calls}
     errors=[]
     if result.status!=case["expected_status"]: errors.append(f"status {result.status}")
     if sequence!=case["expected_tool_sequence"]: errors.append(f"tools {sequence}")

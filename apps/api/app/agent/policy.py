@@ -27,6 +27,7 @@ class PolicyCode(StrEnum):
     UNSUPPORTED_WEATHER = "unsupported_weather"
     UNSUPPORTED_DOMAIN = "unsupported_domain"
     UNSUPPORTED_CITY = "unsupported_city"
+    UNSUPPORTED_MODE = "unsupported_mode"
     UNSUPPORTED_TOOL = "unsupported_tool"
     TOOL_ROUND_LIMIT = "tool_round_limit"
     CITY_DATA_CALL_LIMIT = "city_data_call_limit"
@@ -39,6 +40,7 @@ class PolicyCode(StrEnum):
     ROUTE_WAYPOINT_LIMIT = "route_waypoint_limit"
     PROVIDER_UNAVAILABLE = "provider_unavailable"
     UNSAFE_RESPONSE = "unsafe_response"
+    UNSAFE_PROMPT = "unsafe_prompt"
 
 
 class PolicyDecision(BaseModel):
@@ -67,7 +69,10 @@ class GuardrailPolicy:
     }
     weather_terms = {"weather", "forecast", "temperature", "rain", "rainfall", "wind"}
     unsupported_terms = {"revenue", "population", "demographics", "crime"}
+    historical_mode_terms = {"historical", "history", "demand", "trip", "trips", "journey", "journeys", "route", "routing"}
     _secret_pattern = re.compile(r"(?i)(api[_-]?key|authorization|bearer|credential|secret|token)\s*[:=]\s*\S+")
+    _prompt_injection_pattern = re.compile(r"(?i)(ignore|override|reveal|print|show).{0,50}(previous|system|developer|instruction|prompt)|jailbreak|fetch\s+(?:https?://|www\.)|open\s+(?:https?://|www\.)")
+    _raw_volume_pattern = re.compile(r"(?i)(rank|compare).{0,80}(total|raw|absolute).{0,40}(trip|journey)|(total|raw|absolute).{0,40}(trip|journey).{0,80}(rank|compare)")
 
     @staticmethod
     def allow() -> PolicyDecision:
@@ -79,6 +84,10 @@ class GuardrailPolicy:
         except ValueError:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_CITY, message="CityScope does not support this city.")
         words = set(re.findall(r"[a-z]+", request.question.lower()))
+        if self._prompt_injection_pattern.search(request.question) or self._raw_volume_pattern.search(request.question):
+            return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSAFE_PROMPT, message="This request is outside the bounded CityScope investigation workflow.")
+        if not city.historical and words & self.historical_mode_terms:
+            return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_MODE, message=f"{city.name} supports current station availability only; historical demand, comparisons, and routes are unavailable.")
         if words & self.weather_terms:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_WEATHER, message="Weather is outside the current CityScope investigation boundary.")
         if words & self.unsupported_terms:

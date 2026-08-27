@@ -87,6 +87,14 @@ Generated artifacts retain checksums, per-reason reconciliation counts, local ob
 
 > A clean checkout uses clearly labelled deterministic fixtures until the official May 2026 source files are built with `pipelines.multicity.build_production`. The verified cohort build accepts 653,075 Chicago trips, 588,599 Washington, DC trips, and 4,680,767 New York trips; London contributes 854,872 accepted TfL trips. Fixture comparisons remain visibly labelled and must not be treated as findings.
 
+After building or promoting all four production city artifacts, generate the fingerprint-bound comparison matrix:
+
+```bash
+.venv/bin/python -m pipelines.multicity.build_comparison
+```
+
+The API uses this small artifact for low-latency comparison reads only while its snapshot IDs, artifact names, and source checksums match the selected cohort. Missing or stale matrices fall back to deterministic Parquet calculations.
+
 ## Quick Start
 
 Prerequisites: Python 3.11+, Node.js 20+, and npm.

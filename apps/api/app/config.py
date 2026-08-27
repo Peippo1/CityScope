@@ -3,6 +3,8 @@ import logging
 import os
 from urllib.parse import urlsplit
 
+from fastapi import Request
+
 from dotenv import load_dotenv
 
 
@@ -14,6 +16,26 @@ ENV_FILE = PROJECT_ROOT / ".env.local"
 load_dotenv(ENV_FILE, override=False)
 
 LOGGER = logging.getLogger("cityscope.config")
+
+
+def _positive_int(name: str, default: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+MAX_REQUEST_BYTES = _positive_int("CITYSCOPE_MAX_REQUEST_BYTES", 16_384)
+INVESTIGATION_RATE_LIMIT = _positive_int("CITYSCOPE_INVESTIGATION_RATE_LIMIT", 12)
+INVESTIGATION_RATE_WINDOW_SECONDS = _positive_int("CITYSCOPE_INVESTIGATION_RATE_WINDOW_SECONDS", 300)
+INVESTIGATION_CONCURRENCY_LIMIT = _positive_int("CITYSCOPE_INVESTIGATION_CONCURRENCY_LIMIT", 8)
+INVESTIGATION_TIMEOUT_SECONDS = _positive_int("CITYSCOPE_INVESTIGATION_TIMEOUT_SECONDS", 60)
+MODEL_TIMEOUT_SECONDS = _positive_int("CITYSCOPE_MODEL_TIMEOUT_SECONDS", 30)
+
+
+def is_production() -> bool:
+    return os.getenv("CITYSCOPE_ENV", "development").lower() == "production"
 
 
 def missing_server_credentials() -> list[str]:
@@ -48,3 +70,12 @@ def configured_origin_regex() -> str | None:
 
 def trusted_hosts() -> list[str]:
     return [host.strip() for host in os.getenv("CITYSCOPE_TRUSTED_HOSTS", "localhost,127.0.0.1,testserver").split(",") if host.strip()]
+
+
+def request_client_key(request: Request) -> str:
+    """Trust forwarding headers only when the deployment explicitly opts in."""
+    if os.getenv("CITYSCOPE_TRUST_PROXY_HEADERS", "false").lower() == "true":
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if forwarded:
+            return forwarded
+    return request.client.host if request.client else "unknown"

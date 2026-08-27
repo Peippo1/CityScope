@@ -32,6 +32,10 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+filterwarnings = [
+  "error",
+  "ignore::pydantic_settings.exceptions.IncompleteFieldDefinitionWarning",
+]
 
 [tool.setuptools.packages.find]
 include = ["apps*", "pipelines*", "services*"]

@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 from services.city_data_mcp.schemas import DatasetMetadata, Evidence, ToolEnvelope
+from .. import config
 from ..schemas import CityComparisonResponse
 
 from .mcp_client import CityDataMcpClient
@@ -41,6 +42,56 @@ class InvestigationService:
         self.telemetry.emit(TelemetryEvent(investigation_id=result.investigation_id, event_type="final_result", status=result.status, policy_code=safety.code.value))
         return result
 
+    @staticmethod
+    def _comparison_unit(metric: str) -> str:
+        return {
+            "trips_per_active_station_day": "trips/station/day",
+            "median_trip_duration_minutes": "minutes",
+            "peak_hour_share": "share",
+            "weekend_share": "share",
+            "hotspot_concentration": "share",
+        }[metric]
+
+    @classmethod
+    def _comparison_answer(cls, comparison: CityComparisonResponse) -> str:
+        labels = {
+            "trips_per_active_station_day": "trips per active station per day",
+            "median_trip_duration_minutes": "median trip duration",
+            "peak_hour_share": "peak-hour share",
+            "weekend_share": "weekend share",
+            "hotspot_concentration": "hotspot concentration",
+        }
+        unit = cls._comparison_unit(comparison.metric)
+
+        def value(row) -> str:
+            if unit == "share":
+                return f"{row.value * 100:.1f}%"
+            if unit == "minutes":
+                return f"{row.value:.1f} minutes"
+            return f"{row.value:.2f} trips/station/day"
+
+        rows = sorted(comparison.cities, key=lambda row: row.rank)
+        ranking = ", ".join(f"{row.city_name} ({value(row)})" for row in rows)
+        return f"{rows[0].city_name} ranks first for {labels[comparison.metric]} in the matched May 2026 cohort. The normalized ranking is {ranking}."
+
+    @staticmethod
+    def _historical_answer(request: InvestigationRequest, envelope: ToolEnvelope | None, analysis: list[dict[str, Any]], fallback: str | None) -> str:
+        if analysis:
+            row = min(analysis, key=lambda item: (item["scarcity_rank"], -item["mobility_value"], item["h3_cell"]))
+            return (
+                f"H3 area {row['h3_cell']} has the fewest observed {row['category']} results "
+                f"({row['place_count']}) among the investigated high-activity areas, with {row['mobility_value']:.0f} historical journeys. "
+                "Place counts are current Google Maps context, not a complete census."
+            )
+        if envelope and envelope.map_layers:
+            rows = sorted(envelope.map_layers, key=lambda item: (item.rank or 9999, -item.value, item.h3_cell))
+            top = rows[0]
+            metric = top.metric.replace("_", " ")
+            return f"In the selected historical snapshot, H3 area {top.h3_cell} is the highest returned area for {metric}, with {top.value:,.0f} journeys."
+        if envelope and envelope.dataset:
+            return f"{envelope.dataset.dataset_name} is a historical snapshot covering {envelope.dataset.observation_start} to {envelope.dataset.observation_end}."
+        return fallback or "No grounded answer was returned."
+
     async def investigate(self, request: InvestigationRequest) -> InvestigationResult:
         iid, trace, budget = str(uuid.uuid4()), [], ExecutionBudget()
         gate = self.policy.check_request(request)
@@ -56,7 +107,10 @@ class InvestigationService:
         while self.policy.check_model_round(budget).outcome == PolicyOutcome.ALLOW:
             started = time.perf_counter()
             try:
-                decision = await self.model.decide(request.question, context, tool_results)
+                decision = await asyncio.wait_for(
+                    self.model.decide(request.question, context, tool_results),
+                    timeout=config.MODEL_TIMEOUT_SECONDS,
+                )
             except Exception:
                 failure = self.policy.provider_error("Gemini")
                 self.record(iid, trace, kind="planning", label="Model decision unavailable", status="failed", provider="gemini", policy=failure, ms=round((time.perf_counter()-started)*1000), call=budget.model_rounds, limit=self.policy.max_model_rounds)
@@ -115,7 +169,7 @@ class InvestigationService:
                         comparison = CityComparisonResponse.model_validate(raw)
                         city_insights = [comparison.model_dump(mode="json")]
                         comparison_limitations = comparison.limitations
-                        comparison_evidence = [Evidence(metric=comparison.metric, value=row.value, unit="normalized value", source_aggregate="cross_city_canonical_trips", filters_applied={"observation_period": comparison.observation_period}, h3_cells=[], category=row.city_name) for row in comparison.cities]
+                        comparison_evidence = [Evidence(metric=comparison.metric, value=row.value, unit=self._comparison_unit(comparison.metric), source_aggregate="cross_city_canonical_trips", filters_applied={"observation_period": comparison.observation_period}, h3_cells=[], category=row.city_name) for row in comparison.cities]
                     elif decision.tool == "describe_dataset":
                         dataset = DatasetMetadata.model_validate(raw); envelope = ToolEnvelope(dataset=dataset, results=[], evidence=[], map_layers=[], limitations=dataset.limitations)
                     else: envelope = ToolEnvelope.model_validate(raw)
@@ -126,6 +180,17 @@ class InvestigationService:
                 tool_results.append({"source":"city_data", **(comparison.model_dump(mode="json") if decision.tool == "compare_cities" else envelope.model_dump(mode="json"))})
                 result_count = len(comparison.cities) if decision.tool == "compare_cities" else len(envelope.results)
                 self.record(iid, trace, kind="tool_call", label=f"Called City Data MCP: {decision.tool}", status="completed", provider="city_data", tool=f"city_data.{decision.tool}", policy=gate, count=result_count, ms=round((time.perf_counter()-started)*1000), call=budget.city_data_calls, limit=self.policy.max_city_data_calls)
+                if decision.tool == "compare_cities":
+                    final = ToolDecision(
+                        kind="answer",
+                        answer=self._comparison_answer(comparison),
+                        follow_up_suggestions=[
+                            "How does peak-hour share compare across London, New York City, Chicago, and Washington, DC?",
+                            "How does weekend share compare across London, New York City, Chicago, and Washington, DC?",
+                            "How does median trip duration compare across London, New York City, Chicago, and Washington, DC?",
+                        ],
+                    )
+                    break
             context = json.dumps({"request":request.context.model_dump(mode="json"),"available_evidence":tool_results}, default=str)
         if not envelope and not places and not city_insights:
             return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The investigation did not produce a grounded result.", limitations=["A grounded result is required."], trace=trace))
@@ -136,7 +201,8 @@ class InvestigationService:
         self.record(iid, trace, kind="synthesis", label="Synthesize an evidence-grounded answer", status="completed", policy=self.policy.allow())
         evidence = (envelope.evidence if envelope else []) + comparison_evidence + [Evidence.model_validate(x) for x in external]
         limitations = list(dict.fromkeys((envelope.limitations if envelope else []) + comparison_limitations + (["Google Maps place counts are current search context, not an exhaustive census."] if external else [])))
-        return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=final.answer or "No answer was returned.", dataset=envelope.dataset if envelope else None, evidence=evidence, places=places, amenity_analysis=analysis, city_insights=city_insights, map_layers=envelope.map_layers if envelope else [], limitations=limitations, trace=trace, follow_up_suggestions=final.follow_up_suggestions))
+        answer = self._historical_answer(request, envelope, analysis, final.answer)
+        return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=answer, dataset=envelope.dataset if envelope else None, evidence=evidence, places=places, amenity_analysis=analysis, city_insights=city_insights, map_layers=envelope.map_layers if envelope else [], limitations=limitations, trace=trace, follow_up_suggestions=final.follow_up_suggestions))
 
     async def _paris_live(self, iid: str, trace: list[TraceEvent]) -> InvestigationResult:
         started = time.perf_counter()

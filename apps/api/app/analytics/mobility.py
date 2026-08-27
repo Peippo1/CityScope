@@ -17,9 +17,10 @@ COMPARISON_METRICS = {"trips_per_active_station_day", "median_trip_duration_minu
 class MobilityAnalytics:
     """Deterministic city analytics over independently versioned Parquet artifacts."""
 
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, *, use_precomputed: bool = True):
         self.root = root
         self._comparison_cache: dict[tuple[str, str], float] = {}
+        self._precomputed_comparison = self._load_precomputed_comparison() if use_precomputed else None
 
     @property
     def metadata_path(self) -> Path:
@@ -99,9 +100,34 @@ class MobilityAnalytics:
         cached = self._comparison_cache.get((city, metric))
         if cached is not None:
             return cached
-        value = self._uncached_comparison_value(city, metric)
+        precomputed = self._precomputed_comparison or {}
+        value = precomputed.get("metrics", {}).get(metric, {}).get(city)
+        if not isinstance(value, (int, float)):
+            value = self._uncached_comparison_value(city, metric)
         self._comparison_cache[(city, metric)] = value
         return value
+
+    def _load_precomputed_comparison(self) -> dict | None:
+        path = self.root / "data" / "generated" / "cross_city_comparison.json"
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text())
+            if payload.get("schema_version") != 1 or set(payload.get("metrics", {})) != COMPARISON_METRICS:
+                return None
+            expected = payload.get("source_fingerprints", {})
+            for city in historical_city_ids():
+                metadata, journeys = self._dataset(city)
+                actual = {
+                    "snapshot_id": metadata.get("snapshot_id"),
+                    "artifact_version": metadata.get("generated_artifact_version"),
+                    "artifact_name": journeys.name,
+                }
+                if expected.get(city) != actual:
+                    return None
+            return payload
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            return None
 
     def _uncached_comparison_value(self, city: str, metric: str) -> float:
         _, journeys_path = self._dataset(city)

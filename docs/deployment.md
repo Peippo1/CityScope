@@ -11,6 +11,21 @@
 
 Cloud Run, Artifact Registry, Cloud Build, and Secret Manager require billing on the GCP project. Link a billing account to `cityscope-506222` before running the one-time setup below.
 
+## Public API protection
+
+Put the public API behind an external HTTPS load balancer with a serverless NEG, then attach Cloud Armor before public promotion. The checked-in policy applies `12` POST requests to `/investigate` per source IP per five minutes and returns `429` above that threshold:
+
+```bash
+chmod +x deploy/cloud-armor-api-policy.sh
+CITYSCOPE_PROJECT=cityscope-506222 \
+  CITYSCOPE_BACKEND_SERVICE=YOUR_GLOBAL_BACKEND_SERVICE \
+  deploy/cloud-armor-api-policy.sh
+```
+
+Cloud Armor is the cross-instance control. The API also enforces a smaller per-instance limit, an eight-request concurrency cap, a 16 KB request cap, a 30-second model deadline, and a 60-second request deadline. Set `CITYSCOPE_TRUST_PROXY_HEADERS=true` only when Cloud Run receives traffic exclusively through a trusted proxy/load balancer that sets `X-Forwarded-For`.
+
+The Firebase Hosting configuration applies clickjacking, MIME-sniffing, referrer, permissions, and baseline CSP headers. Do not loosen the CSP to fix a third-party script; extend it deliberately after testing the exact source.
+
 ## One-time GCP setup
 
 ```bash
@@ -60,6 +75,8 @@ gcloud builds submit . \
   --project cityscope-506222
 ```
 
+The verification response reports `comparison_matrix: ready` when the fingerprint-bound matrix matches all four production artifacts. `parquet_fallback` remains functional, but rerun `.venv/bin/python -m pipelines.multicity.build_comparison` before a latency-sensitive demo.
+
 ## Paris archive
 
 The demo project uses these provisioned resources:
@@ -102,6 +119,9 @@ Keep these server-only values in the API environment, never in the web app:
 - `CITYSCOPE_PARIS_ARCHIVE_BUCKET` — private Cloud Storage bucket used only by the archive job.
 - `CITYSCOPE_WEB_ORIGIN` — exact browser origin allowed by API CORS.
 - `CITYSCOPE_TRUSTED_HOSTS` — comma-separated API Host header allowlist.
+- `CITYSCOPE_ENV=production` — disables public API docs and OpenAPI endpoints.
+- `CITYSCOPE_TRUST_PROXY_HEADERS=true` — opt in to proxy source-IP rate-limit keys only behind the trusted production load balancer.
+- `CITYSCOPE_MAX_REQUEST_BYTES`, `CITYSCOPE_INVESTIGATION_RATE_LIMIT`, `CITYSCOPE_INVESTIGATION_RATE_WINDOW_SECONDS`, `CITYSCOPE_INVESTIGATION_CONCURRENCY_LIMIT`, `CITYSCOPE_INVESTIGATION_TIMEOUT_SECONDS`, `CITYSCOPE_MODEL_TIMEOUT_SECONDS` — bounded public request controls. Keep Cloud Armor as the global enforcement layer.
 - `CITYSCOPE_CITY_DATA_MCP_ID_TOKEN_AUDIENCE` — private MCP Cloud Run service URL.
 - `CITYSCOPE_MCP_ALLOWED_HOSTS` — exact MCP Cloud Run Host header allowlist used by MCP DNS-rebinding protection.
 - `FIREBASE_PROJECT_ID` — enables Firebase token verification and Firestore-backed saved investigations.
@@ -127,6 +147,8 @@ Check `GET http://localhost:8000/health`. A `degraded` response identifies missi
 Run local mocked tests first. For the optional live gate, use a single named-origin route and verify the trace contains no `routes.compute_routes` Gemini tool. The bounded route path permits two Grounding endpoint resolutions and one Routes API request. Do not run the gate in a loop or include Gemini unless agent planning itself is being tested.
 
 Before public exposure, confirm `npm audit --audit-level=high`, `pip-audit --skip-editable`, `pytest -q`, `npm run build`, and `git diff --check` all pass. Never print `.env.local`, request headers, or raw provider responses containing credentials.
+
+The Python test suite treats warnings as failures. The sole scoped exception is an upstream `mcp`/`pydantic-settings` forward-reference warning, tracked in `pyproject.toml`; remove that exception when the dependency stack resolves it.
 
 For the deployed judge walkthrough and Cloud Run topology, see [hackathon-demo.md](hackathon-demo.md). Run `python scripts/verify_deployment_artifact.py` before the image build and check API `GET /ready` after deployment.
 

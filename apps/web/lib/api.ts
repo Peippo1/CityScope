@@ -44,6 +44,7 @@ export async function investigate(request: InvestigationRequest): Promise<Invest
 
 export type SavedInvestigation = {
   id: string;
+  record_type: "historical_investigation" | "historical_comparison";
   question: string;
   selected_h3_cells: string[];
   status: InvestigationResult["status"];
@@ -51,6 +52,8 @@ export type SavedInvestigation = {
   dataset_snapshot_id?: string | null;
   dataset_name?: string | null;
   historical_evidence: InvestigationResult["evidence"];
+  comparison_metric?: string | null;
+  comparison_cities: string[];
   created_at: string;
 };
 

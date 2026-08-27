@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from pipelines.core.analytics_contract import MetricName, TimeFilter
 from ..cities import CityId
@@ -17,12 +17,14 @@ class ConversationTurn(BaseModel):
 
 
 class InvestigationContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     selected_h3_cells: list[str] = Field(default_factory=list, max_length=50)
     previous_turns: list[ConversationTurn] = Field(default_factory=list, max_length=6)
     evidence_summary: str | None = Field(default=None, max_length=2000)
 
 
 class InvestigationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     city: CityId = "london"
     question: str = Field(min_length=1, max_length=500)
     context: InvestigationContext = Field(default_factory=InvestigationContext)

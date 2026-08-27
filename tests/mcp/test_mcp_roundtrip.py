@@ -36,10 +36,17 @@ def test_streamable_http_client_server_round_trip():
                             "find_hotspots",
                             {"request": {"city": "london", "metric": "total_activity", "limit": 2, "time_filter": {}}},
                         )
+                        comparison = await session.call_tool(
+                            "compare_cities",
+                            {"request": {"cities": ["london", "chicago"], "metric": "hotspot_concentration"}},
+                        )
                         assert {tool.name for tool in tools.tools} == {
                             "describe_dataset", "get_area_metrics", "find_hotspots", "compare_areas", "compare_cities"
                         }
                         assert hotspots.isError is False
                         assert hotspots.content
+                        assert comparison.isError is False
+                        assert comparison.structuredContent["metric"] == "hotspot_concentration"
+                        assert len(comparison.structuredContent["cities"]) == 2
 
     asyncio.run(run())

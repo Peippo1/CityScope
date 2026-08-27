@@ -17,12 +17,13 @@ type CityMapProps = {
   route?: Route;
   selectedH3Cell?: string | null;
   onSelectH3Cell?: (h3Cell: string) => void;
+  onSelectPlace?: (place: FocusedMapPlace) => void;
   cityName?: string;
   bounds?: [number, number, number, number];
   ariaLabel?: string;
 };
 
-export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cell, onSelectH3Cell, cityName = "London", bounds = [51.28, -0.52, 51.72, 0.34], ariaLabel }: CityMapProps) {
+export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cell, onSelectH3Cell, onSelectPlace, cityName = "London", bounds = [51.28, -0.52, 51.72, 0.34], ariaLabel }: CityMapProps) {
   const node = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -68,6 +69,7 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
           icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: "#f9ab00", fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 2 },
         });
         marker.addListener("click", () => {
+          onSelectPlace?.({ place_id: place.place_id, name: place.name ?? "Google Maps place", latitude: place.latitude, longitude: place.longitude, maps_uri: place.maps_uri });
           const content = document.createElement("div");
           const label = place.name ?? "Google Maps place";
           if (place.maps_uri) {
@@ -106,7 +108,7 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
       cleanups.push(() => { polygons.forEach((polygon) => polygon.setMap(null)); markers.forEach((marker) => marker.setMap(null)); focusedMarker?.setMap(null); routeMarkers.forEach((marker) => marker.setMap(null)); routeLine?.setMap(null); infoWindow.close(); });
     }).catch(() => { if (!cancelled) setLoadError(true); });
     return () => { cancelled = true; cleanups.forEach((cleanup) => cleanup()); };
-  }, [cells, places, focusedPlace, route, selectedH3Cell, onSelectH3Cell, cityName, bounds]);
+  }, [cells, places, focusedPlace, route, selectedH3Cell, onSelectH3Cell, onSelectPlace, cityName, bounds]);
 
   if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
     return <div className="map-placeholder" role="img" aria-label="Google Maps preview unavailable until a browser API key is configured">Google Maps preview requires NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. The ranked activity values remain available beside this panel.</div>;

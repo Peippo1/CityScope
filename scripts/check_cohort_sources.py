@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from apps.api.app.artifacts import HISTORICAL_COHORT
@@ -39,11 +39,28 @@ def probe(url: str, timeout_s: float = 20.0) -> int:
         with urlopen(request, timeout=timeout_s) as response:
             return response.status
     except HTTPError as exc:
-        if exc.code not in {403, 405}:
+        if exc.code not in {403, 404, 405}:
             raise
+        exc.close()
     request = Request(url, headers={"User-Agent": "CityScope-cohort-monitor/1.0", "Range": "bytes=0-0"})
     with urlopen(request, timeout=timeout_s) as response:
         return response.status
+
+
+def probe_sources(sources: list[dict[str, str]]) -> tuple[list[dict[str, object]], bool]:
+    results: list[dict[str, object]] = []
+    healthy = True
+    for source in sources:
+        result: dict[str, object] = {"city": source["city"], "url": source["url"]}
+        try:
+            result["status"] = probe(source["url"])
+        except (HTTPError, URLError, TimeoutError) as exc:
+            healthy = False
+            result["error"] = f"{type(exc).__name__}: {exc}"
+            if isinstance(exc, HTTPError):
+                exc.close()
+        results.append(result)
+    return results, healthy
 
 
 def main() -> None:
@@ -51,9 +68,13 @@ def main() -> None:
     parser.add_argument("--probe", action="store_true", help="Make bounded requests to every pinned official source URL")
     args = parser.parse_args()
     result = validate_manifests()
+    healthy = True
     if args.probe:
-        result["probes"] = [{"city": source["city"], "url": source["url"], "status": probe(source["url"])} for source in result["sources"]]  # type: ignore[index]
+        result["probes"], healthy = probe_sources(result["sources"])  # type: ignore[arg-type, index]
+        result["status"] = "valid" if healthy else "source_probe_failed"
     print(json.dumps(result, indent=2))
+    if not healthy:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

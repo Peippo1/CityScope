@@ -27,7 +27,9 @@ def test_production_artifact_readiness_verifies_manifest_checksum(tmp_path):
             "generated_artifact_version": sha256(checksum_target.read_bytes()).hexdigest(),
         }))
 
-    assert verify_deployment_artifact(tmp_path)["status"] == "ready"
+    ready = verify_deployment_artifact(tmp_path)
+    assert ready["status"] == "ready"
+    assert ready["comparison_matrix"] == "parquet_fallback"
 
     activity.write_bytes(b"tampered")
     assert verify_deployment_artifact(tmp_path)["status"] == "invalid"

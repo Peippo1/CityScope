@@ -1,8 +1,7 @@
-from fastapi.testclient import TestClient
-
 from apps.api.app.auth import CurrentUser, get_current_user
 from apps.api.app.history import FirestoreInvestigationStore, InMemoryInvestigationStore, SavedInvestigationCreate, get_history_store
 from apps.api.app.main import app
+from .client import ApiClient
 
 
 def payload(question: str = "Where are the cycling hotspots?") -> dict:
@@ -23,11 +22,12 @@ def test_saved_investigations_are_private_and_exclude_current_provider_data():
     store = InMemoryInvestigationStore()
     app.dependency_overrides[get_current_user] = lambda: CurrentUser(uid="judge-a")
     app.dependency_overrides[get_history_store] = lambda: store
-    client = TestClient(app)
+    client = ApiClient(app)
     try:
         created = client.post("/me/investigations", json=payload())
         assert created.status_code == 201
         record = created.json()
+        assert record["record_type"] == "historical_investigation"
         assert record["question"] == "Where are the cycling hotspots?"
         assert record["historical_evidence"][0]["value"] == 42
         assert "places" not in record
@@ -42,9 +42,39 @@ def test_saved_investigations_are_private_and_exclude_current_provider_data():
 
 
 def test_saved_investigations_require_a_verified_identity():
-    client = TestClient(app)
+    client = ApiClient(app)
     response = client.get("/me/investigations")
     assert response.status_code == 401
+
+
+def test_live_network_payloads_cannot_be_saved():
+    store = InMemoryInvestigationStore()
+    app.dependency_overrides[get_current_user] = lambda: CurrentUser(uid="judge-a")
+    app.dependency_overrides[get_history_store] = lambda: store
+    live_payload = payload()
+    live_payload["request"]["city"] = "paris"
+    live_payload["result"]["city_insights"] = [{"stations": [{"station_id": "live"}]}]
+    client = ApiClient(app)
+    try:
+        response = client.post("/me/investigations", json=live_payload)
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Live network availability is ephemeral and cannot be saved as an investigation."
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_cross_city_comparisons_have_an_explicit_saved_record_type():
+    comparison_payload = payload("How do the four cities compare?")
+    comparison_payload["result"]["evidence"] = [{
+        "source": "city_data", "metric": "hotspot_concentration", "value": 0.8, "unit": "share",
+        "source_aggregate": "cross_city_canonical_trips", "filters_applied": {}, "h3_cells": [], "category": "Chicago",
+    }]
+
+    record = InMemoryInvestigationStore().create(CurrentUser(uid="judge-a"), SavedInvestigationCreate.model_validate(comparison_payload))
+
+    assert record.record_type == "historical_comparison"
+    assert record.comparison_metric == "hotspot_concentration"
+    assert record.comparison_cities == ["Chicago"]
 
 
 def test_firestore_operations_use_bounded_deadlines():
