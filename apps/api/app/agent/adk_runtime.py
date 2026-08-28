@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import uuid
+import warnings
 from typing import Any
 
 from .model import GeminiInvestigationModel
@@ -30,7 +31,12 @@ def build_root_agent() -> Any | None:
     """Build the single root LlmAgent when google-adk is installed."""
 
     try:
-        from google.adk.agents import LlmAgent
+        # ADK 1.14 imports optional Vertex modules that currently emit
+        # deprecation warnings during import; keep that upstream noise out of
+        # the API/test warning policy without suppressing runtime failures.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            from google.adk.agents import LlmAgent
     except ImportError:
         return None
     # ADK's Gemini backend reads GOOGLE_API_KEY; keep the existing server-only
