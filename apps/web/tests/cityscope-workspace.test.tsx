@@ -169,6 +169,24 @@ describe("CityScopeWorkspace", () => {
     expect(getActivity).toHaveBeenCalledWith("new_york");
   });
 
+  it("does not retain the previous city's historical attribution after switching cities", async () => {
+    const user = userEvent.setup();
+    const getActivity = vi.fn().mockImplementation(async (city) => ({
+      ...activity,
+      city,
+      dataset_name: city === "new_york" ? "Citi Bike May 2026 trip history" : "TfL Santander Cycles journey data",
+      attribution_text: city === "new_york" ? "Data provided by Citi Bike" : "Data provided by Transport for London",
+    }));
+    render(<CityScopeWorkspace services={{ getCities: vi.fn().mockResolvedValue(registry), getActivity, investigate: vi.fn() }} />);
+
+    expect((await screen.findAllByText("TfL Santander Cycles journey data")).length).toBeGreaterThan(0);
+    await user.selectOptions(screen.getByRole("combobox", { name: "City workspace" }), "new_york");
+
+    expect((await screen.findAllByText("Citi Bike May 2026 trip history")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("TfL Santander Cycles journey data")).not.toBeInTheDocument();
+    expect(screen.queryByText("Data provided by Transport for London")).not.toBeInTheDocument();
+  });
+
   it("shows Paris as separate live network context", async () => {
     const user = userEvent.setup();
     const getActivity = vi.fn().mockResolvedValue(activity);

@@ -97,6 +97,7 @@ ul, ol { margin-top: 0; }
 .eyebrow { margin-bottom: 6px; color: var(--blue-strong); font-size: .72rem; font-weight: 700; letter-spacing: 0; text-transform: uppercase; }
 
 .snapshot-banner { display: flex; min-height: 54px; gap: 16px; align-items: center; margin-bottom: 16px; padding: 10px 14px; border: 1px solid #f6d77a; border-radius: var(--radius); background: var(--yellow-subtle); color: #5f4500; }
+.snapshot-banner--loading { opacity: .78; }
 .snapshot-banner p { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px 18px; margin: 0; font-size: .82rem; }
 .snapshot-banner p span { color: #725a16; }
 .source-badge, .status-badge { display: inline-flex; width: fit-content; min-height: 28px; align-items: center; padding: 4px 9px; border-radius: 999px; font-size: .72rem; font-weight: 700; white-space: nowrap; }

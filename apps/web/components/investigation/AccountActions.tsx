@@ -1,28 +1,29 @@
 "use client";
 
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
-import { useEffect, useState } from "react";
+import { signOut } from "firebase/auth";
+import { useState } from "react";
 import { saveInvestigation } from "../../lib/api";
-import { getFirebaseAuth, googleProvider } from "../../lib/firebase";
+import { signInWithGoogle, useFirebaseUser } from "../../lib/firebase";
 import type { InvestigationRequest, InvestigationResult } from "../../types/investigation";
 
 type AccountActionsProps = { request: InvestigationRequest | null; result: InvestigationResult | null };
 
 export function AccountActions({ request, result }: AccountActionsProps) {
-  const [user, setUser] = useState<User | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const auth = getFirebaseAuth();
-
-  useEffect(() => auth ? onAuthStateChanged(auth, setUser) : undefined, [auth]);
+  const { auth, user } = useFirebaseUser();
 
   async function signIn() {
     if (!auth) return;
     setMessage(null);
     try {
-      await signInWithPopup(auth, googleProvider());
+      await signInWithGoogle();
     } catch {
-      setMessage("Google sign-in could not be completed.");
+      // Popup providers can reject after Firebase has already committed the
+      // session (for example when the browser closes the popup callback).
+      // Prefer the authoritative auth state over a misleading error banner.
+      if (auth.currentUser) setMessage(null);
+      else setMessage("Google sign-in could not be completed.");
     }
   }
 

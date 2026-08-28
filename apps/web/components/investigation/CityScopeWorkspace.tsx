@@ -15,6 +15,7 @@ import { AccountActions } from "./AccountActions";
 import { ComparisonQuestionComposer } from "./ComparisonQuestionComposer";
 import { InvestigationResultPanel } from "./InvestigationResultPanel";
 import { QuestionComposer } from "./QuestionComposer";
+import { useFirebaseUser } from "../../lib/firebase";
 
 type WorkspaceServices = {
   getActivity: (city?: string) => Promise<ActivityResponse>;
@@ -70,6 +71,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [liveLoading, setLiveLoading] = useState(false);
   const [currentPlaces, setCurrentPlaces] = useState<FocusedMapPlace[]>([]);
   const [focusedPlace, setFocusedPlace] = useState<FocusedMapPlace | null>(null);
+  const { auth, user } = useFirebaseUser();
 
   useEffect(() => {
     if (!services.getCities) return;
@@ -105,6 +107,10 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const submitQuestion = useCallback(async () => {
     const trimmedQuestion = question.trim();
     if (!trimmedQuestion || investigating) return;
+    if (auth && !user) {
+      setInvestigationError("Sign in with Google to use CityScope agents. Browsing and comparisons remain available without sign-in.");
+      return;
+    }
     setInvestigating(true);
     setInvestigationError(null);
     try {
@@ -122,7 +128,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     } finally {
       setInvestigating(false);
     }
-  }, [investigating, question, selectedCity.id, selectedH3Cell, services]);
+  }, [auth, investigating, question, selectedCity.id, selectedH3Cell, services, user]);
 
   const loadComparison = useCallback(async (metric = comparisonMetric) => {
     if (!services.getComparison) return;
@@ -174,6 +180,10 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     const city = cities.find((item) => item.id === cityId);
     if (!city) return;
     setSelectedCity(city);
+    // Clear the previous city's snapshot immediately so its attribution cannot
+    // remain visible while the newly selected city's activity is loading.
+    setActivity(null);
+    setActivityError(null);
     setCurrentPlaces([]);
     setFocusedPlace(null);
     setInvestigation(null);
@@ -228,13 +238,13 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
       </section>}
       {view === "live" && <section className="standalone-workspace">{liveLoading && <div className="inline-loading" aria-live="polite">Loading current {selectedCity.name} station availability...</div>}{liveNetwork?.city === selectedCity.id && <LiveNetworkPanel cityName={selectedCity.name} bounds={selectedCity.bounds} network={liveNetwork} />}{liveError && <div className="empty-state" role="alert"><p>{liveError}</p><button type="button" className="secondary-button" onClick={() => void loadLive()}>Retry {selectedCity.name} live network</button></div>}</section>}
 
-      {view === "explore" && activity && <aside className="snapshot-banner" aria-label="Historical dataset notice">
+      {view === "explore" && (activity || activityLoading) && <aside className={`snapshot-banner${activityLoading ? " snapshot-banner--loading" : ""}`} aria-label="Historical dataset notice">
         <span className="source-badge source-badge--historical">Historical snapshot</span>
-        <p><strong>{activity.dataset_name ?? "CityScope mobility dataset"}</strong><span>{activity.observation_period}</span><span>H3 resolution {activity.h3_resolution}</span><span>{activity.attribution_text}</span></p>
+        {activity ? <p><strong>{activity.dataset_name ?? "CityScope mobility dataset"}</strong><span>{activity.observation_period}</span><span>H3 resolution {activity.h3_resolution}</span><span>{activity.attribution_text}</span></p> : <p><strong>Loading {selectedCity.name} mobility dataset…</strong><span>Refreshing city snapshot</span></p>}
       </aside>}
 
       {view === "explore" && <><section id="explore" className="command-surface" aria-label={`${selectedCity.name} mobility investigation workspace`}>
-        <QuestionComposer cityName={selectedCity.name} datasetName={activity?.dataset_name} value={question} isSubmitting={investigating} error={investigationError} onChange={setQuestion} onSubmit={() => void submitQuestion()} />
+        <QuestionComposer cityName={selectedCity.name} datasetName={activity?.dataset_name} value={question} isSubmitting={investigating} error={investigationError} isAuthenticated={Boolean(user) || !auth} onChange={setQuestion} onSubmit={() => void submitQuestion()} />
         {investigationError && <button type="button" className="secondary-button retry-investigation" onClick={() => void submitQuestion()}>Retry investigation</button>}
       </section>
 

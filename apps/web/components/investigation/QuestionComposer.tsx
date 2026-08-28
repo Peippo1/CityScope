@@ -25,11 +25,12 @@ type QuestionComposerProps = {
   value: string;
   isSubmitting: boolean;
   error?: string | null;
+  isAuthenticated?: boolean;
   onChange: (value: string) => void;
   onSubmit: () => void;
 };
 
-export function QuestionComposer({ cityName, datasetName, value, isSubmitting, error, onChange, onSubmit }: QuestionComposerProps) {
+export function QuestionComposer({ cityName, datasetName, value, isSubmitting, error, isAuthenticated = true, onChange, onSubmit }: QuestionComposerProps) {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (value.trim() && !isSubmitting) onSubmit();
@@ -64,7 +65,7 @@ export function QuestionComposer({ cityName, datasetName, value, isSubmitting, e
             {isSubmitting ? "Investigating…" : "Investigate"}
           </button>
         </div>
-        <p id="question-help" className="helper-text">{cityName} only · based on May 2026 {datasetName ?? "mobility"} evidence</p>
+        <p id="question-help" className="helper-text">{cityName} only · based on May 2026 {datasetName ?? "mobility"} evidence{!isAuthenticated ? " · sign in with Google to use agents" : ""}</p>
         {error && <p id="investigation-error" className="inline-error" role="alert">{error}</p>}
       </form>
     </section>

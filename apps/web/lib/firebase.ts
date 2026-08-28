@@ -1,7 +1,8 @@
 "use client";
 
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, type User } from "firebase/auth";
+import { useEffect, useState } from "react";
 
 const config = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -18,4 +19,22 @@ export function getFirebaseAuth() {
 
 export function googleProvider() {
   return new GoogleAuthProvider();
+}
+
+export function useFirebaseUser() {
+  const auth = getFirebaseAuth();
+  const [user, setUser] = useState<User | null>(() => auth?.currentUser ?? null);
+
+  useEffect(() => {
+    if (!auth) return undefined;
+    return onAuthStateChanged(auth, setUser);
+  }, [auth]);
+
+  return { auth, user };
+}
+
+export async function signInWithGoogle() {
+  const auth = getFirebaseAuth();
+  if (!auth) return null;
+  return signInWithPopup(auth, googleProvider());
 }
