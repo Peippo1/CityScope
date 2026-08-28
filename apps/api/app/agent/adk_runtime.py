@@ -18,7 +18,7 @@ from .schemas import ToolDecision
 def _bounded_tool(name: str):
     """Return a safe planning tool; execution is deliberately backend-owned."""
 
-    def tool(request: str = "") -> str:
+    def tool(request: str) -> str:
         return json.dumps({"tool": name, "status": "delegated_to_deterministic_application", "request": request[:200]})
 
     tool.__name__ = name.replace(".", "_")
