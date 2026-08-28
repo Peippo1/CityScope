@@ -3,6 +3,8 @@ from pydantic import BaseModel, Field
 
 class ActivityCell(BaseModel):
     h3_cell: str
+    latitude: float | None = None
+    longitude: float | None = None
     total_journeys: int = Field(ge=0)
     origin_journeys: int = Field(ge=0)
     destination_journeys: int = Field(ge=0)

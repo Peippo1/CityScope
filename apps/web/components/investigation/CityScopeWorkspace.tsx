@@ -204,6 +204,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     total_journeys: Number(layer.value),
   })) ?? [], [investigation]);
   const mapCells = investigationCells.length > 0 ? investigationCells : activity?.cells ?? [];
+  const mapPlaces = useMemo(() => [...(investigation?.places ?? []), ...currentPlaces], [currentPlaces, investigation?.places]);
 
   return (
     <main id="main-content" className="app-shell">
@@ -253,7 +254,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
           <div className="map-card-heading"><div><p className="eyebrow">Spatial view</p><h2 id="map-heading">{selectedCity.name} activity</h2></div><MapLegend hasPlaces={currentPlaces.length > 0 || Boolean(investigation?.places.length)} hasRoute={Boolean(investigation?.route)} /></div>
           {activityLoading && <div className="map-skeleton" aria-live="polite"><span>Loading {selectedCity.name} activity...</span></div>}
           {activityError && !activityLoading && <div className="empty-state" role="alert"><h3>{selectedCity.name} activity is unavailable</h3><p>{activityError}</p><button type="button" className="secondary-button" onClick={() => void loadActivity()}>Retry {selectedCity.name} activity</button></div>}
-          {!activityLoading && !activityError && <CityMap cells={mapCells} places={[...(investigation?.places ?? []), ...currentPlaces]} focusedPlace={focusedPlace} route={investigation?.route} selectedH3Cell={selectedH3Cell} onSelectH3Cell={setSelectedH3Cell} cityName={selectedCity.name} bounds={selectedCity.bounds} />}
+          {!activityLoading && !activityError && <CityMap cells={mapCells} places={mapPlaces} focusedPlace={focusedPlace} route={investigation?.route} selectedH3Cell={selectedH3Cell} onSelectH3Cell={setSelectedH3Cell} cityName={selectedCity.name} bounds={selectedCity.bounds} />}
         </section>
 
         <div className="visual-sidebar">

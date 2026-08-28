@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
+from h3 import cell_to_latlng
 
 from pipelines.core.analytics_contract import TimeFilter
 
@@ -37,12 +38,13 @@ def get_activity(city: str, limit: int = Query(default=100, ge=1, le=500)) -> Ac
     try:
         dataset = ANALYTICS.describe_dataset(city)
         rows = ANALYTICS.find_hotspots(city, "total_activity", TimeFilter(), limit)
+        area_metrics = {row["h3_cell"]: row for row in ANALYTICS.get_area_metrics(city, [item["h3_cell"] for item in rows], ["starts", "ends"], TimeFilter())}
     except (ValueError, FileNotFoundError) as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return ActivityResponse(
         city=city, dataset_name=dataset["dataset_name"], observation_period="2026-05-01/2026-05-31",
         attribution_text=dataset["attribution_text"], historical_snapshot=True, h3_resolution=dataset["h3_resolution"],
-        cells=[ActivityCell(h3_cell=row["h3_cell"], total_journeys=int(row["value"]), origin_journeys=0, destination_journeys=0) for row in rows],
+        cells=[ActivityCell(h3_cell=row["h3_cell"], latitude=cell_to_latlng(row["h3_cell"])[0], longitude=cell_to_latlng(row["h3_cell"])[1], total_journeys=int(row["value"]), origin_journeys=int(area_metrics[row["h3_cell"]]["starts"]), destination_journeys=int(area_metrics[row["h3_cell"]]["ends"])) for row in rows],
     )
 
 

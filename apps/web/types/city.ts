@@ -1,5 +1,7 @@
 export type ActivityCell = {
   h3_cell: string;
+  latitude?: number | null;
+  longitude?: number | null;
   total_journeys: number;
   origin_journeys: number;
   destination_journeys: number;

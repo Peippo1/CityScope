@@ -17,6 +17,10 @@ const EXAMPLE_QUESTIONS = [
     label: "Plan a bicycle route",
     question: "Plan a bicycle route between two busy cycling areas.",
   },
+  {
+    label: "Find stops along my route",
+    question: "My route is Home to Richmond Park. Where are good coffee shops or public bathrooms along the way?",
+  },
 ] as const;
 
 type QuestionComposerProps = {
