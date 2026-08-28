@@ -59,6 +59,16 @@ const registry = {
 };
 
 describe("CityScopeWorkspace", () => {
+  it("renders the custom two-color CityScope signal mark", () => {
+    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate: vi.fn() }} />);
+
+    const mark = screen.getByLabelText("CityScope home").querySelector(".brand-mark");
+    expect(mark).toBeInTheDocument();
+    expect(mark?.querySelectorAll(".brand-mark__cell")).toHaveLength(4);
+    expect(mark?.querySelectorAll(".brand-mark__cell--ink")).toHaveLength(2);
+    expect(mark?.querySelectorAll(".brand-mark__cell--teal")).toHaveLength(2);
+  });
+
   it("lets a user retry activity loading without turning it into an investigation error", async () => {
     const user = userEvent.setup();
     const getActivity = vi.fn().mockRejectedValueOnce(new Error("Activity unavailable")).mockResolvedValueOnce(activity);

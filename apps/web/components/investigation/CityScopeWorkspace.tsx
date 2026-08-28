@@ -199,7 +199,12 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     <main id="main-content" className="app-shell">
       <header className="topbar">
         <a className="brand" href="#main-content" aria-label="CityScope home">
-          <span className="brand-mark" aria-hidden="true"><i /><i /><i /><i /></span><span>CityScope</span>
+          <span className="brand-mark" aria-hidden="true">
+            <i className="brand-mark__cell brand-mark__cell--ink" />
+            <i className="brand-mark__cell brand-mark__cell--teal" />
+            <i className="brand-mark__cell brand-mark__cell--teal" />
+            <i className="brand-mark__cell brand-mark__cell--ink" />
+          </span><span>CityScope</span>
         </a>
         <nav className="view-nav" aria-label="Workspace sections">
           <button type="button" onClick={() => changeView("explore")} aria-pressed={view === "explore"} disabled={!selectedCity.historical}>Explore</button><button type="button" onClick={() => changeView("compare")} aria-pressed={view === "compare"}>Compare</button><button type="button" onClick={() => changeView("live")} aria-pressed={view === "live"} disabled={!selectedCity.live_network}>Live network</button>
