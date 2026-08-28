@@ -14,7 +14,8 @@ def test_root_agent_is_optional_when_adk_is_not_installed() -> None:
     assert agent is None or getattr(agent, "name", "") == "cityscope_taskmaster"
 
 
-def test_adk_model_preserves_typed_fallback_without_adk() -> None:
+def test_adk_model_preserves_typed_fallback_without_adk(monkeypatch) -> None:
+    monkeypatch.setattr("apps.api.app.agent.adk_runtime.build_root_agent", lambda: None)
     class FakeFallback:
         model_name = "gemini-3.5-flash"
 
