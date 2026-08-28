@@ -18,7 +18,7 @@ This document is portfolio and submission copy. Review it against the final demo
 
 ## Portfolio summary
 
-CityScope is an agentic geospatial intelligence application that turns a mobility question into a bounded, visual investigation. Its historical cohort covers London, New York City, Chicago, and Washington, DC through matched May 2026 trip data and normalized comparison metrics. A separate City Live Data MCP optionally supplies current Citi Bike, Divvy, Capital Bikeshare, and Vélib' station availability, visibly excluded from historical rankings. London remains historical-only because Santander availability is not representative of all cycling. Gemini 3.5 Flash selects guarded tools; deterministic City Data MCP queries H3-indexed aggregates; Google Maps supplies current place context; and Google Routes computes attributed bicycle routes.
+CityScope is an agentic geospatial intelligence application that turns a mobility question into a bounded, visual investigation. Its historical cohort covers London, New York City, Chicago, and Washington, DC through matched May 2026 trip data and normalized comparison metrics. A separate City Live Data MCP optionally supplies current Citi Bike, Divvy, Capital Bikeshare, and Vélib' station availability, visibly excluded from historical rankings. London remains historical-only because Santander availability is not representative of all cycling. A Google ADK Runner executes one root LlmAgent powered by Gemini 3.5 Flash; deterministic City Data MCP queries H3-indexed aggregates; Google Maps supplies current place context; Google Routes computes attributed bicycle routes; and optional Gemma 4 scoring is locally schema-validated before use.
 
 ## Inspiration
 
@@ -36,7 +36,7 @@ City data analysis is still fragmented across downloads, notebooks, dashboards, 
 
 ## How we built it
 
-The Next.js frontend is statically exported to Firebase Hosting. A FastAPI service on Cloud Run is the public trust boundary. Gemini 3.5 Flash is accessed through the Google GenAI SDK and returns typed planning decisions. Historical analytics and live station status are isolated in two IAM-protected MCP services. DuckDB queries versioned Parquet artifacts created by four validated source adapters and a shared canonical H3 pipeline. Google Maps resolves current place context and route endpoints; Google Routes returns bicycle route geometry. Firebase Authentication and Firestore provide identity and user-owned persistence. Secret Manager stores server-only credentials.
+The Next.js frontend is statically exported to Firebase Hosting. A FastAPI service on Cloud Run is the public trust boundary. The ADK Runner owns per-request root-agent execution while Gemini 3.5 Flash returns typed planning decisions. Historical analytics and live station status are isolated in two IAM-protected MCP services. DuckDB queries versioned Parquet artifacts created by four validated source adapters and a shared canonical H3 pipeline. Google Maps resolves current place context and route endpoints; Google Routes returns bicycle route geometry. Firebase Authentication and Firestore provide identity and user-owned persistence. Secret Manager stores server-only credentials. Waypoints, route execution, validation, and provenance remain deterministic application steps; the browser never receives server credentials.
 
 ## Challenges
 
@@ -53,7 +53,7 @@ The Next.js frontend is statically exported to Firebase Hosting. A FastAPI servi
 - Added deterministic agent evaluations, provider fakes, dependency audits, and browser accessibility tests to CI.
 - Produced a real Kings Cross-to-Borough bicycle route with historically active waypoint rationale.
 - Kept historical, current-place, and route evidence visibly separate throughout the product.
-- Added agent-submitted normalized comparisons, deterministic finding cards, city drill-down, optional live station maps, and judge-visible production/fixture status.
+- Added agent-submitted normalized comparisons, deterministic finding cards, city drill-down, optional live station maps, judge-visible production/fixture status, and a sanitized ADK execution trace.
 - Bound a precomputed five-metric matrix to source artifact fingerprints for fast cold comparison reads with a deterministic Parquet fallback.
 
 ## What we learned
@@ -71,7 +71,7 @@ Useful agent autonomy comes from strong contracts. Typed decisions, bounded tool
 
 ## Built with
 
-Gemini 3.5 Flash, Google GenAI SDK, Google Cloud Run, Firebase Hosting, Firebase Authentication, Firestore, Secret Manager, Artifact Registry, Google Maps JavaScript API, Google Maps Grounding, Google Routes API, FastAPI, MCP, Next.js, React, DuckDB, Parquet, H3, Python, and TypeScript.
+Gemini 3.5 Flash, Google ADK, Google GenAI SDK, optional Gemma 4, Google Cloud Run, Firebase Hosting, Firebase Authentication, Firestore, Secret Manager, Artifact Registry, Google Maps JavaScript API, Google Maps Grounding, Google Routes API, FastAPI, MCP, Next.js, React, DuckDB, Parquet, H3, Python, and TypeScript.
 
 ## Submission checklist
 

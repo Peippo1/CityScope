@@ -2,7 +2,7 @@
 
 ## Judge story (2–3 minutes)
 
-1. Open the CityScope URL, choose **Compare demand intensity**, and submit the cross-city question. Show that the agent selects the bounded `compare_cities` workflow, then open the trace and point out that rankings use normalized metrics, never raw trip totals.
+1. Open the CityScope URL, choose **Compare demand intensity**, and submit the cross-city question. Show the sanitized ADK trace (`ADK investigation started` → `compare_cities` → `compose_result`) and point out that rankings use normalized metrics, never raw trip totals.
 2. Select London, NYC, Chicago, or Washington, DC and ask where historical cycling activity was highest; open the evidence disclosure to show deterministic City Data MCP provenance.
 3. Drill into New York City, switch from its historical activity to its Citi Bike live station map, and show bikes, docks, provider freshness, and the non-comparability statement. Switch to Paris to demonstrate the same bounded MCP contract across providers.
 4. Return to London and ask which busy areas have few cafés, then request a bicycle route between King's Cross and Borough.
@@ -25,6 +25,6 @@ Configure the browser Maps key to the deployed web origin and allowed Maps APIs.
 
 ## Post-deploy smoke gate
 
-Run one agent-submitted normalized comparison and one direct metric change, followed by city drill-down, optional live NYC status, historical London hotspots, amenity enrichment, and a named-endpoint bicycle route. Check `/health` and `/ready`, verify the `compare_cities` trace and source attribution are shown, and confirm provider failures display the bounded fallback. Record only status, source labels, and timestamps, never requests, provider payloads, headers, or credentials.
+Run one agent-submitted normalized comparison and one direct metric change, followed by city drill-down, optional live NYC status, historical London hotspots, amenity enrichment, and a named-endpoint bicycle route. Check `/health` and `/ready`, verify the ADK event trace and source attribution are shown, and confirm provider failures display the bounded fallback. If a qualitative preference is requested, show the optional `journey_character.score [Gemma 4]` event and bounded result; malformed or unavailable Gemma output must fall back deterministically. Record only status, source labels, and timestamps, never requests, provider payloads, headers, or credentials.
 
 Run all offline tests and artifact builders before starting the local reload-enabled services. Then run provider-backed smoke requests one at a time so file-watcher reloads cannot interrupt an MCP session.

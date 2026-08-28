@@ -35,6 +35,7 @@ class TraceEvent(BaseModel):
     label: str
     status: Literal["completed", "rejected", "failed"]
     tool: str | None = None
+    provider: str | None = None
     result_count: int | None = None
     latency_ms: int | None = None
     policy_code: str | None = None
@@ -56,6 +57,7 @@ class InvestigationResult(BaseModel):
     limitations: list[str] = Field(default_factory=list)
     trace: list[TraceEvent] = Field(default_factory=list)
     follow_up_suggestions: list[str] = Field(default_factory=list, max_length=3)
+    journey_character_score: dict[str, Any] | None = None
 
 
 class ToolDecision(BaseModel):

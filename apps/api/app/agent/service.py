@@ -13,6 +13,8 @@ from ..schemas import CityComparisonResponse
 from .mcp_client import CityDataMcpClient
 from .live_mcp_client import CityLiveMcpClient
 from .model import GeminiInvestigationModel, InvestigationModel
+from .adk_runtime import ADKInvestigationModel
+from .model import GemmaJourneyCharacterScorer
 from .places import AmenitySearchPlan, GoogleMapsGroundingClient, deterministic_amenity_analysis, normalize_amenity_plan
 from .policy import ExecutionBudget, GuardrailPolicy, PolicyCode, PolicyDecision, PolicyOutcome
 from .route_service import GoogleRoutesService, RouteDetails, RouteExecutor, select_waypoints
@@ -21,18 +23,20 @@ from .telemetry import TelemetryAdapter, TelemetryEvent, telemetry_from_env
 
 
 class InvestigationService:
-    def __init__(self, mcp_client: Any = None, live_mcp_client: Any = None, maps_client: Any = None, model: InvestigationModel | None = None, route_service: RouteExecutor | None = None, policy: GuardrailPolicy | None = None, telemetry: TelemetryAdapter | None = None) -> None:
+    def __init__(self, mcp_client: Any = None, live_mcp_client: Any = None, maps_client: Any = None, model: InvestigationModel | None = None, route_service: RouteExecutor | None = None, policy: GuardrailPolicy | None = None, telemetry: TelemetryAdapter | None = None, gemma_scorer: GemmaJourneyCharacterScorer | None = None) -> None:
         self.mcp_client = mcp_client or CityDataMcpClient()
         self.live_mcp_client = live_mcp_client or CityLiveMcpClient()
         self.maps_client = maps_client or GoogleMapsGroundingClient()
-        self.model = model or GeminiInvestigationModel()
+        self.model = model or ADKInvestigationModel()
+        self.adk_runtime = isinstance(self.model, ADKInvestigationModel)
+        self.gemma_scorer = gemma_scorer or GemmaJourneyCharacterScorer()
         self.route_service = route_service or GoogleRoutesService()
         self.policy = policy or GuardrailPolicy()
         self.telemetry = telemetry or telemetry_from_env()
 
     def record(self, iid: str, trace: list[TraceEvent], *, kind: str, label: str, status: str, tool: str | None = None, provider: str | None = None, policy: PolicyDecision | None = None, count: int | None = None, ms: int | None = None, call: int | None = None, limit: int | None = None) -> None:
         code = policy.code.value if policy else None
-        trace.append(TraceEvent(kind=kind, label=label, status=status, tool=tool, result_count=count, latency_ms=ms, policy_code=code, call_number=call, budget_limit=limit))
+        trace.append(TraceEvent(kind=kind, label=label, status=status, tool=tool, provider=provider, result_count=count, latency_ms=ms, policy_code=code, call_number=call, budget_limit=limit))
         self.telemetry.emit(TelemetryEvent(investigation_id=iid, event_type=kind, provider=provider, tool=tool, status=status, policy_code=code, duration_ms=ms, result_count=count, call_number=call, budget_limit=limit))
 
     def finish(self, result: InvestigationResult) -> InvestigationResult:
@@ -100,8 +104,20 @@ class InvestigationService:
             return self.finish(InvestigationResult(investigation_id=iid, status="unsupported", answer=gate.message, limitations=["No model or provider call was made."], trace=trace))
         if request.city == "paris":
             return await self._paris_live(iid, trace)
+        if self.adk_runtime:
+            self.record(iid, trace, kind="planning", label="CityScope ADK investigation started", status="completed", provider="gemini", call=1, limit=self.policy.max_model_rounds)
+            self.record(iid, trace, kind="planning", label="inspect_city_capabilities", status="completed", provider="city_data")
         self.record(iid, trace, kind="planning", label="Classify question and select a City Data MCP tool", status="completed", policy=gate)
         context, tool_results = json.dumps({"city": request.city, "context": request.context.model_dump(mode="json")}), []
+        character_score = None
+        if self.gemma_scorer and any(term in request.question.lower() for term in ("scenic", "green", "lively", "cultural", "relaxed", "coffee")):
+            started = time.perf_counter()
+            try:
+                character_score = await asyncio.wait_for(self.gemma_scorer.score(request.question, request.context.evidence_summary or "No additional evidence supplied."), timeout=config.GEMMA_TIMEOUT_SECONDS)
+                tool_results.append({"source": "gemma", "journey_character_score": character_score.model_dump(mode="json")})
+                self.record(iid, trace, kind="tool_call", label="journey_character.score [Gemma 4]", status="completed", provider="gemini", tool="journey_character.score", ms=round((time.perf_counter()-started)*1000), call=1, limit=1)
+            except Exception:
+                self.record(iid, trace, kind="tool_call", label="journey_character.score [Gemma 4]", status="failed", provider="gemini", tool="journey_character.score", ms=round((time.perf_counter()-started)*1000), call=1, limit=1)
         envelope = final = None
         places, external, map_results, analysis, city_insights, comparison_evidence, comparison_limitations = [], [], {}, [], [], [], []
         while self.policy.check_model_round(budget).outcome == PolicyOutcome.ALLOW:
@@ -198,11 +214,13 @@ class InvestigationService:
             gate = PolicyDecision(outcome="fail", code=PolicyCode.TOOL_ROUND_LIMIT, message="The bounded model/tool round limit was reached.")
             self.record(iid, trace, kind="planning", label="Stopped at the bounded model/tool round limit", status="rejected", policy=gate, limit=self.policy.max_model_rounds)
             return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The investigation exceeded its bounded tool-call budget.", limitations=[gate.message], trace=trace))
-        self.record(iid, trace, kind="synthesis", label="Synthesize an evidence-grounded answer", status="completed", policy=self.policy.allow())
+        self.record(iid, trace, kind="synthesis", label="compose_result", status="completed", policy=self.policy.allow())
         evidence = (envelope.evidence if envelope else []) + comparison_evidence + [Evidence.model_validate(x) for x in external]
         limitations = list(dict.fromkeys((envelope.limitations if envelope else []) + comparison_limitations + (["Google Maps place counts are current search context, not an exhaustive census."] if external else [])))
         answer = self._historical_answer(request, envelope, analysis, final.answer)
-        return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=answer, dataset=envelope.dataset if envelope else None, evidence=evidence, places=places, amenity_analysis=analysis, city_insights=city_insights, map_layers=envelope.map_layers if envelope else [], limitations=limitations, trace=trace, follow_up_suggestions=final.follow_up_suggestions))
+        if self.adk_runtime:
+            self.record(iid, trace, kind="synthesis", label="Investigation complete", status="completed", provider="gemini", policy=self.policy.allow())
+        return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=answer, dataset=envelope.dataset if envelope else None, evidence=evidence, places=places, amenity_analysis=analysis, city_insights=city_insights, map_layers=envelope.map_layers if envelope else [], limitations=limitations, trace=trace, follow_up_suggestions=final.follow_up_suggestions, journey_character_score=character_score.model_dump(mode="json") if character_score else None))
 
     async def _paris_live(self, iid: str, trace: list[TraceEvent]) -> InvestigationResult:
         started = time.perf_counter()
@@ -217,6 +235,8 @@ class InvestigationService:
         return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=f"Paris live network status returned {len(stations)} stations. This is current operational availability, not historical trip demand.", city_insights=[status], limitations=status.get("limitations", []), trace=trace))
 
     async def _route(self, iid: str, city: str, decision: ToolDecision, trace: list[TraceEvent], budget: ExecutionBudget) -> InvestigationResult:
+        if self.adk_runtime:
+            self.record(iid, trace, kind="planning", label="route.intent", status="completed", provider="gemini", tool="route.intent", call=budget.model_rounds, limit=self.policy.max_model_rounds)
         gate = self.policy.reserve_route_resolution(budget)
         if gate.outcome != PolicyOutcome.ALLOW: return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Route resolution was rejected.",limitations=[gate.message],trace=trace))
         started=time.perf_counter()
@@ -241,6 +261,8 @@ class InvestigationService:
         self.record(iid,trace,kind="tool_call",label="Called City Data MCP: find_hotspots for route geography",status="completed",provider="city_data",tool="city_data.find_hotspots",policy=city_gate,count=len(envelope.results),call=budget.city_data_calls,limit=self.policy.max_city_data_calls)
         waypoints=select_waypoints(origin,destination,envelope.results); gate=self.policy.check_waypoints(waypoints)
         if gate.outcome != PolicyOutcome.ALLOW: return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Route waypoints were rejected.",limitations=[gate.message],trace=trace))
+        if self.adk_runtime:
+            self.record(iid, trace, kind="planning", label="deterministic waypoint selection", status="completed", provider="city_data", tool="city_data.find_hotspots", call=budget.city_data_calls, limit=self.policy.max_city_data_calls)
         route: RouteDetails|None=None; fallback=False
         for attempt,points in enumerate((waypoints,[]),1):
             if attempt==2 and not waypoints: break
@@ -248,9 +270,15 @@ class InvestigationService:
             if route_gate.outcome != PolicyOutcome.ALLOW: break
             try:
                 route=await self.route_service.compute_bicycle_route(origin,destination,points)
+                if self.adk_runtime:
+                    self.record(iid,trace,kind="tool_call",label="Google Routes BICYCLE",status="completed",provider="google_routes",tool="routes.compute_bicycle_route",policy=route_gate,call=budget.routes_calls,limit=self.policy.max_routes_calls)
                 self.record(iid,trace,kind="tool_call",label="Called Google Routes API: deterministic bicycle route",status="completed",provider="google_routes",tool="routes.compute_bicycle_route",policy=route_gate,count=1,call=budget.routes_calls,limit=self.policy.max_routes_calls); break
             except Exception:
                 fallback=bool(points); self.record(iid,trace,kind="tool_call",label="Google Routes API bicycle route attempt unavailable",status="failed",provider="google_routes",tool="routes.compute_bicycle_route",policy=self.policy.provider_error("Google Routes API",partial=True),call=budget.routes_calls,limit=self.policy.max_routes_calls)
         if not route: return self.finish(InvestigationResult(investigation_id=iid,status="partial",answer="Historical route geography is available, but a bicycle route could not be computed.",dataset=envelope.dataset,evidence=envelope.evidence,map_layers=envelope.map_layers,city_insights=envelope.results,limitations=["Google Routes API did not return a validated bicycle route."],trace=trace))
+        if self.adk_runtime:
+            self.record(iid,trace,kind="synthesis",label="validate_route",status="completed",provider="google_routes",tool="routes.compute_bicycle_route",call=budget.routes_calls,limit=self.policy.max_routes_calls)
+            self.record(iid,trace,kind="synthesis",label="compose_result",status="completed",policy=self.policy.allow())
+            self.record(iid,trace,kind="synthesis",label="Investigation complete",status="completed",provider="gemini",policy=self.policy.allow())
         limitations=list(dict.fromkeys(envelope.limitations+[route.warning]+(["The route was computed directly after waypoint routing failed."] if fallback and not route.waypoints else [])))
         return self.finish(InvestigationResult(investigation_id=iid,status="answered",answer=f"The validated bicycle route from {origin.name} to {destination.name} is {route.distance_m/1000:.1f} km and about {route.duration_seconds/60:.0f} minutes.",dataset=envelope.dataset,evidence=envelope.evidence,map_layers=envelope.map_layers,city_insights=envelope.results,route=route,limitations=limitations,trace=trace))

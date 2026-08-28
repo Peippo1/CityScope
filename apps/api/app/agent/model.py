@@ -5,7 +5,7 @@ import os
 from typing import Literal
 from typing import Protocol
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt, field_validator
 
 from .. import config  # noqa: F401  # Load the project environment before reading it.
 from pipelines.core.analytics_contract import MetricName, TimeFilter
@@ -34,6 +34,25 @@ class GeminiDecision(BaseModel):
     destination: str | None = None
     answer: str | None = None
     follow_up_suggestions: list[str] = Field(default_factory=list, max_length=3)
+
+
+class JourneyCharacterScore(BaseModel):
+    """Bounded, non-authoritative qualitative scoring returned by Gemma."""
+
+    scenic: StrictInt
+    green: StrictInt
+    lively: StrictInt
+    cultural: StrictInt
+    relaxed: StrictInt
+    coffee: StrictInt
+    rationale: str = Field(min_length=1, max_length=500)
+
+    @field_validator("scenic", "green", "lively", "cultural", "relaxed", "coffee")
+    @classmethod
+    def score_must_be_bounded(cls, value: int) -> int:
+        if isinstance(value, bool) or not 0 <= value <= 10:
+            raise ValueError("journey character scores must be integers from 0 to 10")
+        return value
 
 
 class InvestigationModel(Protocol):
@@ -102,3 +121,35 @@ Previous tool results: {json.dumps(tool_results, default=str)}
             if value is not None
         }
         return ToolDecision(kind=decision.kind, tool=decision.tool, arguments=arguments, answer=decision.answer, follow_up_suggestions=decision.follow_up_suggestions)
+
+
+class GemmaJourneyCharacterScorer:
+    """Optional one-call Gemma scorer with local validation and no raw payload retention."""
+
+    def __init__(self, api_key: str | None = None, model_name: str | None = None) -> None:
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.model_name = model_name or os.getenv("CITYSCOPE_GEMMA_MODEL", "gemma-4-26b-a4b-it")
+
+    async def score(self, question: str, evidence_summary: str) -> JourneyCharacterScore:
+        if not self.api_key:
+            raise RuntimeError("GEMINI_API_KEY is not configured")
+        try:
+            from google import genai
+        except ImportError as exc:
+            raise RuntimeError("The google-genai package is required for Gemma scoring") from exc
+        client = genai.Client(api_key=self.api_key)
+        prompt = (
+            "Score the requested journey character using only the supplied historical evidence. "
+            "Return JSON with integer fields scenic, green, lively, cultural, relaxed, coffee (0-10) "
+            "and a short rationale. Do not invent facts.\n"
+            f"Question: {question}\nEvidence: {evidence_summary}"
+        )
+        response = await client.aio.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config={"response_mime_type": "application/json"},
+        )
+        text = (response.text or "").strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        return JourneyCharacterScore.model_validate_json(text)

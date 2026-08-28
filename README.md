@@ -10,7 +10,7 @@
 ![Google Cloud](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run%20%2B%20Maps-4285F4?logo=googlecloud&logoColor=white)
 ![License](https://img.shields.io/badge/license-private-lightgrey)
 
-CityScope turns natural-language questions into bounded, traceable investigations over historical bike-share activity. London, New York City, Chicago, and Washington, DC are compared through normalized May 2026 metrics. New York City, Chicago, Washington, DC, and Paris expose optional current station availability; London is intentionally historical-only so station supply is not mistaken for city-wide cycling demand. It combines deterministic H3 and DuckDB analytics with a guarded Gemini planning layer, current Google Maps context, bicycle routing, and user-owned investigation history.
+CityScope turns natural-language questions into bounded, traceable investigations over historical bike-share activity. London, New York City, Chicago, and Washington, DC are compared through normalized May 2026 metrics. New York City, Chicago, Washington, DC, and Paris expose optional current station availability; London is intentionally historical-only so station supply is not mistaken for city-wide cycling demand. It combines deterministic H3 and DuckDB analytics with a Google ADK Runner and root LlmAgent powered by Gemini 3.5 Flash, current Google Maps context, bicycle routing, and user-owned investigation history. ADK plans bounded actions; the application remains authoritative for MCP execution, waypoint selection, Routes, validation, and provenance. An optional Gemma 4 scorer adds bounded journey-character context without becoming a critical dependency.
 
 **[Open the live CityScope app](https://cityscope-506222.web.app)**
 
@@ -61,9 +61,10 @@ flowchart LR
     mcp -->|"DuckDB queries"| data[("Versioned Parquet + metadata")]
     api -->|"User-owned records"| firestore[("Firestore")]
     api -.->|"Verify ID token"| auth
-    api -.->|"Structured planning"| gemini["Gemini"]
+    api -.->|"ADK Runner + root LlmAgent"| gemini["Gemini 3.5 Flash"]
     api -.->|"Place context"| maps["Maps Grounding Lite"]
     api -.->|"Bicycle route"| routes["Google Routes API"]
+    gemma["Optional Gemma 4 scorer"] -.-> api
 
     sources["TfL + Citi Bike + Divvy + Capital Bikeshare"] --> pipeline["Validation + H3 pipeline"]
     pipeline --> data
@@ -78,7 +79,7 @@ The FastAPI service is the trust boundary. Browser Firestore access is denied; a
 ```text
 Official trip snapshots -> validate and normalize -> H3 aggregation -> Parquet -> DuckDB
                                                                |
-question -> guarded planner -> City Data MCP -------------------+
+question -> ADK root planner -> City Data MCP -------------------+
                           \-> Maps and Routes -> evidence-grounded result
 Optional live feeds -> City Live Data MCP -> validated, labelled station context
 ```
