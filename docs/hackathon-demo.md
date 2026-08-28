@@ -25,6 +25,6 @@ Configure the browser Maps key to the deployed web origin and allowed Maps APIs.
 
 ## Post-deploy smoke gate
 
-Run one agent-submitted normalized comparison and one direct metric change, followed by city drill-down, live NYC status, historical hotspots, amenity enrichment, and a named-endpoint bicycle route. Check `/health` and `/ready`, verify the `compare_cities` trace and source attribution are shown, and confirm provider failures display the bounded fallback. Record only status, source labels, and timestamps, never requests, provider payloads, headers, or credentials.
+Run one agent-submitted normalized comparison and one direct metric change, followed by city drill-down, optional live NYC status, historical London hotspots, amenity enrichment, and a named-endpoint bicycle route. Check `/health` and `/ready`, verify the `compare_cities` trace and source attribution are shown, and confirm provider failures display the bounded fallback. Record only status, source labels, and timestamps, never requests, provider payloads, headers, or credentials.
 
 Run all offline tests and artifact builders before starting the local reload-enabled services. Then run provider-backed smoke requests one at a time so file-watcher reloads cannot interrupt an MCP session.

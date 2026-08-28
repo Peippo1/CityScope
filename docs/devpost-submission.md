@@ -18,7 +18,7 @@ This document is portfolio and submission copy. Review it against the final demo
 
 ## Portfolio summary
 
-CityScope is an agentic geospatial intelligence application that turns a mobility question into a bounded, visual investigation. Its historical cohort covers London, New York City, Chicago, and Washington, DC through matched May 2026 trip data and normalized comparison metrics. A separate City Live Data MCP supplies current Citi Bike, Divvy, Capital Bikeshare, and Vélib' station availability, visibly excluded from historical rankings. Gemini 3.5 Flash selects guarded tools; deterministic City Data MCP queries H3-indexed aggregates; Google Maps supplies current place context; and Google Routes computes attributed bicycle routes.
+CityScope is an agentic geospatial intelligence application that turns a mobility question into a bounded, visual investigation. Its historical cohort covers London, New York City, Chicago, and Washington, DC through matched May 2026 trip data and normalized comparison metrics. A separate City Live Data MCP optionally supplies current Citi Bike, Divvy, Capital Bikeshare, and Vélib' station availability, visibly excluded from historical rankings. London remains historical-only because Santander availability is not representative of all cycling. Gemini 3.5 Flash selects guarded tools; deterministic City Data MCP queries H3-indexed aggregates; Google Maps supplies current place context; and Google Routes computes attributed bicycle routes.
 
 ## Inspiration
 
@@ -27,7 +27,7 @@ City data analysis is still fragmented across downloads, notebooks, dashboards, 
 ## What it does
 
 - Lets the agent answer four-city questions by selecting one approved normalized demand, duration, peak-hour, weekend, or hotspot-concentration metric rather than ranking raw volume.
-- Maps current station availability for NYC, Chicago, Washington, DC, and Paris with provider freshness and an explicit non-comparability boundary.
+- Maps optional current station availability for NYC, Chicago, Washington, DC, and Paris with provider freshness and an explicit non-comparability boundary.
 - Ranks and compares H3-indexed cycling activity using deterministic DuckDB queries.
 - Enriches trusted areas with current Google Maps place context.
 - Resolves named endpoints and computes Google bicycle routes through bounded activity-informed waypoints.
@@ -36,12 +36,12 @@ City data analysis is still fragmented across downloads, notebooks, dashboards, 
 
 ## How we built it
 
-The Next.js frontend is statically exported to Firebase Hosting. A FastAPI service on Cloud Run is the public trust boundary. Gemini 3.5 Flash is accessed through the Google GenAI SDK and returns typed planning decisions. Historical analytics and live GBFS status are isolated in two IAM-protected MCP services. DuckDB queries versioned Parquet artifacts created by four validated source adapters and a shared canonical H3 pipeline. Google Maps resolves current place context and route endpoints; Google Routes returns bicycle route geometry. Firebase Authentication and Firestore provide identity and user-owned persistence. Secret Manager stores server-only credentials.
+The Next.js frontend is statically exported to Firebase Hosting. A FastAPI service on Cloud Run is the public trust boundary. Gemini 3.5 Flash is accessed through the Google GenAI SDK and returns typed planning decisions. Historical analytics and live station status are isolated in two IAM-protected MCP services. DuckDB queries versioned Parquet artifacts created by four validated source adapters and a shared canonical H3 pipeline. Google Maps resolves current place context and route endpoints; Google Routes returns bicycle route geometry. Firebase Authentication and Firestore provide identity and user-owned persistence. Secret Manager stores server-only credentials.
 
 ## Challenges
 
 - Keeping model reasoning separate from deterministic geospatial computation.
-- Preserving provenance across four historical providers, four live networks, and current Google context.
+- Preserving provenance across four historical providers, four optional live networks, and current Google context.
 - Applying policy checks before planning, before provider calls, and before response delivery.
 - Configuring Cloud Run service identity, ingress, MCP DNS-rebinding protection, CORS, and Firebase Hosting safely.
 - Designing a data-dense visual workspace that remains usable and accessible on mobile.
@@ -53,7 +53,7 @@ The Next.js frontend is statically exported to Firebase Hosting. A FastAPI servi
 - Added deterministic agent evaluations, provider fakes, dependency audits, and browser accessibility tests to CI.
 - Produced a real Kings Cross-to-Borough bicycle route with historically active waypoint rationale.
 - Kept historical, current-place, and route evidence visibly separate throughout the product.
-- Added agent-submitted normalized comparisons, deterministic finding cards, city drill-down, live station maps, and judge-visible production/fixture status.
+- Added agent-submitted normalized comparisons, deterministic finding cards, city drill-down, optional live station maps, and judge-visible production/fixture status.
 - Bound a precomputed five-metric matrix to source artifact fingerprints for fast cold comparison reads with a deterministic Parquet fallback.
 
 ## What we learned

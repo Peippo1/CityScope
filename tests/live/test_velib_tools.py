@@ -43,8 +43,3 @@ def test_live_provider_registry_uses_only_fixed_https_gbfs_endpoints():
         assert provider.information_url.startswith("https://")
         assert "station_status.json" in provider.status_url
         assert "station_information.json" in provider.information_url
-
-
-def test_live_station_request_rejects_unregistered_cities():
-    with pytest.raises(ValueError):
-        LiveStationRequest(city="london")

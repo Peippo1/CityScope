@@ -4,7 +4,7 @@
 
 - Firebase Hosting serves the static Next.js export.
 - A public Cloud Run service hosts the FastAPI API.
-- An IAM-private Cloud Run service hosts deterministic City Data MCP. A separate IAM-private Cloud Run service hosts fixed-provider live GBFS access for NYC, Chicago, Washington, DC, and Paris; only the API service account has `roles/run.invoker` on either service.
+- An IAM-private Cloud Run service hosts deterministic City Data MCP. A separate IAM-private Cloud Run service hosts optional fixed-provider live station access for NYC, Chicago, Washington, DC, and Paris; only the API service account has `roles/run.invoker` on either service.
 - An hourly Cloud Scheduler-triggered Cloud Run job writes compressed Paris GBFS station snapshots to a private Cloud Storage bucket. It is the only identity allowed to write that bucket.
 - Artifact Registry stores the API, MCP, live MCP, and collector images in `europe-west2`.
 - Secret Manager supplies only server-side Gemini and Google API keys.
@@ -114,7 +114,7 @@ Keep these server-only values in the API environment, never in the web app:
 - `GOOGLE_MAPS_GROUNDING_API_KEY` — Grounding MCP place resolution and search. `GOOGLE_MAPS_API_KEY` is a temporary server fallback.
 - `GOOGLE_ROUTES_API_KEY` — direct bicycle Routes API execution. `GOOGLE_MAPS_API_KEY` is a temporary server fallback.
 - `CITYSCOPE_CITY_DATA_MCP_URL` — City Data MCP endpoint.
-- `CITYSCOPE_CITY_LIVE_DATA_MCP_URL` — fixed-provider live GBFS MCP endpoint.
+- `CITYSCOPE_CITY_LIVE_DATA_MCP_URL` — fixed-provider live station MCP endpoint.
 - `CITYSCOPE_CITY_LIVE_DATA_MCP_ID_TOKEN_AUDIENCE` — private live MCP Cloud Run service URL used to mint the API identity token.
 - `CITYSCOPE_PARIS_ARCHIVE_BUCKET` — private Cloud Storage bucket used only by the archive job.
 - `CITYSCOPE_WEB_ORIGIN` — exact browser origin allowed by API CORS.

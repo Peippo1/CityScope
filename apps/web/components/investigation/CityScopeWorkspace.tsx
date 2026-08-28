@@ -214,7 +214,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
 
       <section className="dashboard-intro" aria-labelledby="page-title">
         <div><p className="eyebrow">Cross-city bike-share intelligence</p><h1 id="page-title">Compare movement. Find patterns. Plan better routes.</h1></div>
-        <p>Explore matched historical cycling activity across four cities, then inspect current station availability through separately labelled live networks.</p>
+        <p>Explore matched historical bike-share activity across four cities, then inspect optional station context where a live provider is available.</p>
       </section>
 
       <label className="city-switcher">City workspace<select value={selectedCity.id} onChange={(event) => selectCity(event.target.value)}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}{city.live_network && !city.historical ? " (live only)" : ""}</option>)}</select></label>

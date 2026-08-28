@@ -12,7 +12,7 @@ City data is abundant, but answering a practical question still involves too muc
 
 A normal chatbot can describe that workflow. CityScope is designed to carry it out.
 
-CityScope now compares a matched May 2026 historical cohort: London, New York City, Chicago, and Washington, DC. A user can inspect normalized demand patterns, then drill into one city's H3 hotspots, nearby amenities, or a bicycle route. NYC, Chicago, DC, and Paris also have a separate live mode: fixed official GBFS feeds show station availability and freshness, but are never ranked beside historical trip demand.
+CityScope now compares a matched May 2026 historical cohort: London, New York City, Chicago, and Washington, DC. A user can inspect normalized demand patterns, then drill into one city's H3 hotspots, nearby amenities, or a bicycle route. NYC, Chicago, DC, and Paris optionally expose a separate live mode: fixed official provider feeds show station availability and freshness, but are never ranked beside historical trip demand. London stays historical-only because Santander supply is not representative of the wider cycling market.
 
 ## Why a bounded agent
 

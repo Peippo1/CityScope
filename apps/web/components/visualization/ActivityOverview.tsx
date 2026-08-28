@@ -19,7 +19,7 @@ export function ActivityOverview({ cells, selectedH3Cell, onSelectH3Cell, cityNa
         <span className="live-label"><i aria-hidden="true" />Snapshot</span>
       </header>
       <dl className="activity-summary">
-        <div><dt>Mapped journeys</dt><dd>{total.toLocaleString()}</dd></div>
+        <div><dt>Observed journeys</dt><dd>{total.toLocaleString()}</dd></div>
         <div><dt>Peak area</dt><dd>{peak.toLocaleString()}</dd></div>
         <div><dt>H3 areas</dt><dd>{cells.length}</dd></div>
       </dl>
@@ -39,7 +39,7 @@ export function ActivityOverview({ cells, selectedH3Cell, onSelectH3Cell, cityNa
           </button>
         ))}
       </div>
-      <p className="chart-caption">Select a bar to focus its H3 area and include it in your next investigation.</p>
+      <p className="chart-caption">Historical bike-share snapshot; select a bar to focus its H3 area and include it in your next investigation.</p>
     </section>
   );
 }

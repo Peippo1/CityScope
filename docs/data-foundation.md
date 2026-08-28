@@ -17,6 +17,8 @@ TfL publishes Santander Cycle Hire journey data by week and documents journey ID
 
 TfL attribution is displayed in the application as: `Data provided by Transport for London`. Historical data is explicitly labelled as a snapshot and is not presented as live activity.
 
+These journeys represent Santander Cycle Hire only; they are not a census of private bikes or dockless operators. CityScope therefore describes the result as observed bike-share activity. TfL's keyless Active Travel Counts release is the next source to add when route-level evidence across the wider cycling market is required.
+
 ## Matched US production snapshots
 
 CityScope ingests the official May 2026 Citi Bike, Divvy, and Capital Bikeshare archives through one validated source-family adapter. ZIP members are read in bounded chunks. Source-local timestamps are localized using each city registry timezone before being converted to UTC for storage; hour, weekday, weekend, and May-window checks remain local to the city.

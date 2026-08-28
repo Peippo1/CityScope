@@ -93,6 +93,12 @@ def test_live_network_endpoint_rejects_a_historical_only_city():
     assert response.status_code == 404
 
 
+def test_live_network_endpoint_rejects_an_unknown_city():
+    response = ApiClient(app).get("/cities/berlin/live-network")
+
+    assert response.status_code == 404
+
+
 def test_activity_limit_is_validated():
     response = ApiClient(app).get("/cities/london/activity?limit=0")
 
