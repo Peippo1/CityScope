@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { InvestigationResult } from "../../types/investigation";
 
 function safeText(value: string) {
@@ -17,12 +18,25 @@ function evidenceValue(value: number, unit: string) {
   return value.toLocaleString();
 }
 
+async function shareRoute(result: InvestigationResult, onMessage: (message: string) => void) {
+  if (!result.route || typeof navigator === "undefined") return;
+  const text = `${result.route.origin.name} → ${result.route.destination.name} · ${(result.route.distance_m / 1000).toFixed(1)} km`;
+  const nav = navigator as Navigator & { share?: (data: { title: string; text: string }) => Promise<void> };
+  if (typeof nav.share === "function") {
+    try { await nav.share({ title: "CityScope route", text }); onMessage("Route shared."); } catch { /* user cancelled */ }
+  } else if (navigator.clipboard) {
+    await navigator.clipboard.writeText(text);
+    onMessage("Route copied — send it to your phone.");
+  }
+}
+
 function SourceBadge({ kind }: { kind: "historical" | "current" | "route" }) {
   const labels = { historical: "Historical mobility evidence", current: "Current Google Maps context", route: "Google bicycle route" };
   return <span className={`source-badge source-badge--${kind}`}>{labels[kind]}</span>;
 }
 
 export function InvestigationResultPanel({ result, onSuggestion }: { result: InvestigationResult; onSuggestion: (question: string) => void }) {
+  const [shareMessage, setShareMessage] = useState<string | null>(null);
   const historicalEvidence = result.evidence.filter((item) => item.source === "city_data");
   const currentEvidence = result.evidence.filter((item) => item.source === "google_maps");
   const places = Array.from(new Map(result.places.map((place) => [place.place_id, place])).values());
@@ -42,6 +56,7 @@ export function InvestigationResultPanel({ result, onSuggestion }: { result: Inv
         <dl className="route-metrics"><div><dt>Distance</dt><dd>{(result.route.distance_m / 1000).toFixed(1)} km</dd></div><div><dt>Estimated time</dt><dd>{Math.round(result.route.duration_seconds / 60)} min</dd></div></dl>
         {result.route.waypoints.length > 0 && <div className="waypoint-list"><h4>Why this route</h4><ul>{result.route.waypoints.map((point) => <li key={point.h3_cell}>{safeText(point.reason)}</li>)}</ul></div>}
         <p className="warning"><strong>Bicycle routing notice:</strong> {safeText(result.route.warning)}</p>
+        <div className="route-actions"><button type="button" className="secondary-button" onClick={() => void shareRoute(result, setShareMessage)}>Share to my phone</button>{shareMessage && <span className="share-message" role="status">{shareMessage}</span>}</div>
         {result.route.attribution_url && <a className="source-link" href={result.route.attribution_url} target="_blank" rel="noreferrer">{result.route.attribution_title ?? "Google Routes API"}</a>}
       </section>}
 

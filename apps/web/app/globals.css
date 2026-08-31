@@ -114,6 +114,9 @@ ul, ol { margin-top: 0; }
 .section-heading.compact h2 { font-size: 1.2rem; }
 .section-heading.compact p:last-child { margin-bottom: 14px; font-size: .82rem; }
 .prompt-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.activity-mode { display: inline-flex; gap: 4px; margin-bottom: 10px; padding: 4px; border-radius: 999px; background: var(--surface-subtle); }
+.activity-mode button { min-height: 32px; padding: 5px 11px; border: 0; border-radius: 999px; color: var(--text-muted); background: transparent; font-size: .76rem; font-weight: 700; }
+.activity-mode button.is-selected { color: var(--blue-strong); background: white; box-shadow: var(--shadow); }
 .prompt-chip { min-height: 40px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--blue-strong); background: var(--surface); font-size: .8rem; font-weight: 600; transition: background var(--motion), border-color var(--motion), transform var(--motion); }
 .prompt-chip:nth-child(2) { color: #137333; }
 .prompt-chip:nth-child(3) { color: #8a3b12; }
@@ -243,6 +246,8 @@ ul, ol { margin-top: 0; }
 .waypoint-list ul, .limitations ul { margin-bottom: 0; padding-left: 20px; }
 .warning { margin: 14px 0; padding: 10px 12px; border-left: 4px solid var(--yellow); color: #5f4500; background: var(--yellow-subtle); font-size: .82rem; }
 .source-link { display: inline-flex; min-height: 44px; align-items: center; font-weight: 700; }
+.route-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.share-message { color: var(--green); font-size: .76rem; font-weight: 600; }
 .observation-period { color: var(--text-muted); font-size: .8rem; }
 .metric-list, .place-list, .ranked-list { margin: 0; padding: 0; list-style: none; }
 .metric-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-block: 1px solid var(--border); }

@@ -103,12 +103,13 @@ const CITY_EXAMPLES: Record<string, { start: string; destination: string; exampl
   },
 };
 
-function examplesForCity(cityName: string) {
+function examplesForCity(cityName: string, mode: "bicycle" | "running") {
   const cityExamples = CITY_EXAMPLES[cityName]?.examples;
   // Keep the cross-city historical question available where data exists,
   // while making route-oriented suggestions city-specific.
   const historical = new Set(["London", "New York City", "Chicago", "Washington, DC"]);
-  return cityExamples ? [...(historical.has(cityName) ? [LONDON_EXAMPLES[0]] : []), ...cityExamples] : LONDON_EXAMPLES;
+  const examples = cityExamples ? [...(historical.has(cityName) ? [LONDON_EXAMPLES[0]] : []), ...cityExamples] : LONDON_EXAMPLES;
+  return mode === "running" ? [LONDON_EXAMPLES[LONDON_EXAMPLES.length - 1], ...(cityName === "New York City" ? [{ label: "Brooklyn 10K run", question: "I've just got to New York, where can I run around Brooklyn, what should I see and where can I stop for coffee at the end of my 10K?" }] : [])] : examples;
 }
 
 function cityPromptContext(cityName: string) {
@@ -125,12 +126,14 @@ type QuestionComposerProps = {
   isAuthenticated?: boolean;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  mode?: "bicycle" | "running";
+  onModeChange?: (mode: "bicycle" | "running") => void;
 };
 
-export function QuestionComposer({ cityName, datasetName, value, isSubmitting, error, isAuthenticated = true, onChange, onSubmit }: QuestionComposerProps) {
+export function QuestionComposer({ cityName, datasetName, value, isSubmitting, error, isAuthenticated = true, onChange, onSubmit, mode = "bicycle", onModeChange }: QuestionComposerProps) {
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [listening, setListening] = useState(false);
-  const examples = examplesForCity(cityName);
+  const examples = examplesForCity(cityName, mode);
   const promptContext = cityPromptContext(cityName);
   useEffect(() => { setVoiceAvailable(typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)); }, []);
   function toggleVoice() {
@@ -156,7 +159,11 @@ export function QuestionComposer({ cityName, datasetName, value, isSubmitting, e
       <div className="section-heading">
         <p className="eyebrow">Ask CityScope</p>
         <h2 id="investigate-heading">Plan a {cityName} journey</h2>
-        <p>Give us a named start point and destination, then describe the ride or run, stops, and places you want to discover.</p>
+        <p>Tell us where you want to go and what would make the {mode === "running" ? "run" : "ride"} memorable.</p>
+      </div>
+      <div className="activity-mode" role="group" aria-label="Journey type">
+        <button type="button" className={mode === "bicycle" ? "is-selected" : ""} aria-pressed={mode === "bicycle"} onClick={() => onModeChange?.("bicycle")}>🚲 Cycling</button>
+        <button type="button" className={mode === "running" ? "is-selected" : ""} aria-pressed={mode === "running"} onClick={() => onModeChange?.("running")}>🏃 Running</button>
       </div>
       <div className="prompt-list" aria-label="Example questions">
         {examples.map((example) => (

@@ -103,6 +103,10 @@ class ADKInvestigationModel:
                 raise RuntimeError("ADK returned no final response")
             return ToolDecision.model_validate_json(final_text)
         except Exception:
-            # Do not retry a provider/auth failure: the service policy will
-            # surface one sanitized failure and preserve the cost budget.
-            raise
+            # ADK versions can disagree on Runner/event shapes even when the
+            # underlying Gemini credential is healthy. Fall back to the
+            # direct GenAI structured-output adapter so a transient ADK
+            # runtime mismatch does not turn a valid user request into a
+            # generic failure. The service still applies the same policy and
+            # timeout boundary to the fallback call.
+            return await self.fallback.decide(question, context, tool_results)

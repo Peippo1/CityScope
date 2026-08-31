@@ -54,6 +54,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [activityError, setActivityError] = useState<string | null>(null);
   const [activityLoading, setActivityLoading] = useState(true);
   const [question, setQuestion] = useState("");
+  const [journeyMode, setJourneyMode] = useState<"bicycle" | "running">("bicycle");
   const [investigation, setInvestigation] = useState<InvestigationResult | null>(null);
   const [investigationError, setInvestigationError] = useState<string | null>(null);
   const [investigating, setInvestigating] = useState(false);
@@ -120,7 +121,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     try {
       const request = {
         city: selectedCity.id,
-        question: trimmedQuestion,
+        question: journeyMode === "running" && !/\b(run|running|runner|10k)\b/i.test(trimmedQuestion) ? `Plan this as a running route: ${trimmedQuestion}` : trimmedQuestion,
         context: { selected_h3_cells: selectedH3Cell ? [selectedH3Cell] : [], previous_turns: [], evidence_summary: undefined },
       } satisfies InvestigationRequest;
       const result = await services.investigate(request);
@@ -132,7 +133,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     } finally {
       setInvestigating(false);
     }
-  }, [auth, investigating, question, selectedCity.id, selectedH3Cell, services, user]);
+  }, [auth, investigating, journeyMode, question, selectedCity.id, selectedH3Cell, services, user]);
 
   const loadComparison = useCallback(async (metric = comparisonMetric) => {
     if (!services.getComparison) return;
@@ -193,6 +194,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     setInvestigation(null);
     setSubmittedRequest(null);
     setSelectedH3Cell(null);
+    setJourneyMode("bicycle");
     setLiveNetwork(null);
     setLiveError(null);
     if (city.live_network && !city.historical) setView("live");
@@ -249,7 +251,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
       </aside>}
 
       {view === "explore" && <><section id="explore" className="command-surface" aria-label={`${selectedCity.name} mobility investigation workspace`}>
-        <QuestionComposer cityName={selectedCity.name} datasetName={activity?.dataset_name} value={question} isSubmitting={investigating} error={investigationError} isAuthenticated={Boolean(user) || !auth} onChange={setQuestion} onSubmit={() => void submitQuestion()} />
+        <QuestionComposer cityName={selectedCity.name} datasetName={activity?.dataset_name} value={question} mode={journeyMode} onModeChange={setJourneyMode} isSubmitting={investigating} error={investigationError} isAuthenticated={Boolean(user) || !auth} onChange={setQuestion} onSubmit={() => void submitQuestion()} />
         {investigationError && <button type="button" className="secondary-button retry-investigation" onClick={() => void submitQuestion()}>Retry investigation</button>}
       </section>
 
