@@ -95,6 +95,6 @@ test("keeps the mobile workspace within the viewport", async ({ page }, testInfo
   await page.goto("/");
   const overflows = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
   expect(overflows).toBe(false);
-  await expect(page.getByRole("heading", { name: "Where should your next ride take you?" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Plan a London journey" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "London activity" })).toBeVisible();
 });
