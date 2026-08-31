@@ -18,7 +18,7 @@ async function shareRoute(result: InvestigationResult, onMessage: (message: stri
 
 export function InvestigationResultPanel({ result, onSuggestion, onSelectPlace }: { result: InvestigationResult; onSuggestion: (question: string) => void; onSelectPlace?: (place: InvestigationResult["places"][number]) => void }) {
   const [shareMessage, setShareMessage] = useState<string | null>(null);
-  const places = Array.from(new Map(result.places.map((place) => [place.place_id, place])).values()).slice(0, 8);
+  const places = Array.from(new Map(result.places.map((place) => [place.place_id, place])).values()).slice(0, 4);
   const statusLabels = { answered: "Ready to go", partial: "Route ready with a few gaps", unsupported: "Not supported", failed: "Could not answer" };
   return <article className={`result-panel result-panel--${result.status}`} aria-live="polite">
     <header className="result-header"><span className={`status-badge status-badge--${result.status}`}>{statusLabels[result.status]}</span><h2>{result.route ? `Your ${result.route.travel_mode === "walking" ? "run" : "ride"}` : "Your route"}</h2><p className="answer">{safeText(result.answer)}</p></header>
