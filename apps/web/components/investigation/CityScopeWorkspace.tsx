@@ -254,12 +254,15 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
       </section>
 
       <section className="visual-workspace" aria-label={`Interactive ${selectedCity.name} mobility visualizations`}>
+        <div className="visual-main">
         <section className="map-card" aria-labelledby="map-heading">
           <div className="map-card-heading"><div><p className="eyebrow">Spatial view</p><h2 id="map-heading">{selectedCity.name} activity</h2></div><div><label><input type="checkbox" checked={showEvidenceLayer} onChange={(event) => setShowEvidenceLayer(event.target.checked)} /> Show evidence layer</label><MapLegend hasPlaces={currentPlaces.length > 0 || Boolean(investigation?.places.length)} hasRoute={Boolean(investigation?.route)} /></div></div>
           {activityLoading && <div className="map-skeleton" aria-live="polite"><span>Loading {selectedCity.name} activity...</span></div>}
           {activityError && !activityLoading && <div className="empty-state" role="alert"><h3>{selectedCity.name} activity is unavailable</h3><p>{activityError}</p><button type="button" className="secondary-button" onClick={() => void loadActivity()}>Retry {selectedCity.name} activity</button></div>}
           {!activityLoading && !activityError && <CityMap cells={mapCells} places={mapPlaces} focusedPlace={focusedPlace} route={investigation?.route} selectedH3Cell={selectedH3Cell} onSelectH3Cell={showEvidenceLayer ? setSelectedH3Cell : undefined} cityName={selectedCity.name} bounds={selectedCity.bounds} showCells={showEvidenceLayer} />}
         </section>
+        {activity && <aside className="list-card activity-ranking-card" aria-labelledby="ranked-heading"><div className="section-heading compact"><p className="eyebrow">Historical ranking</p><h2 id="ranked-heading">Highest activity areas</h2><p>May 2026 starts and arrivals combined.</p></div><H3ActivityLayer cells={activity.cells} selectedH3Cell={selectedH3Cell} onSelectH3Cell={setSelectedH3Cell} /></aside>}
+        </div>
 
         <div className="visual-sidebar">
           {activity && <ActivityOverview cells={activity.cells} selectedH3Cell={selectedH3Cell} onSelectH3Cell={setSelectedH3Cell} cityName={selectedCity.name} />}
@@ -270,7 +273,6 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
 
       <section id="evidence" className={`evidence-workspace${investigation ? " has-result" : ""}`}>
         {investigation && <InvestigationResultPanel result={investigation} onSuggestion={setQuestion} />}
-        {activity && <aside className="list-card" aria-labelledby="ranked-heading"><div className="section-heading compact"><p className="eyebrow">Historical ranking</p><h2 id="ranked-heading">Highest activity areas</h2><p>May 2026 starts and arrivals combined.</p></div><H3ActivityLayer cells={activity.cells} selectedH3Cell={selectedH3Cell} onSelectH3Cell={setSelectedH3Cell} /></aside>}
       </section></>}
     </main>
   );
