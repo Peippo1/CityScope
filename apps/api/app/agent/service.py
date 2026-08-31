@@ -239,6 +239,8 @@ class InvestigationService:
         return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=f"Paris live network status returned {len(stations)} stations. This is current operational availability, not historical trip demand.", city_insights=[status], limitations=status.get("limitations", []), trace=trace))
 
     async def _route(self, iid: str, city: str, decision: ToolDecision, trace: list[TraceEvent], budget: ExecutionBudget) -> InvestigationResult:
+        travel_mode = decision.arguments.get("travel_mode", "bicycle")
+        mode_label = "running" if travel_mode == "walking" else "bicycle"
         if self.adk_runtime:
             self.record(iid, trace, kind="planning", label="route.intent", status="completed", provider="gemini", tool="route.intent", call=budget.model_rounds, limit=self.policy.max_model_rounds)
         gate = self.policy.reserve_route_resolution(budget)
@@ -256,7 +258,7 @@ class InvestigationService:
         city_gate = self.policy.allow()
         if not get_city(city).historical:
             envelope = ToolEnvelope(
-                dataset=DatasetMetadata(city=city, dataset_id="route-only", dataset_name=f"{get_city(city).name} route planning", snapshot_id="route-only", observation_start="", observation_end="", source_organisation="CityScope", mode="bicycle routing", h3_resolution=0, historical=False, available_metrics=[], supported_temporal_filters=[], limitations=[f"No historical CityScope mobility dataset is available for {get_city(city).name}; route suggestions use named places and Google Maps/Routes."], provenance_summary={}),
+                dataset=DatasetMetadata(city=city, dataset_id="route-only", dataset_name=f"{get_city(city).name} route planning", snapshot_id="route-only", observation_start="", observation_end="", source_organisation="CityScope", mode=f"{mode_label} routing", h3_resolution=0, historical=False, available_metrics=[], supported_temporal_filters=[], limitations=[f"No historical CityScope mobility dataset is available for {get_city(city).name}; route suggestions use named places and Google Maps/Routes."], provenance_summary={}),
                 results=[], evidence=[], map_layers=[], limitations=[f"No historical CityScope mobility dataset is available for {get_city(city).name}; route suggestions use named places and Google Maps/Routes."],
             )
             waypoints = []
@@ -281,13 +283,13 @@ class InvestigationService:
             self.record(iid, trace, kind="planning", label="deterministic waypoint selection", status="completed", provider="city_data", tool="city_data.find_hotspots", call=budget.city_data_calls, limit=self.policy.max_city_data_calls)
         return_to_origin = bool(decision.arguments.get("return_to_origin"))
         planner = JourneyPlanner(self.route_service, lambda: self.policy.reserve_route_call(budget).outcome == PolicyOutcome.ALLOW)
-        planned = await planner.plan(origin, destination, waypoints, return_to_origin)
+        planned = await planner.plan(origin, destination, waypoints, return_to_origin, travel_mode=travel_mode)
         if not planned:
-            self.record(iid,trace,kind="tool_call",label="Google Routes API bicycle route unavailable",status="failed",provider="google_routes",tool="routes.compute_bicycle_route",policy=self.policy.provider_error("Google Routes API", partial=True),call=budget.routes_calls,limit=self.policy.max_routes_calls)
-            return self.finish(InvestigationResult(investigation_id=iid,status="partial",answer="Historical route geography is available, but a bicycle route could not be computed.",dataset=envelope.dataset,evidence=envelope.evidence,map_layers=envelope.map_layers,city_insights=envelope.results,limitations=["Google Routes API did not return a validated bicycle route."],trace=trace))
+            self.record(iid,trace,kind="tool_call",label=f"Google Routes API {mode_label} route unavailable",status="failed",provider="google_routes",tool="routes.compute_bicycle_route",policy=self.policy.provider_error("Google Routes API", partial=True),call=budget.routes_calls,limit=self.policy.max_routes_calls)
+            return self.finish(InvestigationResult(investigation_id=iid,status="partial",answer=f"Historical route geography is available, but a {mode_label} route could not be computed.",dataset=envelope.dataset,evidence=envelope.evidence,map_layers=envelope.map_layers,city_insights=envelope.results,limitations=[f"Google Routes API did not return a validated {mode_label} route."],trace=trace))
         route, fallback = planned.outbound, planned.used_direct_fallback
         route_gate = self.policy.allow()
-        self.record(iid,trace,kind="tool_call",label="Called Google Routes API: deterministic bicycle route",status="completed",provider="google_routes",tool="routes.compute_bicycle_route",policy=route_gate,count=1,call=budget.routes_calls,limit=self.policy.max_routes_calls)
+        self.record(iid,trace,kind="tool_call",label=f"Called Google Routes API: deterministic {mode_label} route",status="completed",provider="google_routes",tool="routes.compute_bicycle_route",policy=route_gate,count=1,call=budget.routes_calls,limit=self.policy.max_routes_calls)
         templates = match_route_templates(
             origin.name,
             destination.name,
@@ -305,7 +307,7 @@ class InvestigationService:
         limitations = list(dict.fromkeys(envelope.limitations + [route.warning] + (["The route was computed directly after waypoint routing failed."] if fallback and not route.waypoints else [])))
         if planned.return_route:
             segments.append(JourneySegment(label="Return loop", purpose="Destination back to start", route=planned.return_route))
-            self.record(iid, trace, kind="tool_call", label="Called Google Routes API: return bicycle route", status="completed", provider="google_routes", tool="routes.compute_bicycle_route", policy=route_gate, count=1, call=budget.routes_calls, limit=self.policy.max_routes_calls)
+            self.record(iid, trace, kind="tool_call", label=f"Called Google Routes API: return {mode_label} route", status="completed", provider="google_routes", tool="routes.compute_bicycle_route", policy=route_gate, count=1, call=budget.routes_calls, limit=self.policy.max_routes_calls)
         elif return_to_origin:
             limitations.append("A return route could not be computed; the outbound route is still available.")
         requested_stops = list(dict.fromkeys(decision.arguments.get("requested_stops") or []))
@@ -341,7 +343,7 @@ class InvestigationService:
                 evidence = envelope.evidence
         else:
             evidence = envelope.evidence
-        provenance = ["Google Maps Grounding for named places", "Google Routes API for bicycle routing", "City Data MCP historical evidence"]
+        provenance = ["Google Maps Grounding for named places", f"Google Routes API for {mode_label} routing", "City Data MCP historical evidence"]
         if template:
             provenance.append(f"Curated route example: {template.name} ({template.source_url})")
         journey = JourneyPlan(
@@ -362,4 +364,4 @@ class InvestigationService:
             self.record(iid,trace,kind="synthesis",label="validate_route",status="completed",provider="google_routes",tool="routes.compute_bicycle_route",call=budget.routes_calls,limit=self.policy.max_routes_calls)
             self.record(iid,trace,kind="synthesis",label="compose_result",status="completed",policy=self.policy.allow())
             self.record(iid,trace,kind="synthesis",label="Investigation complete",status="completed",provider="gemini",policy=self.policy.allow())
-        return self.finish(InvestigationResult(investigation_id=iid,status="answered",answer=f"The validated bicycle journey from {origin.name} to {destination.name}" + (" and back" if return_to_origin else "") + f" is {route.distance_m/1000:.1f} km outbound and about {route.duration_seconds/60:.0f} minutes.",dataset=envelope.dataset,evidence=evidence,map_layers=envelope.map_layers,city_insights=envelope.results,route=route,journey_plan=journey,places=selected_stops,limitations=limitations,trace=trace))
+        return self.finish(InvestigationResult(investigation_id=iid,status="answered",answer=f"The validated {mode_label} journey from {origin.name} to {destination.name}" + (" and back" if return_to_origin else "") + f" is {route.distance_m/1000:.1f} km outbound and about {route.duration_seconds/60:.0f} minutes.",dataset=envelope.dataset,evidence=evidence,map_layers=envelope.map_layers,city_insights=envelope.results,route=route,journey_plan=journey,places=selected_stops,limitations=limitations,trace=trace))
