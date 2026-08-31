@@ -23,10 +23,11 @@ describe("QuestionComposer", () => {
   it("prevents blank and in-flight submissions", () => {
     const onSubmit = vi.fn();
     const { rerender } = render(<QuestionComposer cityName="London" value="" isSubmitting={false} onChange={vi.fn()} onSubmit={onSubmit} />);
-    expect(screen.getByRole("button", { name: "Investigate" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create route" })).toBeDisabled();
 
     rerender(<QuestionComposer cityName="London" value="Where are the hotspots?" isSubmitting={true} onChange={vi.fn()} onSubmit={onSubmit} />);
-    expect(screen.getByRole("button", { name: "Investigating…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Creating route…" })).toBeDisabled();
+    expect(screen.getByRole("status")).toBeVisible();
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

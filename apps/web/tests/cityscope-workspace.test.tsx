@@ -27,7 +27,7 @@ describe("CityScopeWorkspace", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "City" }), "new_york");
     await user.click(screen.getByRole("button", { name: /Running/ }));
     await user.type(screen.getByRole("textbox", { name: "Question" }), "A 10K around Brooklyn with coffee");
-    await user.click(screen.getByRole("button", { name: "Investigate" }));
+    await user.click(screen.getByRole("button", { name: "Create route" }));
     expect(investigate).toHaveBeenCalledWith(expect.objectContaining({ city: "new_york", question: "A 10K around Brooklyn with coffee" }));
     expect(await screen.findByText("A lovely route with places to pause.")).toBeVisible();
     expect(screen.getByText("Good places to pause")).toBeVisible();
@@ -38,7 +38,7 @@ describe("CityScopeWorkspace", () => {
     const investigate = vi.fn().mockResolvedValue(routeResult);
     render(<CityScopeWorkspace services={{ investigate }} />);
     await user.type(screen.getByRole("textbox", { name: "Question" }), "Fulham to Richmond Park");
-    await user.click(screen.getByRole("button", { name: "Investigate" }));
+    await user.click(screen.getByRole("button", { name: "Create route" }));
     expect(await screen.findByText("A lovely route with places to pause.")).toBeVisible();
     await user.selectOptions(screen.getByRole("combobox", { name: "City" }), "paris");
     expect(screen.queryByText("A lovely route with places to pause.")).not.toBeInTheDocument();

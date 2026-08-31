@@ -133,9 +133,20 @@ type QuestionComposerProps = {
 export function QuestionComposer({ cityName, datasetName, value, isSubmitting, error, isAuthenticated = true, onChange, onSubmit, mode = "bicycle", onModeChange }: QuestionComposerProps) {
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [listening, setListening] = useState(false);
+  const [generationStep, setGenerationStep] = useState(0);
   const examples = examplesForCity(cityName, mode);
   const promptContext = cityPromptContext(cityName);
   useEffect(() => { setVoiceAvailable(typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)); }, []);
+  const generationMessages = cityName === "Paris"
+    ? ["Finding a belle route…", "Connecting the sights…", "Picking a café stop…"]
+    : cityName === "Copenhagen"
+      ? ["Finding the hyggelig way…", "Following the harbour…", "Picking a coffee stop…"]
+      : ["Thinking about the good bits…", "Drawing your route…", "Picking lovely stops…"];
+  useEffect(() => {
+    if (!isSubmitting) { setGenerationStep(0); return; }
+    const timer = window.setInterval(() => setGenerationStep((step) => (step + 1) % generationMessages.length), 1200);
+    return () => window.clearInterval(timer);
+  }, [isSubmitting, generationMessages.length]);
   function toggleVoice() {
     if (!voiceAvailable || typeof window === "undefined") return;
     const Recognition = (window as Window & { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition }).SpeechRecognition ?? (window as Window & { webkitSpeechRecognition?: new () => SpeechRecognition }).webkitSpeechRecognition;
@@ -184,11 +195,11 @@ export function QuestionComposer({ cityName, datasetName, value, isSubmitting, e
             aria-describedby={error ? "investigation-error" : "question-help"}
           />
           {voiceAvailable && <button type="button" className="secondary-button" onClick={toggleVoice} aria-label={listening ? "Listening" : "Use voice input"}>{listening ? "Listening…" : "🎙 Voice"}</button>}
-          <button type="submit" disabled={isSubmitting || !value.trim()}>
-            {isSubmitting ? "Investigating…" : "Investigate"}
+          <button type="submit" className={isSubmitting ? "create-route-button is-generating" : "create-route-button"} disabled={isSubmitting || !value.trim()} aria-busy={isSubmitting}>
+            {isSubmitting ? "Creating route…" : "Create route"}
           </button>
         </div>
-        <p id="question-help" className="helper-text">Include a named start area such as {promptContext.start} · {cityName} journey planner · Google Maps, Routes, and grounded city evidence{!isAuthenticated ? " · sign in with Google to use agents" : ""}</p>
+        <p id="question-help" className="helper-text">{isSubmitting ? <span className="generation-status" role="status" aria-live="polite"><span className="generation-spinner" aria-hidden="true" />{generationMessages[generationStep]}</span> : <>Include a named start area such as {promptContext.start} · {cityName} journey planner · Google Maps, Routes, and grounded city evidence{!isAuthenticated ? " · sign in with Google to use agents" : ""}</>}</p>
         {error && <p id="investigation-error" className="inline-error" role="alert">{error}</p>}
       </form>
     </section>

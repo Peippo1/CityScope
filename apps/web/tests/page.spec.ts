@@ -10,7 +10,7 @@ test("renders a concise route result with stops and no legacy panels", async ({ 
   await page.route("**/investigate", (request) => request.fulfill({ json: route }));
   await page.goto("/");
   await page.getByRole("textbox", { name: "Question" }).fill("Cycle from King's Cross to Borough with coffee");
-  await page.getByRole("button", { name: "Investigate" }).click();
+  await page.getByRole("button", { name: "Create route" }).click();
   await expect(page.getByRole("heading", { name: "Your ride" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "King's Cross → Borough" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Good places to pause" })).toBeVisible();
