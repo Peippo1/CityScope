@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from apps.api.app.agent.adk_runtime import ADKInvestigationModel, _bounded_tool, build_root_agent
+from apps.api.app.agent.adk_runtime import ADKInvestigationModel, _bounded_tool, build_root_agent, heuristic_route_decision
 from apps.api.app.agent.model import GemmaJourneyCharacterScorer, JourneyCharacterScore
 
 
@@ -31,6 +31,17 @@ def test_bounded_tool_never_executes_a_provider_call() -> None:
     tool = _bounded_tool("maps.search_places")
     assert tool.__name__ == "maps_search_places"
     assert "delegated_to_deterministic_application" in tool("secret-free request")
+
+
+@pytest.mark.parametrize(("question", "origin", "destination"), [
+    ("Cycle from King's Cross to Camden with coffee", "King'S Cross", "Camden"),
+    ("Run around Hyde Park for 45 minutes", "Hyde Park", "Kensington Gardens"),
+    ("Bike from Central Park with food", "Central Park", "Prospect Park"),
+])
+def test_route_fallback_keeps_named_demo_endpoints(question, origin, destination):
+    decision = heuristic_route_decision(question)
+    assert decision.arguments["origin"] == origin
+    assert decision.arguments["destination"] == destination
 
 
 def test_gemma_score_schema_rejects_out_of_range_values() -> None:

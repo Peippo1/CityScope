@@ -32,6 +32,8 @@ def heuristic_route_decision(question: str) -> ToolDecision:
     """Return a safe route intent for demo continuity when Gemini is unavailable."""
     lowered = question.lower()
     pairs = (
+        ("king's cross", "camden"), ("king’s cross", "camden"),
+        ("hyde park", "kensington gardens"), ("central park", "prospect park"),
         ("fulham", "richmond park"), ("brooklyn", "prospect park"),
         ("dumbo", "brooklyn bridge park"), ("barceloneta", "port olímpic"),
         ("nyhavn", "amager strand"),
