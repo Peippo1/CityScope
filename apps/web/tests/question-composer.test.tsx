@@ -29,4 +29,16 @@ describe("QuestionComposer", () => {
     expect(screen.getByRole("button", { name: "Investigating…" })).toBeDisabled();
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  it("updates route examples and start-point guidance for the selected city", () => {
+    const { rerender } = render(<QuestionComposer cityName="London" value="" isSubmitting={false} onChange={vi.fn()} onSubmit={vi.fn()} />);
+    expect(screen.getByPlaceholderText(/Fulham or Greenwich to Richmond Park or a riverside route/)).toBeVisible();
+    expect(screen.getByText(/Include a named start area such as Fulham or Greenwich/)).toBeVisible();
+
+    rerender(<QuestionComposer cityName="Barcelona" value="" isSubmitting={false} onChange={vi.fn()} onSubmit={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Waterfront scenic ride" })).toBeVisible();
+    expect(screen.getByPlaceholderText(/Barceloneta or Eixample to Port Olímpic or Montjuïc/)).toBeVisible();
+    expect(screen.getByText(/Include a named start area such as Barceloneta or Eixample/)).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Fulham scenic loop" })).not.toBeInTheDocument();
+  });
 });
