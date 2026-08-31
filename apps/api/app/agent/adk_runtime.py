@@ -28,6 +28,26 @@ def _bounded_tool(name: str):
     return tool
 
 
+def heuristic_route_decision(question: str) -> ToolDecision:
+    """Return a safe route intent for demo continuity when Gemini is unavailable."""
+    lowered = question.lower()
+    pairs = (
+        ("fulham", "richmond park"), ("brooklyn", "prospect park"),
+        ("dumbo", "brooklyn bridge park"), ("barceloneta", "port olímpic"),
+        ("nyhavn", "amager strand"),
+    )
+    origin, destination = next(((a.title(), b.title()) for a, b in pairs if a in lowered), ("City centre", "a nearby park"))
+    return ToolDecision(
+        kind="call_tool", tool="route.intent",
+        arguments={
+            "origin": origin, "destination": destination,
+            "travel_mode": "walking" if any(term in lowered for term in ("run", "running", "10k")) else "bicycle",
+            "requested_stops": ["cafe", "point_of_interest"],
+            "preferences": ["scenic", "interesting"],
+        },
+    )
+
+
 def build_root_agent() -> Any | None:
     """Build the single root LlmAgent when google-adk is installed."""
 
@@ -88,11 +108,8 @@ class ADKInvestigationModel:
                 # Keep the demo useful during provider outages. This bounded
                 # parser only recognises curated endpoint pairs; it never
                 # invents coordinates, provider payloads, or arbitrary tools.
-                lowered = question.lower()
-                if any(term in lowered for term in ("run", "running", "cycle", "cycling", "bike", "ride", "route")):
-                    pairs = (("fulham", "richmond park"), ("brooklyn", "prospect park"), ("dumbo", "brooklyn bridge park"), ("barceloneta", "port olímpic"), ("nyhavn", "amager strand"))
-                    origin, destination = next(((a.title(), b.title()) for a, b in pairs if a in lowered), ("City centre", "a nearby park"))
-                    return ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": origin, "destination": destination, "travel_mode": "walking" if any(term in lowered for term in ("run", "running", "10k")) else "bicycle", "requested_stops": ["cafe", "point_of_interest"], "preferences": ["scenic", "interesting"]})
+                if any(term in question.lower() for term in ("run", "running", "cycle", "cycling", "bike", "ride", "route")):
+                    return heuristic_route_decision(question)
                 raise
         try:
             from google.adk.runners import Runner
@@ -122,4 +139,9 @@ class ADKInvestigationModel:
             # runtime mismatch does not turn a valid user request into a
             # generic failure. The service still applies the same policy and
             # timeout boundary to the fallback call.
-            return await self.fallback.decide(question, context, tool_results)
+            try:
+                return await self.fallback.decide(question, context, tool_results)
+            except Exception:
+                if any(term in question.lower() for term in ("run", "running", "cycle", "cycling", "bike", "ride", "route")):
+                    return heuristic_route_decision(question)
+                raise

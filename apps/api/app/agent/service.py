@@ -15,7 +15,7 @@ from ..schemas import CityComparisonResponse
 from .mcp_client import CityDataMcpClient
 from .live_mcp_client import CityLiveMcpClient
 from .model import GeminiInvestigationModel, InvestigationModel
-from .adk_runtime import ADKInvestigationModel
+from .adk_runtime import ADKInvestigationModel, heuristic_route_decision
 from .model import GemmaJourneyCharacterScorer
 from .places import AmenitySearchPlan, GoogleMapsGroundingClient, deterministic_amenity_analysis, normalize_amenity_plan
 from .policy import ExecutionBudget, GuardrailPolicy, PolicyCode, PolicyDecision, PolicyOutcome
@@ -139,8 +139,17 @@ class InvestigationService:
             final = decision
             gate = self.policy.check_model_decision(decision)
             if gate.outcome != PolicyOutcome.ALLOW:
-                self.record(iid, trace, kind="tool_call", label="Rejected model decision", status="rejected", tool=decision.tool, policy=gate)
-                return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The requested operation was rejected.", limitations=[gate.message], trace=trace))
+                # A provider can return a malformed route intent even when the
+                # user request is safe. Recover with the same bounded parser
+                # used during provider outages, then apply policy again.
+                if self.adk_runtime and decision.tool == "route.intent" and any(term in request.question.lower() for term in ("run", "running", "cycle", "cycling", "bike", "ride", "route")):
+                    decision = heuristic_route_decision(request.question)
+                    gate = self.policy.check_model_decision(decision)
+                if gate.outcome == PolicyOutcome.ALLOW:
+                    final = decision
+                else:
+                    self.record(iid, trace, kind="tool_call", label="Rejected model decision", status="rejected", tool=decision.tool, policy=gate)
+                    return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The requested operation was rejected.", limitations=[gate.message], trace=trace))
             requested_city = decision.arguments.get("city")
             if decision.tool != "compare_cities" and requested_city is not None and requested_city != request.city:
                 gate = PolicyDecision(outcome="reject", code=PolicyCode.UNSUPPORTED_CITY, message="Tool calls must stay within the selected city.")
