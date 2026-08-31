@@ -26,18 +26,19 @@ export function ActivityOverview({ cells, selectedH3Cell, onSelectH3Cell, cityNa
       <p className="activity-intro">Historical cycling activity can help you choose a lively starting point. Select an area to see it on the map.</p>
       <ol className="activity-highlights" aria-label={`Busiest ${cityName} cycling areas`}>
         {highlightCells.map((cell, index) => (
-          <button
-            type="button"
-            className={`activity-highlight${cell.h3_cell === selectedH3Cell ? " is-selected" : ""}`}
-            key={cell.h3_cell}
-            onClick={() => onSelectH3Cell(cell.h3_cell)}
-            aria-label={`Select ${cell.area_name ?? `area ${index + 1}`} with ${cell.total_journeys.toLocaleString()} journeys`}
-            aria-pressed={cell.h3_cell === selectedH3Cell}
-          >
-            <span className="activity-highlight-rank">{index + 1}</span>
-            <span className="activity-highlight-copy"><strong>{cell.area_name ?? `Area ${index + 1}`}</strong><small>{cell.origin_journeys.toLocaleString()} starts · {cell.destination_journeys.toLocaleString()} arrivals</small></span>
-            <span className="activity-highlight-value">{cell.total_journeys.toLocaleString()}<small>journeys</small></span>
-          </button>
+          <li key={cell.h3_cell}>
+            <button
+              type="button"
+              className={`activity-highlight${cell.h3_cell === selectedH3Cell ? " is-selected" : ""}`}
+              onClick={() => onSelectH3Cell(cell.h3_cell)}
+              aria-label={`Select ${cell.area_name ?? `area ${index + 1}`} with ${cell.total_journeys.toLocaleString()} journeys`}
+              aria-pressed={cell.h3_cell === selectedH3Cell}
+            >
+              <span className="activity-highlight-rank">{index + 1}</span>
+              <span className="activity-highlight-copy"><strong>{cell.area_name ?? `Area ${index + 1}`}</strong><small>{cell.origin_journeys.toLocaleString()} starts · {cell.destination_journeys.toLocaleString()} arrivals</small></span>
+              <span className="activity-highlight-value">{cell.total_journeys.toLocaleString()}<small>journeys</small></span>
+            </button>
+          </li>
         ))}
       </ol>
       <p className="chart-caption">{cityName} historical snapshot · not a live popularity ranking.</p>
