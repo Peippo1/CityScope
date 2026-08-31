@@ -29,6 +29,13 @@ def test_london_activity_endpoint_returns_typed_h3_activity():
     assert payload["cells"][0]["total_journeys"] >= payload["cells"][1]["total_journeys"]
 
 
+def test_activity_endpoint_default_limit_stays_within_h3_query_bound():
+    response = ApiClient(app).get("/cities/london/activity")
+
+    assert response.status_code == 200
+    assert len(response.json()["cells"]) <= 50
+
+
 def test_city_registry_and_normalized_comparison_endpoint():
     client = ApiClient(app)
     cities = client.get("/cities")

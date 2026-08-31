@@ -32,7 +32,7 @@ def compare_cities(cities: list[str] = Query(default=list(historical_city_ids())
 
 
 @router.get("/{city}/activity", response_model=ActivityResponse)
-def get_activity(city: str, limit: int = Query(default=100, ge=1, le=500)) -> ActivityResponse:
+def get_activity(city: str, limit: int = Query(default=50, ge=1, le=50)) -> ActivityResponse:
     if city not in historical_city_ids():
         raise HTTPException(status_code=404, detail="Historical activity is unavailable for this city")
     try:
