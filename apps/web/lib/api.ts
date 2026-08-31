@@ -5,13 +5,25 @@ const API_URL = process.env.NEXT_PUBLIC_CITYSCOPE_API_URL ?? "http://localhost:8
 
 async function apiRequest<T>(path: string, init: RequestInit | undefined, failureMessage: string): Promise<T> {
   let response: Response;
-  try {
-    response = await fetch(`${API_URL}${path}`, init);
-  } catch {
-    throw new Error("CityScope API is unreachable. Check the API service and try again.");
+  const method = (init?.method ?? "GET").toUpperCase();
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      response = await fetch(`${API_URL}${path}`, init);
+    } catch {
+      if (method === "GET" && attempt === 0) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        continue;
+      }
+      throw new Error("CityScope API is unreachable. Check the API service and try again.");
+    }
+    if (response.ok) return response.json() as Promise<T>;
+    if (method === "GET" && attempt === 0 && [502, 503, 504].includes(response.status)) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      continue;
+    }
+    throw new Error(`${failureMessage} (${response.status})`);
   }
-  if (!response.ok) throw new Error(`${failureMessage} (${response.status})`);
-  return response.json() as Promise<T>;
+  throw new Error(`${failureMessage} (503)`);
 }
 
 export async function getCityActivity(city = "london"): Promise<ActivityResponse> {
