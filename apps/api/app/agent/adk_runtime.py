@@ -10,6 +10,7 @@ import json
 import os
 import uuid
 import warnings
+import asyncio
 from typing import Any
 
 from .model import GeminiInvestigationModel
@@ -95,10 +96,11 @@ class ADKInvestigationModel:
             runner = Runner(agent=self._agent, app_name=app_name, session_service=sessions)
             prompt = json.dumps({"question": question, "context": context, "previous_tool_results": tool_results}, default=str)
             final_text = None
-            async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=types.Content(role="user", parts=[types.Part(text=prompt)])):
-                if getattr(event, "is_final_response", lambda: False)():
-                    parts = getattr(getattr(event, "content", None), "parts", []) or []
-                    final_text = next((part.text for part in parts if getattr(part, "text", None)), None)
+            async with asyncio.timeout(8):
+                async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=types.Content(role="user", parts=[types.Part(text=prompt)])):
+                    if getattr(event, "is_final_response", lambda: False)():
+                        parts = getattr(getattr(event, "content", None), "parts", []) or []
+                        final_text = next((part.text for part in parts if getattr(part, "text", None)), None)
             if not final_text:
                 raise RuntimeError("ADK returned no final response")
             return ToolDecision.model_validate_json(final_text)
