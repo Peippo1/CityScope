@@ -228,7 +228,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
       </header>
 
       <section className="dashboard-intro" aria-labelledby="page-title">
-        <div><p className="eyebrow">London journey planner</p><h1 id="page-title">Plan a better journey through the city.</h1></div>
+        <div><p className="eyebrow">{selectedCity.name} journey planner</p><h1 id="page-title">Plan a better journey through {selectedCity.name}.</h1></div>
         <p>Tell CityScope where you are going and what would make the ride memorable. It finds a route, useful stops, and grounded places to explore.</p>
       </section>
 

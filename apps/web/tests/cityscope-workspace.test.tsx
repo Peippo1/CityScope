@@ -165,6 +165,7 @@ describe("CityScopeWorkspace", () => {
     await user.click(await screen.findByRole("button", { name: "Open New York City activity" }));
 
     expect(screen.getByRole("combobox", { name: "City workspace" })).toHaveValue("new_york");
+    expect(screen.getByRole("heading", { name: "Plan a better journey through New York City." })).toBeVisible();
     expect(await screen.findByRole("heading", { name: "New York City activity" })).toBeVisible();
     expect(getActivity).toHaveBeenCalledWith("new_york");
   });
