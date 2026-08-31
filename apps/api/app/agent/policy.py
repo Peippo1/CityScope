@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from .places import MAX_MAPS_SEARCH_CALLS, AmenitySearchPlan
 from .schemas import InvestigationRequest, ToolDecision
+from .route_templates import CITY_ROUTE_TEMPLATES
 from ..cities import get_city
 from services.city_data_mcp.schemas import CompareCitiesRequest
 
@@ -86,8 +87,9 @@ class GuardrailPolicy:
         words = set(re.findall(r"[a-z]+", request.question.lower()))
         if self._prompt_injection_pattern.search(request.question) or self._raw_volume_pattern.search(request.question):
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSAFE_PROMPT, message="This request is outside the bounded CityScope investigation workflow.")
-        if not city.historical and words & self.historical_mode_terms:
-            return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_MODE, message=f"{city.name} supports current station availability only; historical demand, comparisons, and routes are unavailable.")
+        route_terms = {"route", "routing", "cycle", "cycling", "bicycle", "bike", "ride", "journey", "journeys"}
+        if not city.historical and (words & self.historical_mode_terms) - route_terms:
+            return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_MODE, message=f"{city.name} does not have a historical CityScope mobility dataset; route planning remains available where enabled.")
         if words & self.weather_terms:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_WEATHER, message="Weather is outside the current CityScope investigation boundary.")
         if words & self.unsupported_terms:
@@ -115,10 +117,25 @@ class GuardrailPolicy:
         if decision.tool not in self.allowed_tools:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_TOOL, message="The model requested an unsupported operation.")
         if decision.tool == "route.intent":
-            if set(decision.arguments) - {"origin", "destination"}:
+            allowed = {"origin", "destination", "return_to_origin", "requested_stops", "preferences", "template_id"}
+            if set(decision.arguments) - allowed:
                 return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.MODEL_COORDINATES_FORBIDDEN, message="Route coordinates and provider payloads must be selected by trusted backend code.")
             if not all(isinstance(decision.arguments.get(key), str) and decision.arguments[key].strip() for key in ("origin", "destination")):
                 return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message="A bicycle route requires named origins and destinations in the selected city.")
+            stops = decision.arguments.get("requested_stops", [])
+            allowed_stops = {"cafe", "restaurant", "public_bathroom", "shop", "bicycle_repair_shop", "point_of_interest"}
+            if not isinstance(stops, list) or len(stops) > 5 or any(stop not in allowed_stops for stop in stops):
+                return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message="Journey stops must use the bounded amenity categories.")
+            preferences = decision.arguments.get("preferences", [])
+            allowed_preferences = {"scenic", "quiet", "park", "coffee", "lunch", "interesting"}
+            if not isinstance(preferences, list) or len(preferences) > 6 or any(item not in allowed_preferences for item in preferences):
+                return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message="Journey preferences are outside the bounded planner vocabulary.")
+            template_id = decision.arguments.get("template_id")
+            # Template references are validated against the complete curated
+            # catalog; city ownership is enforced later by the matcher.
+            known_template_ids = {template.template_id for template in CITY_ROUTE_TEMPLATES}
+            if template_id is not None and (not isinstance(template_id, str) or len(template_id) > 80 or template_id not in known_template_ids):
+                return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message="Route template references must be bounded names.")
         if decision.tool == "compare_cities":
             try:
                 CompareCitiesRequest.model_validate(decision.arguments)

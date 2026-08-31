@@ -32,6 +32,10 @@ class GeminiDecision(BaseModel):
     categories: list[AmenityCategory] | None = None
     origin: str | None = None
     destination: str | None = None
+    return_to_origin: bool | None = None
+    requested_stops: list[AmenityCategory] | None = None
+    preferences: list[str] | None = None
+    template_id: str | None = None
     answer: str | None = None
     follow_up_suggestions: list[str] = Field(default_factory=list, max_length=3)
 
@@ -81,15 +85,15 @@ Use City Data MCP for historical mobility evidence and Google Maps Grounding Lit
 Never invent current or live facts. Supported questions include historical dataset description, H3 activity hotspots,
 metrics for supplied H3 cells, comparisons between supplied H3 groups, and amenity-enriched questions about cafes,
 coffee shops, bicycle repair shops, restaurants, shops, or public bathrooms around trusted candidate H3 cells.
-Reject questions about weather, traffic, demographics, revenue, forecasts, unnamed areas, or cities that do not match the selected request city. Historical cities are London, New York City, Chicago, and Washington, DC. Paris is a live network availability mode and does not support historical-demand claims or routes.
-For route.intent, return origin and destination as the user's named places. Do not call or construct a Routes API request; routing is a private backend execution step.
+Reject questions about weather, traffic, demographics, revenue, forecasts, unnamed areas, or cities that do not match the selected request city. Historical cities are London, New York City, Chicago, and Washington, DC; each has a small city-specific curated route library. Paris is a live network availability mode and does not support historical-demand claims or routes.
+For route.intent, return origin and destination as the user's named places. For a loop set return_to_origin=true. Extract only requested_stops from cafe, restaurant, public_bathroom, shop, bicycle_repair_shop, point_of_interest, and preferences from scenic, quiet, park, coffee, lunch, interesting. You may provide a short template_id only when the user clearly names a known route idea; otherwise the application matches curated route templates for the selected city deterministically. Do not call or construct a Routes API request; routing is a private backend execution step.
 Return JSON matching the requested schema. Call at most one tool per decision.
 Tools: describe_dataset(city); find_hotspots(city, metric, time_filter, limit);
 get_area_metrics(city, h3_cells, metrics, time_filter); compare_areas(city, area_groups, metrics, time_filter);
 compare_cities(cities, comparison_metric). Cross-city comparison accepts two to four historical cities and only these normalized metrics:
 trips_per_active_station_day, median_trip_duration_minutes, peak_hour_share, weekend_share, hotspot_concentration. Never rank raw totals.
 For amenity enrichment, use maps.search_places only after City Data has supplied candidate H3 cells.
-Its internal planning arguments are {{"h3_cells": [...], "categories": ["cafe"|"coffee_shop"|"bicycle_repair_shop"|"restaurant"|"shop"|"public_bathroom"]}}.
+Its internal planning arguments are {{"h3_cells": [...], "categories": ["cafe"|"coffee_shop"|"bicycle_repair_shop"|"restaurant"|"shop"|"public_bathroom"|"point_of_interest"]}}.
 The application derives all coordinates and sends the exact Google search_places schema. Never provide coordinates or Place IDs.
 Use 3 H3 cells and 1 amenity category by default. Use up to 5 cells or 2 categories only when the user explicitly asks for that broader comparison. Historical wording must identify the mobility snapshot; place wording must identify current Google Maps context.
 
@@ -117,6 +121,10 @@ Previous tool results: {json.dumps(tool_results, default=str)}
                 "categories": decision.categories,
                 "origin": decision.origin,
                 "destination": decision.destination,
+                "return_to_origin": decision.return_to_origin,
+                "requested_stops": decision.requested_stops,
+                "preferences": decision.preferences,
+                "template_id": decision.template_id,
             }.items()
             if value is not None
         }

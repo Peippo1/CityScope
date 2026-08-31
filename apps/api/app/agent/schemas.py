@@ -8,7 +8,8 @@ from pipelines.core.analytics_contract import MetricName, TimeFilter
 from ..cities import CityId
 from services.city_data_mcp.schemas import DatasetMetadata, Evidence, MapLayer
 
-AmenityCategory = Literal["cafe", "coffee_shop", "bicycle_repair_shop", "restaurant", "shop", "public_bathroom"]
+AmenityCategory = Literal["cafe", "coffee_shop", "bicycle_repair_shop", "restaurant", "shop", "public_bathroom", "point_of_interest"]
+JourneyStopCategory = Literal["cafe", "restaurant", "public_bathroom", "shop", "bicycle_repair_shop", "point_of_interest"]
 
 
 class ConversationTurn(BaseModel):
@@ -52,6 +53,7 @@ class InvestigationResult(BaseModel):
     places: list["PlaceResult"] = Field(default_factory=list)
     amenity_analysis: list[dict[str, Any]] = Field(default_factory=list)
     route: "RouteDetails | None" = None
+    journey_plan: "JourneyPlan | None" = None
     city_insights: list[dict[str, Any]] = Field(default_factory=list)
     map_layers: list[MapLayer] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
@@ -95,6 +97,27 @@ class PlaceResult(BaseModel):
     attribution_url: str | None = None
     category: AmenityCategory
     h3_cell: str
+
+
+class JourneySegment(BaseModel):
+    label: str
+    route: "RouteDetails"
+    purpose: str | None = None
+
+
+class JourneyPlan(BaseModel):
+    summary: str
+    segments: list[JourneySegment] = Field(default_factory=list, max_length=2)
+    selected_stops: list[PlaceResult] = Field(default_factory=list, max_length=20)
+    warnings: list[str] = Field(default_factory=list, max_length=10)
+    provenance: list[str] = Field(default_factory=list, max_length=10)
+    template_id: str | None = None
+    template_name: str | None = None
+    template_description: str | None = None
+    template_tags: list[str] = Field(default_factory=list, max_length=6)
+    template_source_url: str | None = None
+    template_notice: str | None = None
+    template_waypoint_hints: list[str] = Field(default_factory=list, max_length=4)
 
 
 from .route_service import RouteDetails  # noqa: E402  # Imported after schemas to avoid model import cycles.

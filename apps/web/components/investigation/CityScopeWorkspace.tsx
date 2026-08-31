@@ -38,7 +38,10 @@ const fallbackCities: CityCapability[] = [
   { id: "new_york", name: "New York City", historical: true, routes: true, live_network: true, timezone: "America/New_York", bounds: [40.49, -74.30, 40.92, -73.68] },
   { id: "chicago", name: "Chicago", historical: true, routes: true, live_network: true, timezone: "America/Chicago", bounds: [41.64, -87.95, 42.08, -87.52] },
   { id: "washington_dc", name: "Washington, DC", historical: true, routes: true, live_network: true, timezone: "America/New_York", bounds: [38.76, -77.25, 39.02, -76.85] },
-  { id: "paris", name: "Paris", historical: false, routes: false, live_network: true, timezone: "Europe/Paris", bounds: [48.75, 2.20, 48.95, 2.52] },
+  { id: "paris", name: "Paris", historical: false, routes: true, live_network: true, timezone: "Europe/Paris", bounds: [48.75, 2.20, 48.95, 2.52] },
+  { id: "copenhagen", name: "Copenhagen", historical: false, routes: true, live_network: false, timezone: "Europe/Copenhagen", bounds: [55.55, 12.40, 55.82, 12.75] },
+  { id: "barcelona", name: "Barcelona", historical: false, routes: true, live_network: false, timezone: "Europe/Madrid", bounds: [41.30, 2.02, 41.50, 2.30] },
+  { id: "madrid", name: "Madrid", historical: false, routes: true, live_network: false, timezone: "Europe/Madrid", bounds: [40.30, -3.85, 40.55, -3.55] },
 ];
 
 function messageFrom(reason: unknown, fallback: string) {
@@ -71,6 +74,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [liveLoading, setLiveLoading] = useState(false);
   const [currentPlaces, setCurrentPlaces] = useState<FocusedMapPlace[]>([]);
   const [focusedPlace, setFocusedPlace] = useState<FocusedMapPlace | null>(null);
+  const [showEvidenceLayer, setShowEvidenceLayer] = useState(false);
   const { auth, user } = useFirebaseUser();
 
   useEffect(() => {
@@ -224,8 +228,8 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
       </header>
 
       <section className="dashboard-intro" aria-labelledby="page-title">
-        <div><p className="eyebrow">Cross-city bike-share intelligence</p><h1 id="page-title">Compare movement. Find patterns. Plan better routes.</h1></div>
-        <p>Explore matched historical bike-share activity across four cities, then inspect optional station context where a live provider is available.</p>
+        <div><p className="eyebrow">London journey planner</p><h1 id="page-title">Plan a better journey through the city.</h1></div>
+        <p>Tell CityScope where you are going and what would make the ride memorable. It finds a route, useful stops, and grounded places to explore.</p>
       </section>
 
       <label className="city-switcher">City workspace<select value={selectedCity.id} onChange={(event) => selectCity(event.target.value)}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}{city.live_network && !city.historical ? " (live only)" : ""}</option>)}</select></label>
@@ -251,10 +255,10 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
 
       <section className="visual-workspace" aria-label={`Interactive ${selectedCity.name} mobility visualizations`}>
         <section className="map-card" aria-labelledby="map-heading">
-          <div className="map-card-heading"><div><p className="eyebrow">Spatial view</p><h2 id="map-heading">{selectedCity.name} activity</h2></div><MapLegend hasPlaces={currentPlaces.length > 0 || Boolean(investigation?.places.length)} hasRoute={Boolean(investigation?.route)} /></div>
+          <div className="map-card-heading"><div><p className="eyebrow">Spatial view</p><h2 id="map-heading">{selectedCity.name} activity</h2></div><div><label><input type="checkbox" checked={showEvidenceLayer} onChange={(event) => setShowEvidenceLayer(event.target.checked)} /> Show evidence layer</label><MapLegend hasPlaces={currentPlaces.length > 0 || Boolean(investigation?.places.length)} hasRoute={Boolean(investigation?.route)} /></div></div>
           {activityLoading && <div className="map-skeleton" aria-live="polite"><span>Loading {selectedCity.name} activity...</span></div>}
           {activityError && !activityLoading && <div className="empty-state" role="alert"><h3>{selectedCity.name} activity is unavailable</h3><p>{activityError}</p><button type="button" className="secondary-button" onClick={() => void loadActivity()}>Retry {selectedCity.name} activity</button></div>}
-          {!activityLoading && !activityError && <CityMap cells={mapCells} places={mapPlaces} focusedPlace={focusedPlace} route={investigation?.route} selectedH3Cell={selectedH3Cell} onSelectH3Cell={setSelectedH3Cell} cityName={selectedCity.name} bounds={selectedCity.bounds} />}
+          {!activityLoading && !activityError && <CityMap cells={mapCells} places={mapPlaces} focusedPlace={focusedPlace} route={investigation?.route} selectedH3Cell={selectedH3Cell} onSelectH3Cell={showEvidenceLayer ? setSelectedH3Cell : undefined} cityName={selectedCity.name} bounds={selectedCity.bounds} showCells={showEvidenceLayer} />}
         </section>
 
         <div className="visual-sidebar">

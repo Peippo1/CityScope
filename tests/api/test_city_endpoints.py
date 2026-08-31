@@ -35,7 +35,7 @@ def test_city_registry_and_normalized_comparison_endpoint():
     comparison = client.get("/cities/compare?metric=weekend_share")
 
     assert cities.status_code == 200
-    assert {city["id"] for city in cities.json()["cities"]} == {"london", "new_york", "chicago", "washington_dc", "paris"}
+    assert {city["id"] for city in cities.json()["cities"]} == {"london", "new_york", "chicago", "washington_dc", "paris", "copenhagen", "barcelona", "madrid"}
     assert comparison.status_code == 200
     assert comparison.json()["metric"] == "weekend_share"
     assert len(comparison.json()["cities"]) == 4

@@ -14,6 +14,7 @@ from .. import config  # noqa: F401  # Load the project environment before readi
 from ..cities import CityId, get_city
 from .schemas import AmenityCategory, PlaceResult
 from .route_service import ResolvedPlace
+from .errors import ProviderPayloadError, ProviderUnavailableError
 
 MAPS_MCP_URL = "https://mapstools.googleapis.com/mcp"
 DEFAULT_CANDIDATE_CELLS = 3
@@ -31,6 +32,7 @@ CATEGORY_QUERY = {
     "restaurant": "restaurants",
     "shop": "shops",
     "public_bathroom": "public bathrooms",
+    "point_of_interest": "interesting places and landmarks",
 }
 
 
@@ -50,7 +52,7 @@ def normalize_amenity_plan(question: str, plan: AmenitySearchPlan) -> AmenitySea
     """Keep normal enrichment small; retain larger plans only when explicitly requested."""
     lowered = question.lower()
     explicit_multi_category = (
-        sum(term in lowered for term in ("cafe", "cafés", "coffee shop", "coffee shops", "bike repair", "bicycle repair", "restaurant", "shop", "bathroom", "restroom", "toilet")) >= 2
+        sum(term in lowered for term in ("cafe", "cafés", "coffee shop", "coffee shops", "bike repair", "bicycle repair", "restaurant", "shop", "bathroom", "restroom", "toilet", "interesting", "landmark", "attraction")) >= 2
         or "both" in lowered
         or "and" in lowered and len(plan.categories) > 1
     )
@@ -117,7 +119,7 @@ class GoogleMapsGroundingClient:
 
     async def search_places(self, category: AmenityCategory, cell: str, city: CityId = "london") -> MapsSearchResult:
         if not self.api_key:
-            raise RuntimeError("GOOGLE_MAPS_GROUNDING_API_KEY is not configured")
+            raise ProviderUnavailableError("Google Maps", "API key is not configured")
         arguments = google_search_arguments(category, cell, city)
         headers = {
             "X-Goog-Api-Key": self.api_key,
@@ -129,17 +131,17 @@ class GoogleMapsGroundingClient:
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=self.timeout_s)) as session:
                     tools = await session.list_tools()
                     if "search_places" not in {tool.name for tool in tools.tools}:
-                        raise RuntimeError("Maps Grounding MCP does not expose search_places")
+                        raise ProviderPayloadError("Google Maps", "search_places tool is unavailable")
                     result = await session.call_tool("search_places", arguments)
                     if result.isError:
-                        raise RuntimeError("Maps Grounding MCP search_places failed")
+                        raise ProviderUnavailableError("Google Maps", "search_places call failed")
                     payload = _structured_payload(result)
                     return parse_search_result(payload, category, cell, city)
 
     async def resolve_location(self, query: str, city: CityId = "london") -> ResolvedPlace:
         """Resolve a named endpoint through Grounding search; never accept model coordinates."""
         if not self.api_key:
-            raise RuntimeError("GOOGLE_MAPS_GROUNDING_API_KEY is not configured")
+            raise ProviderUnavailableError("Google Maps", "API key is not configured")
         headers = {"X-Goog-Api-Key": self.api_key, "Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
         city_definition = get_city(city)
         arguments = {"text_query": f"{query}, {city_definition.maps_location}", "language_code": "en", "region_code": city_definition.region_code}
@@ -148,14 +150,14 @@ class GoogleMapsGroundingClient:
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=self.timeout_s)) as session:
                     tools = await session.list_tools()
                     if "search_places" not in {tool.name for tool in tools.tools}:
-                        raise RuntimeError("Maps Grounding MCP does not expose search_places")
+                        raise ProviderPayloadError("Google Maps", "search_places tool is unavailable")
                     result = await session.call_tool("search_places", arguments)
                     if result.isError:
-                        raise RuntimeError("Maps Grounding MCP location resolution failed")
+                        raise ProviderUnavailableError("Google Maps", "location resolution failed")
                     payload = _structured_payload(result)
         raw = next(iter(payload.get("places", [])), None)
         if not raw or not raw.get("location"):
-            raise RuntimeError(f"Google Maps could not resolve named location: {query}")
+            raise ProviderPayloadError("Google Maps", "named location could not be resolved")
         location = raw["location"]
         links = raw.get("googleMapsLinks") or {}
         return ResolvedPlace(name=raw.get("displayName") or raw.get("name") or query, place_id=raw.get("id"), latitude=float(location["latitude"]), longitude=float(location["longitude"]), maps_uri=links.get("placeUrl"))
@@ -173,7 +175,7 @@ def _structured_payload(result: Any) -> dict[str, Any]:
             value = json.loads(text)
             if isinstance(value, dict):
                 return value
-    raise RuntimeError("Maps Grounding MCP returned no structured search result")
+    raise ProviderPayloadError("Google Maps", "structured search result was missing")
 
 
 def parse_search_result(payload: dict[str, Any], category: AmenityCategory, h3_cell: str, city: CityId = "london") -> MapsSearchResult:

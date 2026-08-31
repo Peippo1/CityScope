@@ -321,6 +321,29 @@ def test_route_intent_executes_city_data_then_private_route_adapter_without_rout
     assert "compute_routes" not in {event.tool for event in result.trace}
 
 
+def test_route_intent_loop_adds_return_segment_and_keeps_two_route_calls() -> None:
+    mcp = FakeMcp(); maps = RouteMaps(); route_service = FakeRouteService()
+    service = InvestigationService(mcp_client=mcp, maps_client=maps, route_service=route_service, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "King's Cross", "destination": "Borough", "return_to_origin": True}),
+    ]))
+    result = asyncio.run(service.investigate(InvestigationRequest(question="Plan a loop from King's Cross to Borough and back.")))
+    assert result.status == "answered"
+    assert result.journey_plan is not None
+    assert [segment.label for segment in result.journey_plan.segments] == ["Outbound", "Return loop"]
+    assert len(route_service.calls) == 2
+
+
+def test_route_intent_includes_curated_template_metadata() -> None:
+    service = InvestigationService(mcp_client=FakeMcp(), maps_client=RouteMaps(), route_service=FakeRouteService(), model=FakeModel([
+        ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "Fulham", "destination": "Richmond Park", "preferences": ["scenic"]}),
+    ]))
+    result = asyncio.run(service.investigate(InvestigationRequest(question="Plan a scenic route from Fulham to Richmond Park.")))
+    assert result.journey_plan is not None
+    assert result.journey_plan.template_id == "fulham-richmond-park"
+    assert result.journey_plan.template_waypoint_hints
+    assert "not live popularity" in (result.journey_plan.template_notice or "")
+
+
 def test_agent_enforces_three_round_budget() -> None:
     mcp = FakeMcp()
     service = InvestigationService(mcp_client=mcp, model=FakeModel([

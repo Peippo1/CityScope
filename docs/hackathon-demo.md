@@ -2,7 +2,8 @@
 
 ## Judge story (2–3 minutes)
 
-1. Open the CityScope URL, choose **Compare demand intensity**, and submit the cross-city question. Show the sanitized ADK trace (`ADK investigation started` → `compare_cities` → `compose_result`) and point out that rankings use normalized metrics, never raw trip totals.
+1. Open the CityScope URL and submit: “I’m in Fulham and would like a scenic loop to Richmond Park with bathrooms, coffee, lunch, and interesting things to see.” Show the sanitized ADK trace (`ADK investigation started` → `route.intent` → Maps resolution → City Data waypoints → Google Routes → amenity search → `compose_result`).
+2. Point out the outbound and return segments, numbered place suggestions, Google Maps/Routes provenance, and the optional evidence-layer toggle. The H3 layer is hidden by default so the journey remains legible.
 2. Select London, NYC, Chicago, or Washington, DC and ask where historical cycling activity was highest; open the evidence disclosure to show deterministic City Data MCP provenance.
 3. Drill into New York City, switch from its historical activity to its Citi Bike live station map, and show bikes, docks, provider freshness, and the non-comparability statement. Switch to Paris to demonstrate the same bounded MCP contract across providers.
 4. Return to London and ask which busy areas have few cafés, then request a bicycle route between King's Cross and Borough.

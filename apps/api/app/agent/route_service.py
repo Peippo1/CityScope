@@ -8,6 +8,7 @@ from typing import Any, Literal, Protocol
 import httpx
 from h3 import cell_to_latlng
 from pydantic import BaseModel, Field
+from .errors import ProviderPayloadError, ProviderUnavailableError
 
 def h3_centroid(cell: str) -> tuple[float, float]:
     return tuple(cell_to_latlng(cell))
@@ -112,19 +113,22 @@ class GoogleRoutesService:
 
     async def compute_bicycle_route(self, origin: RouteLocation, destination: RouteLocation, waypoints: list[RouteWaypoint]) -> RouteDetails:
         if not self.api_key:
-            raise RuntimeError("GOOGLE_ROUTES_API_KEY is not configured")
+            raise ProviderUnavailableError("Google Routes", "API key is not configured")
         body = {"origin": self._endpoint(origin), "destination": self._endpoint(destination), "intermediates": [{"location": {"latLng": {"latitude": point.latitude, "longitude": point.longitude}}} for point in waypoints], "travelMode": "BICYCLE", "polylineQuality": "OVERVIEW", "polylineEncoding": "ENCODED_POLYLINE"}
         headers = {"X-Goog-Api-Key": self.api_key, "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,routes.legs.startLocation,routes.legs.endLocation", "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=self.timeout_s) as client:
             response = await client.post(self.url, json=body, headers=headers)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ProviderUnavailableError("Google Routes", "HTTP request failed") from exc
         routes = response.json().get("routes", [])
         if not routes:
-            raise RuntimeError("Google Routes API returned no bicycle route")
+            raise ProviderPayloadError("Google Routes", "No bicycle route returned")
         route = routes[0]
         polyline = route.get("polyline", {}).get("encodedPolyline")
         duration = route.get("duration", "")
         match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)s", str(duration))
         if not polyline or not match or float(route.get("distanceMeters", 0)) <= 0 or float(match.group(1)) <= 0:
-            raise RuntimeError("Google Routes API returned an invalid bicycle route")
+            raise ProviderPayloadError("Google Routes", "Google Routes API returned an invalid bicycle route")
         return RouteDetails(distance_m=int(route["distanceMeters"]), duration_seconds=float(match.group(1)), polyline=polyline, origin=origin, destination=destination, waypoints=waypoints, attribution_title="Google Routes API", attribution_url="https://developers.google.com/maps/documentation/routes")

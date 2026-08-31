@@ -21,9 +21,10 @@ type CityMapProps = {
   cityName?: string;
   bounds?: [number, number, number, number];
   ariaLabel?: string;
+  showCells?: boolean;
 };
 
-export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cell, onSelectH3Cell, onSelectPlace, cityName = "London", bounds = [51.28, -0.52, 51.72, 0.34], ariaLabel }: CityMapProps) {
+export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cell, onSelectH3Cell, onSelectPlace, cityName = "London", bounds = [51.28, -0.52, 51.72, 0.34], ariaLabel, showCells = false }: CityMapProps) {
   const node = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -45,7 +46,9 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
         restriction: { latLngBounds: { north: bounds[2], south: bounds[0], west: bounds[1], east: bounds[3] }, strictBounds: false },
       });
       const max = Math.max(...cells.map((cell) => cell.total_journeys), 1);
-      const polygons = cells.map((cell) => {
+      // A direct selection callback opts into the evidence layer for reusable
+      // map consumers; the workspace leaves the callback unset while hidden.
+      const polygons = (showCells || Boolean(onSelectH3Cell)) ? cells.map((cell) => {
         const path = cellToBoundary(cell.h3_cell).map(([lat, lng]) => ({ lat, lng }));
         const selected = cell.h3_cell === selectedH3Cell;
         const polygon = new google.maps.Polygon({
@@ -59,7 +62,7 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
         });
         polygon.addListener("click", () => onSelectH3Cell?.(cell.h3_cell));
         return polygon;
-      });
+      }) : [];
       const infoWindow = new google.maps.InfoWindow();
       const markers = places.map((place) => {
         const marker = new google.maps.Marker({
@@ -108,7 +111,7 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
       cleanups.push(() => { polygons.forEach((polygon) => polygon.setMap(null)); markers.forEach((marker) => marker.setMap(null)); focusedMarker?.setMap(null); routeMarkers.forEach((marker) => marker.setMap(null)); routeLine?.setMap(null); infoWindow.close(); });
     }).catch(() => { if (!cancelled) setLoadError(true); });
     return () => { cancelled = true; cleanups.forEach((cleanup) => cleanup()); };
-  }, [cells, places, focusedPlace, route, selectedH3Cell, onSelectH3Cell, onSelectPlace, cityName, bounds]);
+  }, [cells, places, focusedPlace, route, selectedH3Cell, onSelectH3Cell, onSelectPlace, cityName, bounds, showCells]);
 
   if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
     return <div className="map-placeholder" role="img" aria-label="Google Maps preview unavailable until a browser API key is configured">Google Maps preview requires NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. The ranked activity values remain available beside this panel.</div>;

@@ -9,6 +9,7 @@ import pandas as pd
 
 from ..cities import get_city, historical_city_ids
 from pipelines.core.analytics_contract import MetricName, TimeFilter
+from .query_adapter import DuckDbQueryAdapter
 
 
 COMPARISON_METRICS = {"trips_per_active_station_day", "median_trip_duration_minutes", "peak_hour_share", "weekend_share", "hotspot_concentration"}
@@ -21,6 +22,7 @@ class MobilityAnalytics:
         self.root = root
         self._comparison_cache: dict[tuple[str, str], float] = {}
         self._precomputed_comparison = self._load_precomputed_comparison() if use_precomputed else None
+        self._query_adapter = DuckDbQueryAdapter(self._connect)
 
     @property
     def metadata_path(self) -> Path:
@@ -63,10 +65,20 @@ class MobilityAnalytics:
 
     def get_area_metrics(self, city: str, h3_cells: list[str], metrics: list[MetricName], time_filter: TimeFilter) -> list[dict]:
         self._validate_cells(h3_cells)
+        if not time_filter.start_date and not time_filter.end_date and not time_filter.weekdays and time_filter.hour_start is None and time_filter.hour_end is None and time_filter.weekend is None and not time_filter.time_of_day and set(metrics).issubset({"starts", "ends", "total_activity"}):
+            _, journeys_path = self._dataset(city)
+            values = self._query_adapter.area_activity(journeys_path, h3_cells)
+            values = {cell: {**item, "total_activity": item["starts"] + item["ends"]} for cell, item in values.items()}
+            return [{"h3_cell": cell, **{metric: values.get(cell, {}).get(metric, 0) for metric in metrics}} for cell in h3_cells]
         values = self._metric_values(self._filtered_journeys(city, time_filter), metrics)
         return [{"h3_cell": cell, **{metric: int(values[metric].get(cell, 0)) if metric != "city_percentile" else round(float(values[metric].get(cell, 0)), 4) for metric in metrics}} for cell in h3_cells]
 
     def find_hotspots(self, city: str, metric: MetricName, time_filter: TimeFilter, limit: int) -> list[dict]:
+        if not time_filter.start_date and not time_filter.end_date and not time_filter.weekdays and time_filter.hour_start is None and time_filter.hour_end is None and time_filter.weekend is None and not time_filter.time_of_day and metric in {"starts", "ends", "total_activity"}:
+            _, journeys_path = self._dataset(city)
+            rows = self._query_adapter.hotspots(journeys_path, metric, limit)
+            maximum = int(rows[0][1]) if rows else 0
+            return [{"rank": index, "h3_cell": cell, "metric": metric, "value": int(value), "city_percentile": round(float(value / maximum), 4) if maximum else 0.0} for index, (cell, value) in enumerate(rows, start=1)]
         values = self._metric_values(self._filtered_journeys(city, time_filter), [metric])[metric]
         maximum = max(values.values(), default=0)
         return [{"rank": index, "h3_cell": cell, "metric": metric, "value": int(value) if metric != "city_percentile" else round(float(value), 4), "city_percentile": round(float(value / maximum), 4) if maximum else 0.0} for index, (cell, value) in enumerate(sorted(values.items(), key=lambda item: (-item[1], item[0]))[:limit], start=1)]

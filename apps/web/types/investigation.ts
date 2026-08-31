@@ -1,5 +1,5 @@
 export type InvestigationRequest = {
-  city: "london" | "new_york" | "chicago" | "washington_dc" | "paris";
+  city: "london" | "new_york" | "chicago" | "washington_dc" | "paris" | "copenhagen" | "barcelona" | "madrid";
   question: string;
   context: { selected_h3_cells: string[]; previous_turns: { role: "user" | "assistant"; content: string }[]; evidence_summary?: string };
 };
@@ -14,6 +14,7 @@ export type InvestigationResult = {
   amenity_analysis: { h3_cell: string; category: string; place_count: number; mobility_value: number; scarcity_rank: number }[];
   city_insights: { h3_cell?: string; value?: number; metric?: string; [key: string]: unknown }[];
   route?: { travel_mode: "bicycle"; distance_m: number; duration_seconds: number; polyline: string; origin: { name: string; place_id?: string; latitude: number; longitude: number; maps_uri?: string }; destination: { name: string; place_id?: string; latitude: number; longitude: number; maps_uri?: string }; waypoints: { h3_cell: string; latitude: number; longitude: number; mobility_value: number; score: number; reason: string }[]; source: "google_routes_api"; attribution_title?: string; attribution_url?: string; warning: string };
+  journey_plan?: { summary: string; segments: { label: string; purpose?: string; route: NonNullable<InvestigationResult["route"]> }[]; selected_stops: InvestigationResult["places"]; warnings: string[]; provenance: string[]; template_id?: string; template_name?: string; template_description?: string; template_tags: string[]; template_source_url?: string; template_notice?: string; template_waypoint_hints: string[] };
   map_layers: { h3_cell: string; metric: string; value: number; rank?: number }[];
   limitations: string[];
   trace: { kind: string; label: string; status: string; tool?: string; result_count?: number; latency_ms?: number; policy_code?: string; call_number?: number; budget_limit?: number }[];

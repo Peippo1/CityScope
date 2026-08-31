@@ -4,10 +4,12 @@ import asyncio
 import json
 import time
 import uuid
+import h3
 from typing import Any
 
 from services.city_data_mcp.schemas import DatasetMetadata, Evidence, ToolEnvelope
 from .. import config
+from ..cities import get_city
 from ..schemas import CityComparisonResponse
 
 from .mcp_client import CityDataMcpClient
@@ -18,7 +20,9 @@ from .model import GemmaJourneyCharacterScorer
 from .places import AmenitySearchPlan, GoogleMapsGroundingClient, deterministic_amenity_analysis, normalize_amenity_plan
 from .policy import ExecutionBudget, GuardrailPolicy, PolicyCode, PolicyDecision, PolicyOutcome
 from .route_service import GoogleRoutesService, RouteDetails, RouteExecutor, select_waypoints
-from .schemas import InvestigationRequest, InvestigationResult, TraceEvent, ToolDecision
+from .route_templates import match_route_templates
+from .journey_planner import JourneyPlanner
+from .schemas import InvestigationRequest, InvestigationResult, TraceEvent, ToolDecision, JourneyPlan, JourneySegment
 from .telemetry import TelemetryAdapter, TelemetryEvent, telemetry_from_env
 
 
@@ -102,7 +106,7 @@ class InvestigationService:
         if gate.outcome != PolicyOutcome.ALLOW:
             self.record(iid, trace, kind="planning", label="Rejected request at the deterministic policy boundary", status="rejected", policy=gate)
             return self.finish(InvestigationResult(investigation_id=iid, status="unsupported", answer=gate.message, limitations=["No model or provider call was made."], trace=trace))
-        if request.city == "paris":
+        if request.city == "paris" and not any(term in request.question.lower() for term in ("route", "cycling", "cycle", "bicycle", "ride", "journey")):
             return await self._paris_live(iid, trace)
         if self.adk_runtime:
             self.record(iid, trace, kind="planning", label="CityScope ADK investigation started", status="completed", provider="gemini", call=1, limit=self.policy.max_model_rounds)
@@ -249,36 +253,113 @@ class InvestigationService:
         if location_gate.outcome != PolicyOutcome.ALLOW:
             self.record(iid,trace,kind="tool_call",label="Rejected route endpoints outside selected city",status="rejected",provider="google_maps",tool="maps.search_places",policy=location_gate)
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="The route endpoints are outside the selected city.",limitations=[location_gate.message],trace=trace))
-        city_gate=self.policy.check_city_data_call(budget)
-        if city_gate.outcome != PolicyOutcome.ALLOW:
+        city_gate = self.policy.allow()
+        if not get_city(city).historical:
+            envelope = ToolEnvelope(
+                dataset=DatasetMetadata(city=city, dataset_id="route-only", dataset_name=f"{get_city(city).name} route planning", snapshot_id="route-only", observation_start="", observation_end="", source_organisation="CityScope", mode="bicycle routing", h3_resolution=0, historical=False, available_metrics=[], supported_temporal_filters=[], limitations=[f"No historical CityScope mobility dataset is available for {get_city(city).name}; route suggestions use named places and Google Maps/Routes."], provenance_summary={}),
+                results=[], evidence=[], map_layers=[], limitations=[f"No historical CityScope mobility dataset is available for {get_city(city).name}; route suggestions use named places and Google Maps/Routes."],
+            )
+            waypoints = []
+        else:
+            city_gate=self.policy.check_city_data_call(budget)
+        if get_city(city).historical and city_gate.outcome != PolicyOutcome.ALLOW:
             self.record(iid,trace,kind="tool_call",label="Rejected City Data route geography call",status="rejected",provider="city_data",tool="city_data.find_hotspots",policy=city_gate)
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Historical route geography was rejected.",limitations=[city_gate.message],trace=trace))
-        try: envelope=ToolEnvelope.model_validate(await self.mcp_client.call("find_hotspots",{"city":city,"metric":"total_activity","limit":10,"time_filter":{}}))
+        try:
+            if get_city(city).historical:
+                envelope=ToolEnvelope.model_validate(await self.mcp_client.call("find_hotspots",{"city":city,"metric":"total_activity","limit":10,"time_filter":{}}))
         except Exception:
             failure=self.policy.provider_error("City Data MCP")
             self.record(iid,trace,kind="tool_call",label="City Data route geography unavailable",status="failed",provider="city_data",tool="city_data.find_hotspots",policy=failure,call=budget.city_data_calls,limit=self.policy.max_city_data_calls)
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Historical route geography is unavailable.",limitations=[failure.message],trace=trace))
-        self.record(iid,trace,kind="tool_call",label="Called City Data MCP: find_hotspots for route geography",status="completed",provider="city_data",tool="city_data.find_hotspots",policy=city_gate,count=len(envelope.results),call=budget.city_data_calls,limit=self.policy.max_city_data_calls)
-        waypoints=select_waypoints(origin,destination,envelope.results); gate=self.policy.check_waypoints(waypoints)
+        if get_city(city).historical:
+            self.record(iid,trace,kind="tool_call",label="Called City Data MCP: find_hotspots for route geography",status="completed",provider="city_data",tool="city_data.find_hotspots",policy=city_gate,count=len(envelope.results),call=budget.city_data_calls,limit=self.policy.max_city_data_calls)
+            waypoints=select_waypoints(origin,destination,envelope.results)
+        gate=self.policy.check_waypoints(waypoints)
         if gate.outcome != PolicyOutcome.ALLOW: return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Route waypoints were rejected.",limitations=[gate.message],trace=trace))
-        if self.adk_runtime:
+        if self.adk_runtime and get_city(city).historical:
             self.record(iid, trace, kind="planning", label="deterministic waypoint selection", status="completed", provider="city_data", tool="city_data.find_hotspots", call=budget.city_data_calls, limit=self.policy.max_city_data_calls)
-        route: RouteDetails|None=None; fallback=False
-        for attempt,points in enumerate((waypoints,[]),1):
-            if attempt==2 and not waypoints: break
-            route_gate=self.policy.reserve_route_call(budget)
-            if route_gate.outcome != PolicyOutcome.ALLOW: break
-            try:
-                route=await self.route_service.compute_bicycle_route(origin,destination,points)
-                if self.adk_runtime:
-                    self.record(iid,trace,kind="tool_call",label="Google Routes BICYCLE",status="completed",provider="google_routes",tool="routes.compute_bicycle_route",policy=route_gate,call=budget.routes_calls,limit=self.policy.max_routes_calls)
-                self.record(iid,trace,kind="tool_call",label="Called Google Routes API: deterministic bicycle route",status="completed",provider="google_routes",tool="routes.compute_bicycle_route",policy=route_gate,count=1,call=budget.routes_calls,limit=self.policy.max_routes_calls); break
-            except Exception:
-                fallback=bool(points); self.record(iid,trace,kind="tool_call",label="Google Routes API bicycle route attempt unavailable",status="failed",provider="google_routes",tool="routes.compute_bicycle_route",policy=self.policy.provider_error("Google Routes API",partial=True),call=budget.routes_calls,limit=self.policy.max_routes_calls)
-        if not route: return self.finish(InvestigationResult(investigation_id=iid,status="partial",answer="Historical route geography is available, but a bicycle route could not be computed.",dataset=envelope.dataset,evidence=envelope.evidence,map_layers=envelope.map_layers,city_insights=envelope.results,limitations=["Google Routes API did not return a validated bicycle route."],trace=trace))
+        return_to_origin = bool(decision.arguments.get("return_to_origin"))
+        planner = JourneyPlanner(self.route_service, lambda: self.policy.reserve_route_call(budget).outcome == PolicyOutcome.ALLOW)
+        planned = await planner.plan(origin, destination, waypoints, return_to_origin)
+        if not planned:
+            self.record(iid,trace,kind="tool_call",label="Google Routes API bicycle route unavailable",status="failed",provider="google_routes",tool="routes.compute_bicycle_route",policy=self.policy.provider_error("Google Routes API", partial=True),call=budget.routes_calls,limit=self.policy.max_routes_calls)
+            return self.finish(InvestigationResult(investigation_id=iid,status="partial",answer="Historical route geography is available, but a bicycle route could not be computed.",dataset=envelope.dataset,evidence=envelope.evidence,map_layers=envelope.map_layers,city_insights=envelope.results,limitations=["Google Routes API did not return a validated bicycle route."],trace=trace))
+        route, fallback = planned.outbound, planned.used_direct_fallback
+        route_gate = self.policy.allow()
+        self.record(iid,trace,kind="tool_call",label="Called Google Routes API: deterministic bicycle route",status="completed",provider="google_routes",tool="routes.compute_bicycle_route",policy=route_gate,count=1,call=budget.routes_calls,limit=self.policy.max_routes_calls)
+        templates = match_route_templates(
+            origin.name,
+            destination.name,
+            decision.arguments.get("preferences"),
+            decision.arguments.get("requested_stops"),
+            city=city,
+        )
+        requested_template_id = decision.arguments.get("template_id")
+        if requested_template_id:
+            templates = [template for template in templates if template.template_id == requested_template_id]
+        template = templates[0] if templates else None
+        if template:
+            self.record(iid, trace, kind="planning", label=f"Matched curated route template: {template.name}", status="completed", provider="city_data", tool="route.template")
+        segments = [JourneySegment(label="Outbound", purpose="Start to destination", route=route)]
+        limitations = list(dict.fromkeys(envelope.limitations + [route.warning] + (["The route was computed directly after waypoint routing failed."] if fallback and not route.waypoints else [])))
+        if planned.return_route:
+            segments.append(JourneySegment(label="Return loop", purpose="Destination back to start", route=planned.return_route))
+            self.record(iid, trace, kind="tool_call", label="Called Google Routes API: return bicycle route", status="completed", provider="google_routes", tool="routes.compute_bicycle_route", policy=route_gate, count=1, call=budget.routes_calls, limit=self.policy.max_routes_calls)
+        elif return_to_origin:
+            limitations.append("A return route could not be computed; the outbound route is still available.")
+        requested_stops = list(dict.fromkeys(decision.arguments.get("requested_stops") or []))
+        if "interesting" in (decision.arguments.get("preferences") or []) and "point_of_interest" not in requested_stops:
+            requested_stops.append("point_of_interest")
+        requested_stops = requested_stops[:2]
+        selected_stops = []
+        if requested_stops:
+            trusted_cells = [item.h3_cell for item in envelope.map_layers[:3]]
+            if not trusted_cells and not get_city(city).historical:
+                trusted_cells = [h3.latlng_to_cell(origin.latitude, origin.longitude, 9), h3.latlng_to_cell(destination.latitude, destination.longitude, 9)]
+            if trusted_cells:
+                try:
+                    plan = AmenitySearchPlan(h3_cells=trusted_cells, categories=requested_stops)
+                    maps_gate = self.policy.check_maps_plan(plan, trusted_cells, budget)
+                    if maps_gate.outcome == PolicyOutcome.ALLOW:
+                        async def search(cell: str, category: str):
+                            return await self.maps_client.search_places(category, cell, city)
+                        found = await asyncio.gather(*(search(cell, category) for cell in plan.h3_cells for category in plan.categories))
+                        for result in found:
+                            selected_stops.extend(result.places)
+                        self.record(iid, trace, kind="tool_call", label="Called Google Maps Grounding MCP: journey amenity search", status="completed", provider="google_maps", tool="maps.search_places", policy=maps_gate, count=len(selected_stops), call=budget.maps_calls, limit=self.policy.max_maps_calls)
+                        if selected_stops:
+                            evidence = list(envelope.evidence) + [Evidence(metric="journey_place_count", value=len(selected_stops), unit="places", source_aggregate="maps.search_places", filters_applied={"categories": plan.categories}, h3_cells=plan.h3_cells)]
+                        else:
+                            evidence = envelope.evidence
+                    else:
+                        evidence = envelope.evidence
+                except Exception:
+                    evidence = envelope.evidence
+                    limitations.append("Google Maps place suggestions were unavailable; verify stops locally.")
+            else:
+                evidence = envelope.evidence
+        else:
+            evidence = envelope.evidence
+        provenance = ["Google Maps Grounding for named places", "Google Routes API for bicycle routing", "City Data MCP historical evidence"]
+        if template:
+            provenance.append(f"Curated route example: {template.name} ({template.source_url})")
+        journey = JourneyPlan(
+            summary=f"{origin.name} to {destination.name}" + (" and back" if return_to_origin else ""),
+            segments=segments,
+            selected_stops=selected_stops,
+            warnings=limitations,
+            provenance=provenance,
+            template_id=template.template_id if template else None,
+            template_name=template.name if template else None,
+            template_description=template.description if template else None,
+            template_tags=list(template.tags) if template else [],
+            template_source_url=template.source_url if template else None,
+            template_notice="Curated route example, not live popularity data; Google Routes supplies the final geometry." if template else None,
+            template_waypoint_hints=list(template.waypoint_hints) if template else [],
+        )
         if self.adk_runtime:
             self.record(iid,trace,kind="synthesis",label="validate_route",status="completed",provider="google_routes",tool="routes.compute_bicycle_route",call=budget.routes_calls,limit=self.policy.max_routes_calls)
             self.record(iid,trace,kind="synthesis",label="compose_result",status="completed",policy=self.policy.allow())
             self.record(iid,trace,kind="synthesis",label="Investigation complete",status="completed",provider="gemini",policy=self.policy.allow())
-        limitations=list(dict.fromkeys(envelope.limitations+[route.warning]+(["The route was computed directly after waypoint routing failed."] if fallback and not route.waypoints else [])))
-        return self.finish(InvestigationResult(investigation_id=iid,status="answered",answer=f"The validated bicycle route from {origin.name} to {destination.name} is {route.distance_m/1000:.1f} km and about {route.duration_seconds/60:.0f} minutes.",dataset=envelope.dataset,evidence=envelope.evidence,map_layers=envelope.map_layers,city_insights=envelope.results,route=route,limitations=limitations,trace=trace))
+        return self.finish(InvestigationResult(investigation_id=iid,status="answered",answer=f"The validated bicycle journey from {origin.name} to {destination.name}" + (" and back" if return_to_origin else "") + f" is {route.distance_m/1000:.1f} km outbound and about {route.duration_seconds/60:.0f} minutes.",dataset=envelope.dataset,evidence=evidence,map_layers=envelope.map_layers,city_insights=envelope.results,route=route,journey_plan=journey,places=selected_stops,limitations=limitations,trace=trace))

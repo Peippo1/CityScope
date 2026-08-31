@@ -1,6 +1,6 @@
 # CityScope
 
-**Evidence-grounded bike-share intelligence across comparable cities.**
+**An evidence-grounded London journey planner for better bicycle days out.**
 
 [![CityScope checks](https://github.com/Peippo1/CityScope/actions/workflows/ci.yml/badge.svg)](https://github.com/Peippo1/CityScope/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
@@ -10,7 +10,7 @@
 ![Google Cloud](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run%20%2B%20Maps-4285F4?logo=googlecloud&logoColor=white)
 ![License](https://img.shields.io/badge/license-private-lightgrey)
 
-CityScope turns natural-language questions into bounded, traceable investigations over historical bike-share activity. London, New York City, Chicago, and Washington, DC are compared through normalized May 2026 metrics. New York City, Chicago, Washington, DC, and Paris expose optional current station availability; London is intentionally historical-only so station supply is not mistaken for city-wide cycling demand. It combines deterministic H3 and DuckDB analytics with a Google ADK Runner and root LlmAgent powered by Gemini 3.5 Flash, current Google Maps context, bicycle routing, and user-owned investigation history. ADK plans bounded actions; the application remains authoritative for MCP execution, waypoint selection, Routes, validation, and provenance. An optional Gemma 4 scorer adds bounded journey-character context without becoming a critical dependency.
+CityScope turns a natural-language outing request into a bounded, traceable London journey plan: named endpoints, a scenic or quiet bicycle route, useful bathroom/coffee/lunch stops, and interesting places to explore. Historical bike-share activity remains hidden supporting evidence for corridor selection; Compare and Live modes remain available as secondary views. It combines deterministic H3 and DuckDB analytics with a Google ADK Runner and root LlmAgent powered by Gemini 3.5 Flash, current Google Maps context, bicycle routing, and user-owned investigation history. ADK plans bounded actions; the application remains authoritative for MCP execution, waypoint selection, Routes, validation, and provenance.
 
 **[Open the live CityScope app](https://cityscope-506222.web.app)**
 
@@ -26,9 +26,15 @@ CityScope keeps the map, interactive activity chart, request flow, and investiga
   <img src="docs/assets/cityscope-mobile.png" width="320" alt="CityScope mobile investigation workspace" />
 </p>
 
-The current cross-city slice can:
+The current prototype can:
 
-- rank historical cycling activity across H3 cells in London, NYC, Chicago, and Washington, DC;
+- plan a London journey with outbound and optional return-loop bicycle legs;
+- use curated London route ideas including Richmond Park, Thames Path, Regent's Canal, Greenwich, Wandle Trail, Lee Valley, and Epping Forest as scenic planning templates;
+- use city-specific route ideas for New York City, Chicago, and Washington, DC when those route-capable workspaces are selected;
+- explore curated European route concepts in Paris, Copenhagen, Barcelona, and Madrid; these are route-planning cities without historical CityScope mobility snapshots;
+- suggest bounded Google Maps stops for coffee, bathrooms, lunch, shops, or repairs;
+- accept optional browser-native voice input in the journey composer;
+- keep H3 activity as an optional evidence layer rather than the primary map UI;
 - compare those four cities using trips per active station/day, median duration, peak-hour share, weekend share, and hotspot concentration;
 - inspect optional live station maps for NYC, Chicago, Washington, DC, and Paris without mixing availability into historical demand rankings;
 - enrich trusted areas with current Google Maps place context;

@@ -6,7 +6,7 @@ This document is portfolio and submission copy. Review it against the final demo
 
 **Name:** CityScope
 
-**Tagline:** Evidence-grounded bike-share intelligence for comparing cities without inventing equivalence.
+**Tagline:** A grounded London journey planner for routes, coffee, bathrooms, lunch, and discovery.
 
 **Recommended category:** Taskmaster
 
@@ -18,7 +18,7 @@ This document is portfolio and submission copy. Review it against the final demo
 
 ## Portfolio summary
 
-CityScope is an agentic geospatial intelligence application that turns a mobility question into a bounded, visual investigation. Its historical cohort covers London, New York City, Chicago, and Washington, DC through matched May 2026 trip data and normalized comparison metrics. A separate City Live Data MCP optionally supplies current Citi Bike, Divvy, Capital Bikeshare, and Vélib' station availability, visibly excluded from historical rankings. London remains historical-only because Santander availability is not representative of all cycling. A Google ADK Runner executes one root LlmAgent powered by Gemini 3.5 Flash; deterministic City Data MCP queries H3-indexed aggregates; Google Maps supplies current place context; Google Routes computes attributed bicycle routes; and optional Gemma 4 scoring is locally schema-validated before use.
+CityScope is an agentic geospatial journey planner. A user can ask for a scenic loop from Fulham to Richmond Park with bathrooms, coffee, lunch, and interesting places; the London-first planner resolves named endpoints, selects bounded route waypoints from trusted evidence, calls Google Routes for outbound and optional return legs, and searches Google Maps for useful stops. A Google ADK Runner executes one root LlmAgent powered by Gemini 3.5 Flash; deterministic City Data MCP, Maps, Routes, validation, and provenance remain application-owned. Compare and Live modes preserve the original mobility evidence as secondary views.
 
 ## Inspiration
 

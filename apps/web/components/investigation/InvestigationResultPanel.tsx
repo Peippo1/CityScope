@@ -45,6 +45,15 @@ export function InvestigationResultPanel({ result, onSuggestion }: { result: Inv
         {result.route.attribution_url && <a className="source-link" href={result.route.attribution_url} target="_blank" rel="noreferrer">{result.route.attribution_title ?? "Google Routes API"}</a>}
       </section>}
 
+      {result.journey_plan && <section aria-labelledby="journey-heading" className="insight-card journey-card">
+        <div className="card-heading"><div><SourceBadge kind="route" /><h3 id="journey-heading">Journey itinerary</h3></div></div>
+        <p>{safeText(result.journey_plan.summary)}</p>
+        {result.journey_plan.template_name && <div className="route-template"><strong>Inspired by: {safeText(result.journey_plan.template_name)}</strong>{result.journey_plan.template_description && <p>{safeText(result.journey_plan.template_description)}</p>}{result.journey_plan.template_waypoint_hints.length > 0 && <small>Route ideas: {result.journey_plan.template_waypoint_hints.map(safeText).join(" · ")}</small>}<small>{safeText(result.journey_plan.template_notice ?? "Curated route example, not live popularity data.")}</small>{result.journey_plan.template_source_url && <a className="source-link" href={result.journey_plan.template_source_url} target="_blank" rel="noreferrer">Route example source</a>}</div>}
+        <ol className="journey-segments">{result.journey_plan.segments.map((segment) => <li key={segment.label}><strong>{segment.label}</strong><span>{segment.route.origin.name} → {segment.route.destination.name} · {(segment.route.distance_m / 1000).toFixed(1)} km · {Math.round(segment.route.duration_seconds / 60)} min</span></li>)}</ol>
+        {result.journey_plan.selected_stops.length > 0 && <div><h4>Suggested stops</h4><ul className="place-list">{result.journey_plan.selected_stops.map((place) => <li key={place.place_id}><div><strong>{place.name ?? place.category}</strong><span>{placeLabel(place.category)}</span></div>{place.maps_uri && <a href={place.maps_uri} target="_blank" rel="noreferrer">Open map</a>}</li>)}</ul></div>}
+        {result.journey_plan.provenance.length > 0 && <p className="helper-text">{result.journey_plan.provenance.join(" · ")}</p>}
+      </section>}
+
       {historicalEvidence.length > 0 && <section aria-labelledby="historical-heading" className="insight-card">
         <SourceBadge kind="historical" />
         <h3 id="historical-heading">Historical mobility evidence</h3>
