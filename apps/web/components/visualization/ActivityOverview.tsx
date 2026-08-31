@@ -30,12 +30,12 @@ export function ActivityOverview({ cells, selectedH3Cell, onSelectH3Cell, cityNa
             className={`chart-bar chart-bar--${index % 4}${cell.h3_cell === selectedH3Cell ? " is-selected" : ""}`}
             key={cell.h3_cell}
             onClick={() => onSelectH3Cell(cell.h3_cell)}
-            aria-label={`Select area ${index + 1} with ${cell.total_journeys.toLocaleString()} journeys`}
+            aria-label={`Select ${cell.area_name ?? `area ${index + 1}`} with ${cell.total_journeys.toLocaleString()} journeys`}
             aria-pressed={cell.h3_cell === selectedH3Cell}
           >
             <span className="chart-value">{cell.total_journeys.toLocaleString()}</span>
             <span className="chart-column" style={{ height: `${Math.max(12, (cell.total_journeys / peak) * 100)}%` }} />
-            <span className="chart-label">{index + 1}</span>
+            <span className="chart-label" title={cell.area_name ?? `Area ${index + 1}`}>{cell.area_name ?? index + 1}</span>
           </button>
         ))}
       </div>

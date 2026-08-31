@@ -7,7 +7,7 @@ from pipelines.core.analytics_contract import TimeFilter
 
 from ..analytics.mobility import MobilityAnalytics
 from ..agent.live_mcp_client import CityLiveMcpClient
-from ..cities import CITIES, get_city, historical_city_ids
+from ..cities import CITIES, get_city, historical_city_ids, nearest_area_name
 from ..schemas import ActivityCell, ActivityResponse, CitiesResponse, CityCapability, CityComparisonResponse
 
 
@@ -44,7 +44,7 @@ def get_activity(city: str, limit: int = Query(default=50, ge=1, le=50)) -> Acti
     return ActivityResponse(
         city=city, dataset_name=dataset["dataset_name"], observation_period="2026-05-01/2026-05-31",
         attribution_text=dataset["attribution_text"], historical_snapshot=True, h3_resolution=dataset["h3_resolution"],
-        cells=[ActivityCell(h3_cell=row["h3_cell"], latitude=cell_to_latlng(row["h3_cell"])[0], longitude=cell_to_latlng(row["h3_cell"])[1], total_journeys=int(row["value"]), origin_journeys=int(area_metrics[row["h3_cell"]]["starts"]), destination_journeys=int(area_metrics[row["h3_cell"]]["ends"])) for row in rows],
+        cells=[ActivityCell(h3_cell=row["h3_cell"], area_name=nearest_area_name(city, *cell_to_latlng(row["h3_cell"])), latitude=cell_to_latlng(row["h3_cell"])[0], longitude=cell_to_latlng(row["h3_cell"])[1], total_journeys=int(row["value"]), origin_journeys=int(area_metrics[row["h3_cell"]]["starts"]), destination_journeys=int(area_metrics[row["h3_cell"]]["ends"])) for row in rows],
     )
 
 

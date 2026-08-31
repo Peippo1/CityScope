@@ -207,7 +207,7 @@ ul, ol { margin-top: 0; }
 .evidence-workspace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
 .evidence-workspace.has-result { grid-template-columns: minmax(0, 1.65fr) minmax(330px, .65fr); }
 .list-card { padding: 18px; }
-.activity-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0; padding: 0; list-style: none; }
+.activity-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(58px, auto); align-content: start; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .activity-row { display: grid; width: 100%; min-height: 58px; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 9px; align-items: center; padding: 8px; border: 1px solid transparent; border-radius: 6px; color: var(--text); background: transparent; text-align: left; transition: border-color var(--motion), background var(--motion), transform var(--motion); }
 .activity-row:hover { background: var(--surface-subtle); }
 .activity-row.is-selected { border-color: #8ab4f8; background: var(--blue-subtle); }
