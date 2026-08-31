@@ -33,7 +33,7 @@ class RouteWaypoint(BaseModel):
 
 
 class RouteDetails(BaseModel):
-    travel_mode: Literal["bicycle"] = "bicycle"
+    travel_mode: Literal["bicycle", "walking"] = "bicycle"
     distance_m: int = Field(gt=0)
     duration_seconds: float = Field(gt=0)
     polyline: str = Field(min_length=1)
@@ -59,6 +59,7 @@ class ResolvedPlace(BaseModel):
 
 class RouteExecutor(Protocol):
     async def compute_bicycle_route(self, origin: RouteLocation, destination: RouteLocation, waypoints: list[RouteWaypoint]) -> RouteDetails: ...
+    async def compute_walking_route(self, origin: RouteLocation, destination: RouteLocation, waypoints: list[RouteWaypoint]) -> RouteDetails: ...
 
 
 def _distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -111,10 +112,10 @@ class GoogleRoutesService:
             return {"placeId": location.place_id}
         return {"location": {"latLng": {"latitude": location.latitude, "longitude": location.longitude}}}
 
-    async def compute_bicycle_route(self, origin: RouteLocation, destination: RouteLocation, waypoints: list[RouteWaypoint]) -> RouteDetails:
+    async def _compute_route(self, origin: RouteLocation, destination: RouteLocation, waypoints: list[RouteWaypoint], travel_mode: Literal["BICYCLE", "WALK"] = "BICYCLE") -> RouteDetails:
         if not self.api_key:
             raise ProviderUnavailableError("Google Routes", "API key is not configured")
-        body = {"origin": self._endpoint(origin), "destination": self._endpoint(destination), "intermediates": [{"location": {"latLng": {"latitude": point.latitude, "longitude": point.longitude}}} for point in waypoints], "travelMode": "BICYCLE", "polylineQuality": "OVERVIEW", "polylineEncoding": "ENCODED_POLYLINE"}
+        body = {"origin": self._endpoint(origin), "destination": self._endpoint(destination), "intermediates": [{"location": {"latLng": {"latitude": point.latitude, "longitude": point.longitude}}} for point in waypoints], "travelMode": travel_mode, "polylineQuality": "OVERVIEW", "polylineEncoding": "ENCODED_POLYLINE"}
         headers = {"X-Goog-Api-Key": self.api_key, "X-Goog-FieldMask": "routes.distanceMeters,routes.duration,routes.polyline.encodedPolyline,routes.legs.startLocation,routes.legs.endLocation", "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=self.timeout_s) as client:
             response = await client.post(self.url, json=body, headers=headers)
@@ -124,11 +125,19 @@ class GoogleRoutesService:
             raise ProviderUnavailableError("Google Routes", "HTTP request failed") from exc
         routes = response.json().get("routes", [])
         if not routes:
-            raise ProviderPayloadError("Google Routes", "No bicycle route returned")
+            raise ProviderPayloadError("Google Routes", f"No {travel_mode.lower()} route returned")
         route = routes[0]
         polyline = route.get("polyline", {}).get("encodedPolyline")
         duration = route.get("duration", "")
         match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)s", str(duration))
         if not polyline or not match or float(route.get("distanceMeters", 0)) <= 0 or float(match.group(1)) <= 0:
-            raise ProviderPayloadError("Google Routes", "Google Routes API returned an invalid bicycle route")
-        return RouteDetails(distance_m=int(route["distanceMeters"]), duration_seconds=float(match.group(1)), polyline=polyline, origin=origin, destination=destination, waypoints=waypoints, attribution_title="Google Routes API", attribution_url="https://developers.google.com/maps/documentation/routes")
+            raise ProviderPayloadError("Google Routes", f"Google Routes API returned an invalid {travel_mode.lower()} route")
+        mode = "bicycle" if travel_mode == "BICYCLE" else "walking"
+        warning = "Bicycle routes are beta and may not include every suitable bicycle path; verify locally before travel." if mode == "bicycle" else "Running routes use Google walking geometry as a safe planning approximation; verify surfaces, crossings, and conditions locally."
+        return RouteDetails(travel_mode=mode, distance_m=int(route["distanceMeters"]), duration_seconds=float(match.group(1)), polyline=polyline, origin=origin, destination=destination, waypoints=waypoints, attribution_title="Google Routes API", attribution_url="https://developers.google.com/maps/documentation/routes", warning=warning)
+
+    async def compute_bicycle_route(self, origin: RouteLocation, destination: RouteLocation, waypoints: list[RouteWaypoint]) -> RouteDetails:
+        return await self._compute_route(origin, destination, waypoints, "BICYCLE")
+
+    async def compute_walking_route(self, origin: RouteLocation, destination: RouteLocation, waypoints: list[RouteWaypoint]) -> RouteDetails:
+        return await self._compute_route(origin, destination, waypoints, "WALK")

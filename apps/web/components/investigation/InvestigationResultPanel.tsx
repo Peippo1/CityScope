@@ -37,7 +37,7 @@ export function InvestigationResultPanel({ result, onSuggestion }: { result: Inv
       </header>
 
       {result.route && <section aria-labelledby="route-heading" className="insight-card route-card">
-        <div className="card-heading"><div><SourceBadge kind="route" /><h3 id="route-heading">Bicycle route</h3></div></div>
+        <div className="card-heading"><div><SourceBadge kind="route" /><h3 id="route-heading">{result.route.travel_mode === "walking" ? "Running route" : "Bicycle route"}</h3></div></div>
         <p className="route-endpoints"><strong>{result.route.origin.name}</strong><span aria-hidden="true">→</span><strong>{result.route.destination.name}</strong></p>
         <dl className="route-metrics"><div><dt>Distance</dt><dd>{(result.route.distance_m / 1000).toFixed(1)} km</dd></div><div><dt>Estimated time</dt><dd>{Math.round(result.route.duration_seconds / 60)} min</dd></div></dl>
         {result.route.waypoints.length > 0 && <div className="waypoint-list"><h4>Why this route</h4><ul>{result.route.waypoints.map((point) => <li key={point.h3_cell}>{safeText(point.reason)}</li>)}</ul></div>}

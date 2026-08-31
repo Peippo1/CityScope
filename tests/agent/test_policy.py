@@ -26,6 +26,11 @@ def test_bounded_journey_intent_is_allowed_and_unsupported_preferences_are_rejec
     assert policy.check_model_decision(rejected).code == PolicyCode.INVALID_ROUTE_INTENT
 
 
+def test_running_intent_uses_bounded_walking_mode():
+    decision = ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "DUMBO", "destination": "Prospect Park", "travel_mode": "walking", "requested_stops": ["cafe"]})
+    assert GuardrailPolicy().check_model_decision(decision).code == PolicyCode.ALLOWED
+
+
 def test_unknown_route_template_is_rejected():
     decision = ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "Fulham", "destination": "Richmond Park", "template_id": "not-a-city-route"})
     assert GuardrailPolicy().check_model_decision(decision).code == PolicyCode.INVALID_ROUTE_INTENT

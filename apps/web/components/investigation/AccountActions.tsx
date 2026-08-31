@@ -33,9 +33,9 @@ export function AccountActions({ request, result }: AccountActionsProps) {
     setMessage(null);
     try {
       await saveInvestigation(request, result, await user.getIdToken());
-      setMessage("Saved to your investigation history.");
+      setMessage("Saved to your journey plans.");
     } catch {
-      setMessage("This investigation could not be saved.");
+      setMessage("This journey plan could not be saved.");
     } finally {
       setSaving(false);
     }
@@ -43,7 +43,7 @@ export function AccountActions({ request, result }: AccountActionsProps) {
 
   if (!auth) return <p className="account-note">Sign-in and saved investigations will be available in the deployed demo.</p>;
   return <div className="account-actions" aria-live="polite">
-    {user ? <><span className="account-email">{user.email ?? "Signed in"}</span><button type="button" className="secondary-button" onClick={() => void signOut(auth)}>Sign out</button>{request && result && <button type="button" className="secondary-button" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save investigation"}</button>}</> : <button type="button" className="secondary-button" onClick={() => void signIn()}>Sign in with Google</button>}
+    {user ? <><span className="account-email">{user.email ?? "Signed in"}</span><button type="button" className="secondary-button" onClick={() => void signOut(auth)}>Sign out</button>{request && result && <button type="button" className="secondary-button" disabled={saving} onClick={() => void save()}>{saving ? "Saving…" : "Save journey plan"}</button>}</> : <button type="button" className="secondary-button" onClick={() => void signIn()}>Sign in with Google</button>}
     {message && <span className="account-message">{message}</span>}
   </div>;
 }

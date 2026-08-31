@@ -30,6 +30,10 @@ const LONDON_EXAMPLES = [
     label: "Interesting quiet route",
     question: "Find interesting places along a quiet scenic route.",
   },
+  {
+    label: "Plan a running route",
+    question: "I want a 10K running route with interesting sights and coffee at the finish.",
+  },
 ] as const;
 
 const CITY_EXAMPLES: Record<string, { start: string; destination: string; examples: readonly { label: string; question: string }[] }> = {
@@ -40,6 +44,7 @@ const CITY_EXAMPLES: Record<string, { start: string; destination: string; exampl
       { label: "Hudson scenic ride", question: "I'm in Chelsea and would like a scenic ride along the Hudson River Greenway with coffee and interesting stops." },
       { label: "Central Park loop", question: "Plan a quiet loop around Central Park with a bathroom and lunch stop." },
       { label: "Brooklyn waterfront", question: "Find a waterfront route from DUMBO to Brooklyn Bridge Park with cafes." },
+      { label: "Brooklyn 10K run", question: "I've just got to New York, where can I run around Brooklyn, what should I see and where can I stop for coffee at the end of my 10K?" },
     ],
   },
   Chicago: {
@@ -151,7 +156,7 @@ export function QuestionComposer({ cityName, datasetName, value, isSubmitting, e
       <div className="section-heading">
         <p className="eyebrow">Ask CityScope</p>
         <h2 id="investigate-heading">Plan a {cityName} journey</h2>
-        <p>Give us a named start point and destination, then describe the route, stops, and places you want to discover.</p>
+        <p>Give us a named start point and destination, then describe the ride or run, stops, and places you want to discover.</p>
       </div>
       <div className="prompt-list" aria-label="Example questions">
         {examples.map((example) => (

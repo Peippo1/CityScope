@@ -87,7 +87,7 @@ class GuardrailPolicy:
         words = set(re.findall(r"[a-z]+", request.question.lower()))
         if self._prompt_injection_pattern.search(request.question) or self._raw_volume_pattern.search(request.question):
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSAFE_PROMPT, message="This request is outside the bounded CityScope investigation workflow.")
-        route_terms = {"route", "routing", "cycle", "cycling", "bicycle", "bike", "ride", "journey", "journeys"}
+        route_terms = {"route", "routing", "cycle", "cycling", "bicycle", "bike", "ride", "journey", "journeys", "run", "running", "runner", "10k"}
         if not city.historical and (words & self.historical_mode_terms) - route_terms:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_MODE, message=f"{city.name} does not have a historical CityScope mobility dataset; route planning remains available where enabled.")
         if words & self.weather_terms:
@@ -117,11 +117,13 @@ class GuardrailPolicy:
         if decision.tool not in self.allowed_tools:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.UNSUPPORTED_TOOL, message="The model requested an unsupported operation.")
         if decision.tool == "route.intent":
-            allowed = {"origin", "destination", "return_to_origin", "requested_stops", "preferences", "template_id"}
+            allowed = {"origin", "destination", "return_to_origin", "requested_stops", "preferences", "template_id", "travel_mode"}
             if set(decision.arguments) - allowed:
                 return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.MODEL_COORDINATES_FORBIDDEN, message="Route coordinates and provider payloads must be selected by trusted backend code.")
             if not all(isinstance(decision.arguments.get(key), str) and decision.arguments[key].strip() for key in ("origin", "destination")):
-                return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message="A bicycle route requires named origins and destinations in the selected city.")
+                return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message="A route requires named origins and destinations in the selected city.")
+            if decision.arguments.get("travel_mode", "bicycle") not in {"bicycle", "walking"}:
+                return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message="Route mode must be bicycle or walking.")
             stops = decision.arguments.get("requested_stops", [])
             allowed_stops = {"cafe", "restaurant", "public_bathroom", "shop", "bicycle_repair_shop", "point_of_interest"}
             if not isinstance(stops, list) or len(stops) > 5 or any(stop not in allowed_stops for stop in stops):

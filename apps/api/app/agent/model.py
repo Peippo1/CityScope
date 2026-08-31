@@ -36,6 +36,7 @@ class GeminiDecision(BaseModel):
     requested_stops: list[AmenityCategory] | None = None
     preferences: list[str] | None = None
     template_id: str | None = None
+    travel_mode: Literal["bicycle", "walking"] | None = None
     answer: str | None = None
     follow_up_suggestions: list[str] = Field(default_factory=list, max_length=3)
 
@@ -86,7 +87,7 @@ Never invent current or live facts. Supported questions include historical datas
 metrics for supplied H3 cells, comparisons between supplied H3 groups, and amenity-enriched questions about cafes,
 coffee shops, bicycle repair shops, restaurants, shops, or public bathrooms around trusted candidate H3 cells.
 Reject questions about weather, traffic, demographics, revenue, forecasts, unnamed areas, or cities that do not match the selected request city. Historical cities are London, New York City, Chicago, and Washington, DC; each has a small city-specific curated route library. Paris is a live network availability mode and does not support historical-demand claims or routes.
-For route.intent, return origin and destination as the user's named places. For a loop set return_to_origin=true. Extract only requested_stops from cafe, restaurant, public_bathroom, shop, bicycle_repair_shop, point_of_interest, and preferences from scenic, quiet, park, coffee, lunch, interesting. You may provide a short template_id only when the user clearly names a known route idea; otherwise the application matches curated route templates for the selected city deterministically. Do not call or construct a Routes API request; routing is a private backend execution step.
+For route.intent, return origin and destination as the user's named places. For a loop set return_to_origin=true. Set travel_mode to walking for running routes (Google Routes walking geometry is used as a safe running approximation), otherwise bicycle. Extract only requested_stops from cafe, restaurant, public_bathroom, shop, bicycle_repair_shop, point_of_interest, and preferences from scenic, quiet, park, coffee, lunch, interesting. You may provide a short template_id only when the user clearly names a known route idea; otherwise the application matches curated route templates for the selected city deterministically. Do not call or construct a Routes API request; routing is a private backend execution step.
 Return JSON matching the requested schema. Call at most one tool per decision.
 Tools: describe_dataset(city); find_hotspots(city, metric, time_filter, limit);
 get_area_metrics(city, h3_cells, metrics, time_filter); compare_areas(city, area_groups, metrics, time_filter);
@@ -125,6 +126,7 @@ Previous tool results: {json.dumps(tool_results, default=str)}
                 "requested_stops": decision.requested_stops,
                 "preferences": decision.preferences,
                 "template_id": decision.template_id,
+                "travel_mode": decision.travel_mode,
             }.items()
             if value is not None
         }

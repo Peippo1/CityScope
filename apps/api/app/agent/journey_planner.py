@@ -1,4 +1,4 @@
-"""Focused orchestration for validated outbound/return bicycle segments."""
+"""Focused orchestration for validated outbound/return ride or run segments."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ class JourneyPlanner:
         self.executor = executor
         self.reserve_call = reserve_call
 
-    async def plan(self, origin: RouteLocation, destination: RouteLocation, waypoints: list[RouteWaypoint], return_to_origin: bool) -> JourneySegments | None:
+    async def plan(self, origin: RouteLocation, destination: RouteLocation, waypoints: list[RouteWaypoint], return_to_origin: bool, travel_mode: str = "bicycle") -> JourneySegments | None:
         route = None
         used_direct_fallback = False
         attempts = (waypoints, []) if waypoints else ([],)
@@ -30,7 +30,8 @@ class JourneyPlanner:
             if not self.reserve_call():
                 break
             try:
-                route = await self.executor.compute_bicycle_route(origin, destination, points)
+                compute = self.executor.compute_walking_route if travel_mode == "walking" else self.executor.compute_bicycle_route
+                route = await compute(origin, destination, points)
                 used_direct_fallback = points == [] and bool(waypoints)
                 break
             except Exception:
@@ -40,7 +41,8 @@ class JourneyPlanner:
         return_route = None
         if return_to_origin and self.reserve_call():
             try:
-                return_route = await self.executor.compute_bicycle_route(destination, origin, [])
+                compute = self.executor.compute_walking_route if travel_mode == "walking" else self.executor.compute_bicycle_route
+                return_route = await compute(destination, origin, [])
             except Exception:
                 return_route = None
         return JourneySegments(route, return_route, used_direct_fallback)

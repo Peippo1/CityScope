@@ -54,7 +54,7 @@ def build_root_agent() -> Any | None:
             "kind, tool, arguments, answer, and follow_up_suggestions; tool must be one of "
             "describe_dataset, get_area_metrics, find_hotspots, compare_areas, compare_cities, "
             "maps.search_places, or route.intent. For route.intent, extract named origin and destination, "
-            "return_to_origin for loops, bounded requested_stops, preferences, and an optional template_id; never emit coordinates or polylines."
+            "return_to_origin for loops, travel_mode bicycle or walking for running, bounded requested_stops, preferences, and an optional template_id; never emit coordinates or polylines."
         ),
         tools=[
             _bounded_tool("inspect_city_capabilities"),

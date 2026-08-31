@@ -45,6 +45,26 @@ def test_routes_request_is_bicycle_and_uses_place_ids(monkeypatch) -> None:
     assert result.polyline == "abc"
 
 
+def test_routes_request_supports_running_as_walking_geometry(monkeypatch) -> None:
+    captured = {}
+
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return {"routes": [{"distanceMeters": 10000, "duration": "3600s", "polyline": {"encodedPolyline": "run"}}]}
+
+    class Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def post(self, url, json, headers): captured.update(json=json); return Response()
+
+    monkeypatch.setattr("apps.api.app.agent.route_service.httpx.AsyncClient", lambda **kwargs: Client())
+    origin = RouteLocation(name="DUMBO", latitude=40.7, longitude=-73.99)
+    destination = RouteLocation(name="Prospect Park", latitude=40.66, longitude=-73.97)
+    result = asyncio.run(GoogleRoutesService(api_key="secret").compute_walking_route(origin, destination, []))
+    assert captured["json"]["travelMode"] == "WALK"
+    assert result.travel_mode == "walking"
+
+
 def test_routes_rejects_missing_geometry(monkeypatch) -> None:
     class Response:
         def raise_for_status(self): pass
