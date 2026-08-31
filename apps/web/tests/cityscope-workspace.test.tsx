@@ -2,214 +2,45 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { CityScopeWorkspace } from "../components/investigation/CityScopeWorkspace";
-import type { ActivityResponse } from "../types/city";
-import type { InvestigationResult } from "../types/investigation";
 
-const activity: ActivityResponse = {
-  city: "london",
-  dataset_name: "TfL Cycling",
-  observation_period: "2026-05-01/2026-05-31",
-  attribution_text: "TfL",
-  historical_snapshot: true,
-  h3_resolution: 9,
-  cells: [{ h3_cell: "89194ad3353ffff", total_journeys: 42, origin_journeys: 20, destination_journeys: 22 }],
-};
-
-const investigation: InvestigationResult = {
-  investigation_id: "test",
-  status: "answered",
-  answer: "Area 1 had the highest historical cycling activity.",
-  evidence: [], places: [], amenity_analysis: [], city_insights: [], map_layers: [], limitations: [], trace: [], follow_up_suggestions: [],
-};
-
-const comparisonInvestigation: InvestigationResult = {
-  ...investigation,
-  investigation_id: "comparison-test",
-  answer: "Chicago ranks first for hotspot concentration across the matched cohort.",
-  evidence: [
-    { source: "city_data", metric: "hotspot_concentration", value: 0.8212, unit: "share", source_aggregate: "cross_city_canonical_trips", h3_cells: [], category: "Chicago" },
-  ],
-  trace: [{ kind: "tool_call", label: "Called City Data MCP: compare_cities", status: "completed", tool: "city_data.compare_cities", latency_ms: 18 }],
-  limitations: ["Raw trip totals are intentionally excluded from cross-city rankings."],
-};
-
-const comparison = {
-  metric: "trips_per_active_station_day", calculation_basis: "trips divided by active stations and days", observation_period: "2026-05-01/2026-05-31",
-  cities: [{ city: "london", city_name: "London", value: 1.2, rank: 1, snapshot_id: "2026-05", is_fixture: false }, { city: "new_york", city_name: "New York City", value: 0.9, rank: 2, snapshot_id: "2026-05", is_fixture: false }], limitations: ["Normalized only"],
-};
-
-const parisLive = {
-  city: "paris" as const, provider: "Vélib' Métropole GBFS", fetched_at: "2026-08-26T12:00:00Z", freshness: "fresh" as const, attribution_text: "Live station status provided by Vélib' Métropole.", source_url: "https://example.test/velib", limitations: ["Live only"],
-  stations: [{ station_id: "1", name: "Paris station", latitude: 48.85, longitude: 2.35, bikes_available: 4, docks_available: 7 }],
-};
-
-const newYorkLive = {
-  ...parisLive,
-  city: "new_york" as const,
-  provider: "Citi Bike GBFS",
-  attribution_text: "Live station status provided by Citi Bike.",
-  stations: [{ station_id: "nyc-1", name: "Broadway & W 25 St", latitude: 40.744, longitude: -73.989, bikes_available: 9, docks_available: 5 }],
-};
-
-const registry = {
-  cities: [
-    { id: "london" as const, name: "London", historical: true, routes: true, live_network: false, timezone: "Europe/London", bounds: [51.28, -0.52, 51.72, 0.34] as [number, number, number, number] },
-    { id: "new_york" as const, name: "New York City", historical: true, routes: true, live_network: true, timezone: "America/New_York", bounds: [40.49, -74.30, 40.92, -73.68] as [number, number, number, number] },
-  ],
+const routeResult = {
+  investigation_id: "route", status: "answered" as const, answer: "A lovely route with places to pause.", evidence: [], amenity_analysis: [], city_insights: [], map_layers: [], limitations: [], trace: [], follow_up_suggestions: [],
+  places: [{ place_id: "cafe", name: "Example Cafe", latitude: 51.5, longitude: -0.1, category: "cafe", h3_cell: "cell" }],
+  route: { travel_mode: "bicycle" as const, distance_m: 4000, duration_seconds: 1200, polyline: "route", source: "google_routes_api" as const, warning: "Check conditions locally.", origin: { name: "Fulham", latitude: 51.47, longitude: -0.2 }, destination: { name: "Richmond Park", latitude: 51.44, longitude: -0.27 }, waypoints: [] },
 };
 
 describe("CityScopeWorkspace", () => {
-  it("renders the custom two-color CityScope signal mark", () => {
-    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate: vi.fn() }} />);
-
-    const mark = screen.getByLabelText("CityScope home").querySelector(".brand-mark");
-    expect(mark).toBeInTheDocument();
-    expect(mark?.querySelectorAll(".brand-mark__cell")).toHaveLength(4);
-    expect(mark?.querySelectorAll(".brand-mark__cell--ink")).toHaveLength(2);
-    expect(mark?.querySelectorAll(".brand-mark__cell--teal")).toHaveLength(2);
+  it("renders the route-first workspace without legacy evidence panels or activity requests", async () => {
+    const investigate = vi.fn();
+    render(<CityScopeWorkspace services={{ investigate }} />);
+    expect(screen.getByRole("heading", { name: "Find a route worth remembering." })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Where will you explore?" })).toBeVisible();
+    expect(screen.queryByText("Highest activity areas")).not.toBeInTheDocument();
+    expect(screen.queryByText("Request flow")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Compare" })).not.toBeInTheDocument();
   });
 
-  it("lets a user retry activity loading without turning it into an investigation error", async () => {
+  it("submits a city-aware running prompt and renders the concise route result", async () => {
     const user = userEvent.setup();
-    const getActivity = vi.fn().mockRejectedValueOnce(new Error("Activity unavailable")).mockResolvedValueOnce(activity);
-    render(<CityScopeWorkspace services={{ getActivity, investigate: vi.fn() }} />);
-
-    expect(await screen.findByText("Activity unavailable")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Retry London activity" }));
-
-    expect(await screen.findByRole("heading", { name: "Highest activity areas" })).toBeVisible();
-    expect(screen.queryByText("Activity unavailable")).not.toBeInTheDocument();
-  });
-
-  it("submits a selected example question and renders the answer", async () => {
-    const user = userEvent.setup();
-    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate: vi.fn().mockResolvedValue(investigation) }} />);
-
-    await user.click(screen.getByRole("button", { name: "Find Saturday cycling hotspots" }));
+    const investigate = vi.fn().mockResolvedValue(routeResult);
+    render(<CityScopeWorkspace services={{ investigate }} />);
+    await user.selectOptions(screen.getByRole("combobox", { name: "City" }), "new_york");
+    await user.click(screen.getByRole("button", { name: /Running/ }));
+    await user.type(screen.getByRole("textbox", { name: "Question" }), "A 10K around Brooklyn with coffee");
     await user.click(screen.getByRole("button", { name: "Investigate" }));
-
-    expect(await screen.findByText(investigation.answer)).toBeVisible();
-    expect(screen.getByText("Answered")).toBeVisible();
+    expect(investigate).toHaveBeenCalledWith(expect.objectContaining({ city: "new_york", question: "A 10K around Brooklyn with coffee" }));
+    expect(await screen.findByText("A lovely route with places to pause.")).toBeVisible();
+    expect(screen.getByText("Good places to pause")).toBeVisible();
   });
 
-  it("includes a selected activity area in the investigation context", async () => {
+  it("resets the previous result when switching cities", async () => {
     const user = userEvent.setup();
-    const investigate = vi.fn().mockResolvedValue(investigation);
-    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate }} />);
-
-    await user.click(await screen.findByRole("button", { name: /Area 1/ }));
-    await user.type(screen.getByRole("textbox", { name: "Question" }), "What is nearby?");
+    const investigate = vi.fn().mockResolvedValue(routeResult);
+    render(<CityScopeWorkspace services={{ investigate }} />);
+    await user.type(screen.getByRole("textbox", { name: "Question" }), "Fulham to Richmond Park");
     await user.click(screen.getByRole("button", { name: "Investigate" }));
-
-    expect(investigate).toHaveBeenCalledWith(expect.objectContaining({
-      context: expect.objectContaining({ selected_h3_cells: ["89194ad3353ffff"] }),
-    }));
-  });
-
-  it("keeps an investigation failure local and lets the user retry it", async () => {
-    const user = userEvent.setup();
-    const investigate = vi.fn().mockRejectedValueOnce(new Error("Investigation unavailable")).mockResolvedValueOnce(investigation);
-    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate }} />);
-
-    await user.type(screen.getByRole("textbox", { name: "Question" }), "Where are the hotspots?");
-    await user.click(screen.getByRole("button", { name: "Investigate" }));
-    expect(await screen.findByText("Investigation unavailable")).toBeVisible();
-    expect(screen.getByRole("heading", { name: "Highest activity areas" })).toBeVisible();
-
-    await user.click(screen.getByRole("button", { name: "Retry investigation" }));
-    expect(await screen.findByText(investigation.answer)).toBeVisible();
-    expect(screen.queryByText("Investigation unavailable")).not.toBeInTheDocument();
-  });
-
-  it("shows a normalized four-city comparison without leaving the workspace", async () => {
-    const user = userEvent.setup();
-    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate: vi.fn(), getComparison: vi.fn().mockResolvedValue(comparison) }} />);
-
-    await user.click(screen.getByRole("button", { name: "Compare" }));
-
-    expect(await screen.findByRole("heading", { name: "Four-city comparison" })).toBeVisible();
-    expect(screen.getAllByText("New York City")).toHaveLength(2);
-    expect(screen.getByText(/never raw journey totals/i)).toBeVisible();
-    expect(screen.getAllByText("Verified production artifact · 2026-05")).toHaveLength(2);
-  });
-
-  it("runs a comparison question through the bounded investigation flow", async () => {
-    const user = userEvent.setup();
-    const investigate = vi.fn().mockResolvedValue(comparisonInvestigation);
-    const getComparison = vi.fn().mockResolvedValue(comparison);
-    render(<CityScopeWorkspace services={{ getActivity: vi.fn().mockResolvedValue(activity), investigate, getComparison }} />);
-
-    await user.click(screen.getByRole("button", { name: "Compare" }));
-    await user.click(await screen.findByRole("button", { name: "Compare hotspot concentration" }));
-    await user.click(screen.getByRole("button", { name: "Ask across cities" }));
-
-    expect(investigate).toHaveBeenCalledWith(expect.objectContaining({
-      city: "london",
-      question: expect.stringMatching(/London.*New York City.*Chicago.*Washington, DC/i),
-      context: { selected_h3_cells: [], previous_turns: [], evidence_summary: "Cross-city comparison mode; normalized metrics only." },
-    }));
-    expect(await screen.findByText(comparisonInvestigation.answer)).toBeVisible();
-    expect(getComparison).toHaveBeenCalledWith("hotspot_concentration");
-    expect(screen.getByText("82.1%")).toBeVisible();
-    await user.click(screen.getByText("Evidence & methodology"));
-    expect(screen.getByText(/Called City Data MCP: compare_cities/)).toBeVisible();
-  });
-
-  it("loads the city registry from the API and drills from comparison into city activity", async () => {
-    const user = userEvent.setup();
-    const getActivity = vi.fn().mockImplementation(async (city) => ({ ...activity, city, dataset_name: city === "new_york" ? "Citi Bike Trips" : "TfL Cycling" }));
-    render(<CityScopeWorkspace services={{ getCities: vi.fn().mockResolvedValue(registry), getActivity, investigate: vi.fn(), getComparison: vi.fn().mockResolvedValue(comparison) }} />);
-
-    expect(await screen.findByRole("option", { name: "New York City" })).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Compare" }));
-    await user.click(await screen.findByRole("button", { name: "Open New York City activity" }));
-
-    expect(screen.getByRole("combobox", { name: "City workspace" })).toHaveValue("new_york");
-    expect(screen.getByRole("heading", { name: "Plan a better journey through New York City." })).toBeVisible();
-    expect(await screen.findByRole("heading", { name: "New York City activity" })).toBeVisible();
-    expect(getActivity).toHaveBeenCalledWith("new_york");
-  });
-
-  it("does not retain the previous city's historical attribution after switching cities", async () => {
-    const user = userEvent.setup();
-    const getActivity = vi.fn().mockImplementation(async (city) => ({
-      ...activity,
-      city,
-      dataset_name: city === "new_york" ? "Citi Bike May 2026 trip history" : "TfL Santander Cycles journey data",
-      attribution_text: city === "new_york" ? "Data provided by Citi Bike" : "Data provided by Transport for London",
-    }));
-    render(<CityScopeWorkspace services={{ getCities: vi.fn().mockResolvedValue(registry), getActivity, investigate: vi.fn() }} />);
-
-    expect((await screen.findAllByText("TfL Santander Cycles journey data")).length).toBeGreaterThan(0);
-    await user.selectOptions(screen.getByRole("combobox", { name: "City workspace" }), "new_york");
-
-    expect((await screen.findAllByText("Citi Bike May 2026 trip history")).length).toBeGreaterThan(0);
-    expect(screen.queryByText("TfL Santander Cycles journey data")).not.toBeInTheDocument();
-    expect(screen.queryByText("Data provided by Transport for London")).not.toBeInTheDocument();
-  });
-
-  it("shows Paris as separate live network context", async () => {
-    const user = userEvent.setup();
-    const getActivity = vi.fn().mockResolvedValue(activity);
-    render(<CityScopeWorkspace services={{ getActivity, investigate: vi.fn(), getLive: vi.fn().mockResolvedValue(parisLive) }} />);
-
-    await user.selectOptions(screen.getByRole("combobox", { name: "City workspace" }), "paris");
-
-    expect(await screen.findByRole("heading", { name: "Paris Vélib' Métropole GBFS availability" })).toBeVisible();
-    expect(screen.getByText(/not comparable to the historical trip cohort/i)).toBeVisible();
-    expect(getActivity).not.toHaveBeenCalledWith("paris");
-  });
-
-  it("switches a historical cohort city into its own live station map", async () => {
-    const user = userEvent.setup();
-    const getLive = vi.fn().mockResolvedValue(newYorkLive);
-    render(<CityScopeWorkspace services={{ getCities: vi.fn().mockResolvedValue(registry), getActivity: vi.fn().mockResolvedValue(activity), investigate: vi.fn(), getLive }} />);
-
-    await user.selectOptions(await screen.findByRole("combobox", { name: "City workspace" }), "new_york");
-    await user.click(screen.getByRole("button", { name: "Live network" }));
-
-    expect(await screen.findByRole("heading", { name: "New York City Citi Bike GBFS availability" })).toBeVisible();
-    expect(screen.getByText("Broadway & W 25 St")).toBeVisible();
-    expect(getLive).toHaveBeenCalledWith("new_york");
+    expect(await screen.findByText("A lovely route with places to pause.")).toBeVisible();
+    await user.selectOptions(screen.getByRole("combobox", { name: "City" }), "paris");
+    expect(screen.queryByText("A lovely route with places to pause.")).not.toBeInTheDocument();
   });
 });

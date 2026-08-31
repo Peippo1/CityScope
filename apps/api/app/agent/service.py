@@ -338,9 +338,9 @@ class InvestigationService:
                         found = await asyncio.gather(*(search(cell, category) for cell in plan.h3_cells for category in plan.categories))
                         for result in found:
                             selected_stops.extend(result.places)
-                        # Keep the public itinerary bounded even when each
-                        # route-adjacent cell returns a full Places page.
-                        selected_stops = selected_stops[:20]
+                        # Keep the public itinerary bounded and stable even
+                        # when adjacent cells return the same Places result.
+                        selected_stops = list({place.place_id: place for place in selected_stops}.values())[:20]
                         self.record(iid, trace, kind="tool_call", label="Called Google Maps Grounding MCP: journey amenity search", status="completed", provider="google_maps", tool="maps.search_places", policy=maps_gate, count=len(selected_stops), call=budget.maps_calls, limit=self.policy.max_maps_calls)
                         if selected_stops:
                             evidence = list(envelope.evidence) + [Evidence(metric="journey_place_count", value=len(selected_stops), unit="places", source_aggregate="maps.search_places", filters_applied={"categories": plan.categories}, h3_cells=plan.h3_cells)]

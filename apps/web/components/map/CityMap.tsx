@@ -64,12 +64,13 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
         return polygon;
       }) : [];
       const infoWindow = new google.maps.InfoWindow();
-      const markers = places.map((place) => {
+      const markers = places.map((place, index) => {
         const marker = new google.maps.Marker({
           position: { lat: place.latitude, lng: place.longitude },
           map: map.current,
           title: place.name ?? "Google Maps place",
-          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 6, fillColor: "#f9ab00", fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 2 },
+          label: { text: String(index + 1), color: "#ffffff", fontWeight: "700" },
+          icon: { path: google.maps.SymbolPath.CIRCLE, scale: 10, fillColor: "#f9ab00", fillOpacity: 1, strokeColor: "#ffffff", strokeWeight: 2 },
         });
         marker.addListener("click", () => {
           onSelectPlace?.({ place_id: place.place_id, name: place.name ?? "Google Maps place", latitude: place.latitude, longitude: place.longitude, maps_uri: place.maps_uri });
@@ -106,6 +107,7 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
       if (route && decodedRoute.length > 0) {
         const bounds = new google.maps.LatLngBounds();
         decodedRoute.forEach((point) => bounds.extend(point));
+        places.forEach((place) => bounds.extend({ lat: place.latitude, lng: place.longitude }));
         map.current.fitBounds(bounds, 56);
       }
       cleanups.push(() => { polygons.forEach((polygon) => polygon.setMap(null)); markers.forEach((marker) => marker.setMap(null)); focusedMarker?.setMap(null); routeMarkers.forEach((marker) => marker.setMap(null)); routeLine?.setMap(null); infoWindow.close(); });
@@ -114,7 +116,7 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
   }, [cells, places, focusedPlace, route, selectedH3Cell, onSelectH3Cell, onSelectPlace, cityName, bounds, showCells]);
 
   if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
-    return <div className="map-placeholder" role="img" aria-label="Google Maps preview unavailable until a browser API key is configured">Google Maps preview requires NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. The ranked activity values remain available beside this panel.</div>;
+    return <div className="map-placeholder" role="img" aria-label="Google Maps preview unavailable until a browser API key is configured">Google Maps preview requires NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. Your route will appear here when the map key is configured.</div>;
   }
   if (loadError) return <div className="map-placeholder" role="alert"><strong>Google Maps could not be loaded.</strong><span>The activity ranking and investigation evidence remain available in text.</span></div>;
   return <div ref={node} className="map" aria-label={ariaLabel ?? `${cityName} cycling activity map`} />;

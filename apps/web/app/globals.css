@@ -139,6 +139,15 @@ ul, ol { margin-top: 0; }
 .retry-investigation { margin: 0 24px 18px; }
 
 .visual-workspace { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(360px, .8fr); gap: 16px; align-items: start; }
+.route-workspace { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(340px, .65fr); gap: 16px; align-items: start; margin-top: 16px; }
+.route-result-column { min-width: 0; }
+.route-empty { min-height: 280px; display: grid; align-content: center; gap: 8px; padding: 28px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.route-empty h2, .route-empty p { margin: 0; }
+.place-card-button { display: grid; gap: 3px; border: 0; padding: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.place-card-button:hover strong { color: var(--blue-strong); }
+.route-limitations { margin: 12px 0 0; color: var(--text-muted); font-size: .78rem; }
+.journey-segment-summary { margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: var(--blue-subtle); }
+.journey-segment-summary h3, .journey-segment-summary p { margin: 0; }
 .map-card, .activity-overview, .flow-panel, .list-card, .result-panel { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
 .map-card { min-width: 0; overflow: hidden; }
 .map-card-heading, .panel-heading { display: flex; justify-content: space-between; gap: 16px; align-items: center; }
@@ -284,6 +293,7 @@ ul, ol { margin-top: 0; }
   .composer > .section-heading, .composer > .prompt-list, .composer > form, .comparison-composer > .section-heading, .comparison-composer > .prompt-list, .comparison-composer > form { grid-column: 1; grid-row: auto; }
   .comparison-workspace.has-agent-result { grid-template-columns: 1fr; }
   .visual-workspace { grid-template-columns: 1fr; }
+  .route-workspace { grid-template-columns: 1fr; }
   .visual-sidebar { grid-template-columns: 1fr 1fr; grid-template-rows: auto; }
   .evidence-workspace.has-result { grid-template-columns: 1fr; }
   .live-network-layout { grid-template-columns: 1fr; }
