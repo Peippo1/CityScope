@@ -103,7 +103,13 @@ class ADKInvestigationModel:
     async def decide(self, question: str, context: str, tool_results: list[dict]) -> ToolDecision:
         if self._agent is None:
             try:
-                return await self.fallback.decide(question, context, tool_results)
+                decision = await self.fallback.decide(question, context, tool_results)
+                # Sanitize provider output before it reaches the policy gate.
+                # Some Gemini responses include raw route fields despite the
+                # schema instruction; replace those with the bounded intent.
+                if decision.tool == "route.intent" and set(decision.arguments) - {"origin", "destination", "return_to_origin", "requested_stops", "preferences", "template_id", "travel_mode"}:
+                    return heuristic_route_decision(question)
+                return decision
             except Exception:
                 # Keep the demo useful during provider outages. This bounded
                 # parser only recognises curated endpoint pairs; it never
@@ -131,7 +137,10 @@ class ADKInvestigationModel:
                         final_text = next((part.text for part in parts if getattr(part, "text", None)), None)
             if not final_text:
                 raise RuntimeError("ADK returned no final response")
-            return ToolDecision.model_validate_json(final_text)
+            decision = ToolDecision.model_validate_json(final_text)
+            if decision.tool == "route.intent" and set(decision.arguments) - {"origin", "destination", "return_to_origin", "requested_stops", "preferences", "template_id", "travel_mode"}:
+                return heuristic_route_decision(question)
+            return decision
         except Exception:
             # ADK versions can disagree on Runner/event shapes even when the
             # underlying Gemini credential is healthy. Fall back to the
