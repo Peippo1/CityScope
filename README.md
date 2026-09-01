@@ -20,7 +20,7 @@ CityScope turns a natural-language travel request into a grounded city adventure
 
 Choose a city and whether to run or cycle, then describe a starting point, rough duration or distance, and the kind of experience you want. The map and concise itinerary dominate the result.
 
-![A generated CityScope route with grounded stops](docs/assets/cityscope-route-planning.png)
+![CityScope public build story for the All Things Agentic Hackathon](docs/assets/cityscope-route-planning.png)
 
 <p align="center">
   <img src="docs/assets/cityscope-mobile.png" width="320" alt="CityScope mobile route planner" />
