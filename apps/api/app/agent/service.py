@@ -265,6 +265,7 @@ class InvestigationService:
             self.record(iid,trace,kind="tool_call",label="Rejected route endpoints outside selected city",status="rejected",provider="google_maps",tool="maps.search_places",policy=location_gate)
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="The route endpoints are outside the selected city.",limitations=[location_gate.message],trace=trace))
         city_gate = self.policy.allow()
+        historical_data_available = get_city(city).historical
         if not get_city(city).historical:
             envelope = ToolEnvelope(
                 dataset=DatasetMetadata(city=city, dataset_id="route-only", dataset_name=f"{get_city(city).name} route planning", snapshot_id="route-only", observation_start="", observation_end="", source_organisation="CityScope", mode=f"{mode_label} routing", h3_resolution=0, historical=False, available_metrics=[], supported_temporal_filters=[], limitations=[f"No historical CityScope mobility dataset is available for {get_city(city).name}; route suggestions use named places and Google Maps/Routes."], provenance_summary={}),
@@ -282,8 +283,13 @@ class InvestigationService:
         except Exception:
             failure=self.policy.provider_error("City Data MCP")
             self.record(iid,trace,kind="tool_call",label="City Data route geography unavailable",status="failed",provider="city_data",tool="city_data.find_hotspots",policy=failure,call=budget.city_data_calls,limit=self.policy.max_city_data_calls)
-            return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Historical route geography is unavailable.",limitations=[failure.message],trace=trace))
-        if get_city(city).historical:
+            historical_data_available = False
+            envelope = ToolEnvelope(
+                dataset=DatasetMetadata(city=city, dataset_id="route-only", dataset_name=f"{get_city(city).name} route planning", snapshot_id="route-only", observation_start="", observation_end="", source_organisation="CityScope", mode=f"{mode_label} routing", h3_resolution=0, historical=False, available_metrics=[], supported_temporal_filters=[], limitations=["Historical mobility context was unavailable; this route uses curated city knowledge and Google Maps/Routes."], provenance_summary={}),
+                results=[], evidence=[], map_layers=[], limitations=["Historical mobility context was unavailable; this route uses curated city knowledge and Google Maps/Routes."],
+            )
+            waypoints = []
+        if get_city(city).historical and historical_data_available:
             self.record(iid,trace,kind="tool_call",label="Called City Data MCP: find_hotspots for route geography",status="completed",provider="city_data",tool="city_data.find_hotspots",policy=city_gate,count=len(envelope.results),call=budget.city_data_calls,limit=self.policy.max_city_data_calls)
             waypoints=select_waypoints(origin,destination,envelope.results)
         gate=self.policy.check_waypoints(waypoints)
@@ -326,7 +332,7 @@ class InvestigationService:
         selected_stops = []
         if requested_stops:
             trusted_cells = [item.h3_cell for item in envelope.map_layers[:3]]
-            if not trusted_cells and not get_city(city).historical:
+            if not trusted_cells:
                 trusted_cells = [h3.latlng_to_cell(origin.latitude, origin.longitude, 9), h3.latlng_to_cell(destination.latitude, destination.longitude, 9)]
             if trusted_cells:
                 try:

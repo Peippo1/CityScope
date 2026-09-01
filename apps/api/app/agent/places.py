@@ -194,10 +194,12 @@ def parse_search_result(payload: dict[str, Any], category: AmenityCategory, h3_c
         longitude = float(longitude)
         if not (south <= latitude <= north and west <= longitude <= east):
             continue
+        attribution_title = attribution.get("title")
+        fallback_name = attribution_title.removesuffix(" - Google Maps") if isinstance(attribution_title, str) and attribution_title != "Google Maps" else None
         parsed.append(PlaceResult(
             place_id=place_id,
             resource_name=raw.get("place"),
-            name=raw.get("displayName") or raw.get("name"),
+            name=raw.get("displayName") or raw.get("name") or fallback_name,
             latitude=latitude,
             longitude=longitude,
             maps_uri=links.get("placeUrl"),

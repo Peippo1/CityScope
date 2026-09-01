@@ -85,6 +85,15 @@ def test_google_result_parser_keeps_only_provider_identifiers_and_links() -> Non
     assert parsed.places[0].h3_cell == CELL
 
 
+def test_google_result_parser_uses_attribution_title_when_name_is_missing() -> None:
+    parsed = parse_search_result({"places": [{
+        "id": "abc", "location": {"latitude": 51.5, "longitude": -0.1},
+        "attribution": {"title": "Scootercaffe - Google Maps", "url": "https://maps.google.com"},
+    }]}, "cafe", CELL)
+
+    assert parsed.places[0].name == "Scootercaffe"
+
+
 def test_google_result_parser_rejects_places_outside_the_selected_city() -> None:
     payload = {"places": [
         {"id": "chicago", "location": {"latitude": 41.88, "longitude": -87.63}},

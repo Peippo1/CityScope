@@ -1,6 +1,6 @@
 # CityScope
 
-**An evidence-grounded London journey planner for better bicycle days out.**
+**An AI route planner for memorable runs and rides through a new city.**
 
 [![CityScope checks](https://github.com/Peippo1/CityScope/actions/workflows/ci.yml/badge.svg)](https://github.com/Peippo1/CityScope/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
@@ -10,46 +10,43 @@
 ![Google Cloud](https://img.shields.io/badge/Google%20Cloud-Cloud%20Run%20%2B%20Maps-4285F4?logo=googlecloud&logoColor=white)
 ![License](https://img.shields.io/badge/license-private-lightgrey)
 
-CityScope turns a natural-language outing request into a bounded, traceable London journey plan: named endpoints, a scenic or quiet bicycle route, useful bathroom/coffee/lunch stops, and interesting places to explore. Historical bike-share activity remains hidden supporting evidence for corridor selection; Compare and Live modes remain available as secondary views. It combines deterministic H3 and DuckDB analytics with a Google ADK Runner and root LlmAgent powered by Gemini 3.5 Flash, current Google Maps context, bicycle routing, and user-owned investigation history. ADK plans bounded actions; the application remains authoritative for MCP execution, waypoint selection, Routes, validation, and provenance.
+CityScope turns a natural-language travel request into a grounded city adventure: an actual running or cycling route, two to four interesting stops, and somewhere useful to eat or drink. A Google ADK root `LlmAgent`, powered by Gemini 3.5 Flash, interprets the outing; deterministic backend code matches curated route concepts, resolves real places with Google Maps Grounding, and validates final WALK or BICYCLE geometry through Google Routes. Historical mobility data remains optional supporting intelligence rather than a prerequisite for a good route.
 
-**[Open the live CityScope app](https://cityscope-506222.web.app)**
+**[Open CityScope](https://cityscope-506222.web.app)** · **[Read the public build story](https://cityscope-506222.web.app/blog/cityscope)**
 
 ## Product tour
 
-![CityScope London mobility workspace](docs/assets/cityscope-dashboard.png)
+![CityScope route planner on desktop](docs/assets/cityscope-dashboard.png)
 
-CityScope keeps the map, interactive activity chart, request flow, and investigation controls in one workspace. Every visual separates pinned historical activity snapshots from optional current station availability, Google Maps context, and Google bicycle routes.
+Choose a city and whether to run or cycle, then describe a starting point, rough duration or distance, and the kind of experience you want. The map and concise itinerary dominate the result.
 
-![CityScope bicycle route result from Kings Cross to Borough](docs/assets/cityscope-route-planning.png)
+![A generated CityScope route with grounded stops](docs/assets/cityscope-route-planning.png)
 
 <p align="center">
-  <img src="docs/assets/cityscope-mobile.png" width="320" alt="CityScope mobile investigation workspace" />
+  <img src="docs/assets/cityscope-mobile.png" width="320" alt="CityScope mobile route planner" />
 </p>
 
 The current prototype can:
 
-- plan a London journey with outbound and optional return-loop bicycle legs;
+- plan running and cycling routes with outbound and optional return legs;
 - use curated London route ideas including Richmond Park, Thames Path, Regent's Canal, Greenwich, Wandle Trail, Lee Valley, and Epping Forest as scenic planning templates;
 - use city-specific route ideas for New York City, Chicago, and Washington, DC when those route-capable workspaces are selected;
 - explore curated European route concepts in Paris, Copenhagen, Barcelona, and Madrid; these are route-planning cities without historical CityScope mobility snapshots;
 - suggest bounded Google Maps stops for coffee, bathrooms, lunch, shops, or repairs;
-- accept optional browser-native voice input in the journey composer;
-- keep H3 activity as an optional evidence layer rather than the primary map UI;
-- compare those four cities using trips per active station/day, median duration, peak-hour share, weekend share, and hotspot concentration;
-- inspect optional live station maps for NYC, Chicago, Washington, DC, and Paris without mixing availability into historical demand rankings;
-- enrich trusted areas with current Google Maps place context;
-- compute deterministic bicycle routes through selected activity areas;
-- explore selectable activity charts and a request-flow view driven by real API trace state;
-- show source-tagged evidence, dataset provenance, limitations, and execution traces;
-- authenticate users with Google and save investigations through a Firebase-token-verified API.
+- suggest a small, deduplicated itinerary of real Google Maps places;
+- send a route into Google Maps or share it using native Web Share/clipboard fallback;
+- accept optional browser-native voice input;
+- keep H3 mobility evidence, provenance and execution traces behind the consumer experience;
+- enforce typed route intents, city bounds, waypoint budgets and provider-call limits.
 
 > Historical comparisons use a matched May 2026 window and normalized metrics only. Activity is observed bike-share data, not a census of private or dockless cycling. Station availability is optional operational context, not historical trip demand. CityScope does not claim live cycling conditions, weather, traffic, or forecasts.
 
 ## All Things Agentic Hackathon
 
-CityScope is being built for the [All Things Agentic Hackathon](https://allthingsagentichackathon.devpost.com/), using Gemini 3.5 Flash through the Google GenAI SDK and production services on Google Cloud. The recommended submission category is **Taskmaster**: one bounded investigation can classify a goal, query deterministic city analytics, resolve current places, compute a bicycle route, and return a traceable visual result.
+CityScope was built for the [All Things Agentic Hackathon](https://allthingsagentichackathon.devpost.com/), using Google ADK, Gemini 3.5 Flash through the Google GenAI SDK, Google Maps Grounding, Google Routes, and production services on Google Cloud. The agent performs one useful multi-step task: interpret an outing, select a city route concept, ground its places, calculate its geometry and return a portable plan.
 
-- [Read the build story](docs/blog/building-cityscope.md)
+- [Read the public build story](https://cityscope-506222.web.app/blog/cityscope)
+- [Read the repository copy](docs/blog/building-cityscope.md)
 - [Review the Devpost submission draft](docs/devpost-submission.md)
 - [Follow the four-minute demo plan](docs/hackathon-demo.md)
 

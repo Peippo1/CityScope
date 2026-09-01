@@ -34,6 +34,14 @@ describe("InvestigationResultPanel", () => {
   it("keeps share and save-compatible route actions available", () => {
     render(<InvestigationResultPanel result={result} onSuggestion={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Share to my phone" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Open route in Google Maps" })).toHaveAttribute("href", expect.stringContaining("maps/dir/?api=1"));
     expect(screen.getByRole("link", { name: "Google Routes" })).toHaveAttribute("href", "https://developers.google.com/maps/documentation/routes");
+  });
+
+  it("uses Maps attribution for missing names and caps the itinerary", () => {
+    const places = Array.from({ length: 6 }, (_, index) => ({ place_id: `place-${index}`, latitude: 51.5, longitude: -0.1, category: "point_of_interest", h3_cell: "cell", attribution_title: `Landmark ${index + 1} - Google Maps` }));
+    render(<InvestigationResultPanel result={{ ...result, places }} onSuggestion={vi.fn()} />);
+    expect(screen.getByText("Landmark 1")).toBeVisible();
+    expect(screen.queryByText("Landmark 5")).not.toBeInTheDocument();
   });
 });

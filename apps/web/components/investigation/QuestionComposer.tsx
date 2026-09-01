@@ -11,10 +11,6 @@ type SpeechRecognition = {
 
 const LONDON_EXAMPLES = [
   {
-    label: "Find Saturday cycling hotspots",
-    question: "Where was cycling activity highest on Saturday mornings?",
-  },
-  {
     label: "Fulham scenic loop",
     question: "I'm in Fulham and would like a scenic loop to Richmond Park with bathrooms, coffee, lunch, and interesting things to see.",
   },
@@ -105,10 +101,7 @@ const CITY_EXAMPLES: Record<string, { start: string; destination: string; exampl
 
 function examplesForCity(cityName: string, mode: "bicycle" | "running") {
   const cityExamples = CITY_EXAMPLES[cityName]?.examples;
-  // Keep the cross-city historical question available where data exists,
-  // while making route-oriented suggestions city-specific.
-  const historical = new Set(["London", "New York City", "Chicago", "Washington, DC"]);
-  const examples = cityExamples ? [...(historical.has(cityName) ? [LONDON_EXAMPLES[0]] : []), ...cityExamples] : LONDON_EXAMPLES;
+  const examples = cityExamples ? [...cityExamples] : LONDON_EXAMPLES;
   return mode === "running" ? [LONDON_EXAMPLES[LONDON_EXAMPLES.length - 1], ...(cityName === "New York City" ? [{ label: "Brooklyn 10K run", question: "I've just got to New York, where can I run around Brooklyn, what should I see and where can I stop for coffee at the end of my 10K?" }] : [])] : examples;
 }
 
@@ -123,14 +116,13 @@ type QuestionComposerProps = {
   value: string;
   isSubmitting: boolean;
   error?: string | null;
-  isAuthenticated?: boolean;
   onChange: (value: string) => void;
   onSubmit: () => void;
   mode?: "bicycle" | "running";
   onModeChange?: (mode: "bicycle" | "running") => void;
 };
 
-export function QuestionComposer({ cityName, datasetName, value, isSubmitting, error, isAuthenticated = true, onChange, onSubmit, mode = "bicycle", onModeChange }: QuestionComposerProps) {
+export function QuestionComposer({ cityName, value, isSubmitting, error, onChange, onSubmit, mode = "bicycle", onModeChange }: QuestionComposerProps) {
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [listening, setListening] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
@@ -184,7 +176,7 @@ export function QuestionComposer({ cityName, datasetName, value, isSubmitting, e
         ))}
       </div>
       <form onSubmit={submit}>
-        <label htmlFor="investigation-question">Question</label>
+        <label htmlFor="investigation-question">Describe your route</label>
         <div className="question-row">
           <input
             id="investigation-question"
@@ -196,10 +188,10 @@ export function QuestionComposer({ cityName, datasetName, value, isSubmitting, e
           />
           {voiceAvailable && <button type="button" className="secondary-button" onClick={toggleVoice} aria-label={listening ? "Listening" : "Use voice input"}>{listening ? "Listening…" : "🎙 Voice"}</button>}
           <button type="submit" className={isSubmitting ? "create-route-button is-generating" : "create-route-button"} disabled={isSubmitting || !value.trim()} aria-busy={isSubmitting}>
-            {isSubmitting ? "Creating route…" : "Create route"}
+            {isSubmitting ? "Planning route…" : "Plan my route"}
           </button>
         </div>
-        <p id="question-help" className="helper-text">{isSubmitting ? <span className="generation-status" role="status" aria-live="polite"><span className="generation-spinner" aria-hidden="true" />{generationMessages[generationStep]}</span> : <>Include a named start area such as {promptContext.start} · {cityName} journey planner · Google Maps, Routes, and grounded city evidence{!isAuthenticated ? " · sign in with Google to use agents" : ""}</>}</p>
+        <p id="question-help" className="helper-text">{isSubmitting ? <span className="generation-status" role="status" aria-live="polite"><span className="generation-spinner" aria-hidden="true" />{generationMessages[generationStep]}</span> : <>Try a starting point, rough time or distance, and anything you want to see — for example {promptContext.start} · Google Maps and grounded city knowledge</>}</p>
         {error && <p id="investigation-error" className="inline-error" role="alert">{error}</p>}
       </form>
     </section>

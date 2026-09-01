@@ -13,7 +13,9 @@ describe("CityScopeWorkspace", () => {
   it("renders the route-first workspace without legacy evidence panels or activity requests", async () => {
     const investigate = vi.fn();
     render(<CityScopeWorkspace services={{ investigate }} />);
-    expect(screen.getByRole("heading", { name: "Find a route worth remembering." })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Explore a city your way" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "Build story" })).toHaveAttribute("href", "/blog/cityscope");
+    expect(screen.queryByText(/Sign in with Google/)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Where will you explore?" })).toBeVisible();
     expect(screen.queryByText("Highest activity areas")).not.toBeInTheDocument();
     expect(screen.queryByText("Request flow")).not.toBeInTheDocument();
@@ -26,9 +28,9 @@ describe("CityScopeWorkspace", () => {
     render(<CityScopeWorkspace services={{ investigate }} />);
     await user.selectOptions(screen.getByRole("combobox", { name: "City" }), "new_york");
     await user.click(screen.getByRole("button", { name: /Running/ }));
-    await user.type(screen.getByRole("textbox", { name: "Question" }), "A 10K around Brooklyn with coffee");
-    await user.click(screen.getByRole("button", { name: "Create route" }));
-    expect(investigate).toHaveBeenCalledWith(expect.objectContaining({ city: "new_york", question: "A 10K around Brooklyn with coffee" }));
+    await user.type(screen.getByRole("textbox", { name: "Describe your route" }), "A 10K around Brooklyn with coffee");
+    await user.click(screen.getByRole("button", { name: "Plan my route" }));
+    expect(investigate).toHaveBeenCalledWith(expect.objectContaining({ city: "new_york", question: "Plan this as a running route: A 10K around Brooklyn with coffee" }));
     expect(await screen.findByText("A lovely route with places to pause.")).toBeVisible();
     expect(screen.getByText("Good places to pause")).toBeVisible();
   });
@@ -37,10 +39,20 @@ describe("CityScopeWorkspace", () => {
     const user = userEvent.setup();
     const investigate = vi.fn().mockResolvedValue(routeResult);
     render(<CityScopeWorkspace services={{ investigate }} />);
-    await user.type(screen.getByRole("textbox", { name: "Question" }), "Fulham to Richmond Park");
-    await user.click(screen.getByRole("button", { name: "Create route" }));
+    await user.type(screen.getByRole("textbox", { name: "Describe your route" }), "Fulham to Richmond Park");
+    await user.click(screen.getByRole("button", { name: "Plan my route" }));
     expect(await screen.findByText("A lovely route with places to pause.")).toBeVisible();
     await user.selectOptions(screen.getByRole("combobox", { name: "City" }), "paris");
     expect(screen.queryByText("A lovely route with places to pause.")).not.toBeInTheDocument();
+  });
+
+  it("turns backend failures into a friendly retry state", async () => {
+    const user = userEvent.setup();
+    const investigate = vi.fn().mockRejectedValue(new Error("route.intent invalid (422)"));
+    render(<CityScopeWorkspace services={{ investigate }} />);
+    await user.type(screen.getByRole("textbox", { name: "Describe your route" }), "King's Cross scenic ride");
+    await user.click(screen.getByRole("button", { name: "Plan my route" }));
+    expect(await screen.findByText("CityScope couldn't complete this plan just now. Try again.")).toBeVisible();
+    expect(screen.queryByText(/422/)).not.toBeInTheDocument();
   });
 });
