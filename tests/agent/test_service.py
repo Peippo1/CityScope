@@ -10,6 +10,7 @@ from apps.api.app.agent.places import MapsSearchResult
 from apps.api.app.agent.model import GeminiInvestigationModel
 from apps.api.app.agent.route_service import ResolvedPlace, RouteDetails
 from apps.api.app.agent.service import InvestigationService
+from apps.api.app.agent.policy import GuardrailPolicy
 from apps.api.app import config
 from services.city_data_mcp.schemas import DatasetMetadata, Evidence, MapLayer, ToolEnvelope
 
@@ -123,6 +124,10 @@ class FakeRouteService:
     async def compute_bicycle_route(self, origin, destination, waypoints):
         self.calls.append((origin.place_id or "", destination.place_id or "", len(waypoints)))
         return RouteDetails(distance_m=2400, duration_seconds=900, polyline="encoded-route", origin=origin, destination=destination, waypoints=waypoints)
+
+    async def compute_walking_route(self, origin, destination, waypoints):
+        self.calls.append((origin.place_id or "", destination.place_id or "", len(waypoints)))
+        return RouteDetails(travel_mode="walking", distance_m=2400, duration_seconds=900, polyline="encoded-route", origin=origin, destination=destination, waypoints=waypoints)
 
 
 class ConcurrentMaps(FakeMaps):
@@ -342,6 +347,23 @@ def test_route_intent_includes_curated_template_metadata() -> None:
     assert result.journey_plan.template_id == "fulham-richmond-park"
     assert result.journey_plan.template_waypoint_hints
     assert "not live popularity" in (result.journey_plan.template_notice or "")
+
+
+def test_route_uses_curated_waypoint_when_historical_context_is_unavailable() -> None:
+    mcp = FakeMcp()
+    maps = RouteMaps()
+    route_service = FakeRouteService()
+    policy = GuardrailPolicy()
+    policy.max_city_data_calls = 0
+    service = InvestigationService(mcp_client=mcp, maps_client=maps, route_service=route_service, policy=policy, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "Fulham", "destination": "Richmond Park", "preferences": ["scenic"]}),
+    ]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(question="Plan a scenic route from Fulham to Richmond Park.")))
+
+    assert result.status == "answered"
+    assert route_service.calls[0][2] >= 1
+    assert any("optional City Data" in event.label for event in result.trace)
 
 
 def test_agent_enforces_three_round_budget() -> None:
