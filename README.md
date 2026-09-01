@@ -12,7 +12,7 @@
 
 CityScope turns a natural-language travel request into a grounded city adventure: an actual running or cycling route, two to four interesting stops, and somewhere useful to eat or drink. A Google ADK root `LlmAgent`, powered by Gemini 3.5 Flash, interprets the outing; deterministic backend code matches curated route concepts, resolves real places with Google Maps Grounding, and validates final WALK or BICYCLE geometry through Google Routes. Historical mobility data remains optional supporting intelligence rather than a prerequisite for a good route.
 
-**[Open CityScope](https://cityscope-506222.web.app)** · **[Read the public build story](https://cityscope-506222.web.app/blog/cityscope)**
+**[Open CityScope](https://cityscope-506222.web.app)** · **[Read the public build story](https://tfinch.dev/writing/building-cityscope)**
 
 ## Product tour
 
@@ -45,7 +45,7 @@ The current prototype can:
 
 CityScope was built for the [All Things Agentic Hackathon](https://allthingsagentichackathon.devpost.com/), using Google ADK, Gemini 3.5 Flash through the Google GenAI SDK, Google Maps Grounding, Google Routes, and production services on Google Cloud. The agent performs one useful multi-step task: interpret an outing, select a city route concept, ground its places, calculate its geometry and return a portable plan.
 
-- [Read the public build story](https://cityscope-506222.web.app/blog/cityscope)
+- [Read the public build story](https://tfinch.dev/writing/building-cityscope)
 - [Read the repository copy](docs/blog/building-cityscope.md)
 - [Review the Devpost submission draft](docs/devpost-submission.md)
 - [Follow the four-minute demo plan](docs/hackathon-demo.md)

@@ -4,7 +4,7 @@
 
 > I created this article for the purpose of entering CityScope in the All Things Agentic Hackathon.
 
-[Try CityScope](https://cityscope-506222.web.app) · [Read the public article](https://cityscope-506222.web.app/blog/cityscope) · [View the repository](https://github.com/Peippo1/CityScope) · [All Things Agentic Hackathon](https://allthingsagentichackathon.devpost.com/)
+[Try CityScope](https://cityscope-506222.web.app) · [Read the public article](https://tfinch.dev/writing/building-cityscope) · [View the repository](https://github.com/Peippo1/CityScope) · [All Things Agentic Hackathon](https://allthingsagentichackathon.devpost.com/)
 
 ## The moment CityScope is built for
 

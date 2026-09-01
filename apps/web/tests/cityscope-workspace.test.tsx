@@ -14,7 +14,10 @@ describe("CityScopeWorkspace", () => {
     const investigate = vi.fn();
     render(<CityScopeWorkspace services={{ investigate }} />);
     expect(screen.getByRole("heading", { name: "Explore a city your way" })).toBeVisible();
-    expect(screen.getByRole("link", { name: "Build story" })).toHaveAttribute("href", "/blog/cityscope");
+    expect(screen.getByRole("link", { name: "Build story" })).toHaveAttribute(
+      "href",
+      "https://tfinch.dev/writing/building-cityscope",
+    );
     expect(screen.queryByText(/Sign in with Google/)).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Where will you explore?" })).toBeVisible();
     expect(screen.queryByText("Highest activity areas")).not.toBeInTheDocument();

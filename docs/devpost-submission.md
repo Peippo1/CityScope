@@ -13,7 +13,7 @@ This document is portfolio and submission copy. Review it against the final demo
 **Hosted project:** https://cityscope-506222.web.app
 
 **Repository:** https://github.com/Peippo1/CityScope
-**Build story:** https://cityscope-506222.web.app/blog/cityscope
+**Build story:** https://tfinch.dev/writing/building-cityscope
 
 **Architecture:** https://www.figma.com/board/qfv9Yo1Z88fcn7FBArJeTG
 

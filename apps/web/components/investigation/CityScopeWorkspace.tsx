@@ -91,7 +91,14 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     <main id="main-content" className="app-shell">
       <header className="topbar">
         <a className="brand" href="#main-content" aria-label="CityScope home"><span className="brand-mark" aria-hidden="true"><i className="brand-mark__cell brand-mark__cell--ink" /><i className="brand-mark__cell brand-mark__cell--teal" /><i className="brand-mark__cell brand-mark__cell--teal" /><i className="brand-mark__cell brand-mark__cell--ink" /></span><span>CityScope</span></a>
-        <a className="build-story-link" href="/blog/cityscope">Build story</a>
+        <a
+          className="build-story-link"
+          href="https://tfinch.dev/writing/building-cityscope"
+          target="_blank"
+          rel="noreferrer noopener"
+        >
+          Build story
+        </a>
       </header>
       <section className="dashboard-intro" aria-labelledby="page-title"><div><p className="eyebrow">CityScope</p><h1 id="page-title">Explore a city your way</h1></div><p>Tell CityScope where you are and how you want to explore. It will build a run or ride through interesting places, with a good stop along the way.</p></section>
       <label className="city-switcher">City<select value={selectedCity.id} onChange={(event) => selectCity(event.target.value)}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}</select></label>
