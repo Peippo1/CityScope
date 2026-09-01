@@ -42,6 +42,19 @@ describe("InvestigationResultPanel", () => {
     const places = Array.from({ length: 6 }, (_, index) => ({ place_id: `place-${index}`, latitude: 51.5, longitude: -0.1, category: "point_of_interest", h3_cell: "cell", attribution_title: `Landmark ${index + 1} - Google Maps` }));
     render(<InvestigationResultPanel result={{ ...result, places }} onSuggestion={vi.fn()} />);
     expect(screen.getByText("Landmark 1")).toBeVisible();
-    expect(screen.queryByText("Landmark 5")).not.toBeInTheDocument();
+    expect(screen.queryByText("Landmark 4")).not.toBeInTheDocument();
+  });
+
+  it("keeps at most one food stop alongside route sights", () => {
+    const places = [
+      { place_id: "cafe-1", name: "Cafe One", latitude: 51.5, longitude: -0.1, category: "cafe", h3_cell: "cell" },
+      { place_id: "cafe-2", name: "Cafe Two", latitude: 51.5, longitude: -0.1, category: "cafe", h3_cell: "cell" },
+      { place_id: "sight-1", name: "Landmark One", latitude: 51.5, longitude: -0.1, category: "point_of_interest", h3_cell: "cell" },
+      { place_id: "sight-2", name: "Landmark Two", latitude: 51.5, longitude: -0.1, category: "point_of_interest", h3_cell: "cell" },
+    ];
+    render(<InvestigationResultPanel result={{ ...result, places }} onSuggestion={vi.fn()} />);
+    expect(screen.getByText("Cafe One")).toBeVisible();
+    expect(screen.queryByText("Cafe Two")).not.toBeInTheDocument();
+    expect(screen.getByText("Landmark One")).toBeVisible();
   });
 });

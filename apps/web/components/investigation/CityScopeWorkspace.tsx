@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getCities, investigate } from "../../lib/api";
+import { selectItineraryPlaces } from "../../lib/itinerary";
 import type { CitiesResponse, CityCapability } from "../../types/city";
 import type { InvestigationRequest, InvestigationResult } from "../../types/investigation";
 import { CityMap, type FocusedMapPlace } from "../map/CityMap";
@@ -84,7 +85,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     h3_cell: layer.h3_cell,
     total_journeys: Number(layer.value),
   })) ?? [], [investigation]);
-  const mapPlaces = useMemo(() => investigation?.places ?? [], [investigation?.places]);
+  const mapPlaces = useMemo(() => selectItineraryPlaces(investigation?.places ?? []), [investigation?.places]);
 
   return (
     <main id="main-content" className="app-shell">

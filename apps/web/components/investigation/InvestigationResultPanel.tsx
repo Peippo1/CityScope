@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { InvestigationResult } from "../../types/investigation";
+import { selectItineraryPlaces } from "../../lib/itinerary";
 
 function safeText(value: string) {
   return value.replace(/AIza[0-9A-Za-z_-]{20,}/g, "[redacted]").replace(/((?:api[_ -]?key|authorization|bearer|token|secret|password)\s*[:=]\s*)([^\s,;]+)/gi, "$1[redacted]");
@@ -32,7 +33,7 @@ async function shareRoute(result: InvestigationResult, onMessage: (message: stri
 
 export function InvestigationResultPanel({ result, onSuggestion, onSelectPlace }: { result: InvestigationResult; onSuggestion: (question: string) => void; onSelectPlace?: (place: InvestigationResult["places"][number]) => void }) {
   const [shareMessage, setShareMessage] = useState<string | null>(null);
-  const places = Array.from(new Map(result.places.map((place) => [place.place_id, place])).values()).slice(0, 4);
+  const places = selectItineraryPlaces(result.places);
   const mapDirections = directionsUrl(result);
   const statusLabels = { answered: "Ready to go", partial: "Route ready with a few gaps", unsupported: "Not supported", failed: "Could not answer" };
   return <article className={`result-panel result-panel--${result.status}`} aria-live="polite">
