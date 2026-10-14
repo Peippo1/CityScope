@@ -9,12 +9,13 @@ const route = {
 test("renders a concise route result with stops and no legacy panels", async ({ page }) => {
   await page.route("**/investigate", (request) => request.fulfill({ json: route }));
   await page.goto("/");
-  await page.getByRole("textbox", { name: "Describe your route" }).fill("Cycle from King's Cross to Borough with coffee");
+  await page.getByLabel("Starting point").fill("King's Cross");
+  await page.getByLabel(/Destination/).fill("Borough");
   await page.getByRole("button", { name: "Plan my route" }).click();
   await expect(page.getByRole("heading", { name: "Your ride" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "King's Cross → Borough" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Nearby optional facilities" })).toBeVisible();
-  await expect(page.getByText("Coffee stop")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Example Cafe Coffee stop" })).toBeVisible();
   await expect(page.getByText("Request flow")).not.toBeVisible();
   await expect(page.getByText("Historical mobility evidence")).not.toBeVisible();
 });
@@ -23,8 +24,52 @@ test("switches city and running mode without loading activity data", async ({ pa
   await page.goto("/");
   await page.locator(".city-switcher select").selectOption("new_york");
   await page.getByRole("button", { name: /Running/ }).click();
-  await expect(page.getByRole("heading", { name: "Plan a New York City journey" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Brooklyn 10K run" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "New York City route planner" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "🏃 Running" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Park journey" })).toBeVisible();
+});
+
+test("submits explicit endpoints and preserves the selected activity", async ({ page }) => {
+  let requestBody: { question: string; context: { start_location?: string; destination?: string; activity?: string } } | undefined;
+  await page.route("**/investigate", async (interceptedRoute) => {
+    requestBody = interceptedRoute.request().postDataJSON() as typeof requestBody;
+    await interceptedRoute.fulfill({ json: route });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Running/ }).click();
+  await page.getByLabel("Starting point").fill("King's Cross");
+  await page.getByLabel(/Destination/).fill("Camden");
+  await page.getByRole("button", { name: "Plan my route" }).click();
+  await expect(page.getByRole("heading", { name: "Your ride" })).toBeVisible();
+  expect(requestBody).toEqual(expect.objectContaining({
+    question: "Plan this as a running route. Start at King's Cross. Go to Camden.",
+    context: expect.objectContaining({ start_location: "King's Cross", destination: "Camden", activity: "running" }),
+  }));
+});
+
+test("Surprise me creates an immediate bounded A-to-B request", async ({ page }) => {
+  let requestBody: { question: string; context: { start_location?: string; destination?: string; journey_type?: string; activity?: string } } | undefined;
+  await page.route("**/investigate", async (interceptedRoute) => {
+    requestBody = interceptedRoute.request().postDataJSON() as typeof requestBody;
+    await interceptedRoute.fulfill({ json: route });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Running/ }).click();
+  await page.getByLabel("Starting point").fill("King's Cross");
+  await page.getByRole("button", { name: "Surprise me" }).click();
+  await expect(page.getByRole("heading", { name: "Your ride" })).toBeVisible();
+  expect(requestBody?.context).toEqual(expect.objectContaining({ start_location: "King's Cross", destination: "Camden Market", journey_type: "a_to_b", activity: "running" }));
+  expect(requestBody?.question).toContain("Go to Camden Market.");
+});
+
+test("renders a useful provider error and keeps the retry action available", async ({ page }) => {
+  await page.route("**/investigate", (request) => request.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ detail: "provider unavailable" }) }));
+  await page.goto("/");
+  await page.getByLabel("Starting point").fill("King's Cross");
+  await page.getByLabel(/Destination/).fill("Camden");
+  await page.getByRole("button", { name: "Plan my route" }).click();
+  await expect(page.locator("#investigation-error")).toContainText("mapping or AI provider is temporarily unavailable");
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
 });
 
 test("has no serious accessibility violations or mobile overflow", async ({ page }, testInfo) => {
