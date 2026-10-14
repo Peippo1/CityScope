@@ -24,4 +24,22 @@ describe("locale support", () => {
     render(<LocaleProvider><Harness /></LocaleProvider>);
     expect(await screen.findByText("Planifier mon trajet")).toBeVisible();
   });
+
+  it.each([
+    ["en-GB", "How are you travelling?", "e.g. Camden Market"],
+    ["fr-FR", "Comment voyagez-vous ?", "ex. Bastille"],
+    ["es-ES", "¿Cómo vas a desplazarte?", "p. ej., Madrid Río"],
+    ["it-IT", "Come vuoi spostarti?", "es. Villa Borghese"],
+  ] as const)("provides translated planner copy for %s", async (locale, travelMode, destinationPlaceholder) => {
+    const user = userEvent.setup();
+    render(<LocaleProvider><Harness /></LocaleProvider>);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Language" }), locale);
+    function PlannerCopy() {
+      const { copy } = useLocale();
+      return <><span>{copy.travelMode}</span><span>{copy.destinationPlaceholder}</span><span>{copy.publicToilets}</span></>;
+    }
+    render(<LocaleProvider><PlannerCopy /></LocaleProvider>);
+    expect(screen.getByText(travelMode)).toBeVisible();
+    expect(screen.getByText(destinationPlaceholder)).toBeVisible();
+  });
 });

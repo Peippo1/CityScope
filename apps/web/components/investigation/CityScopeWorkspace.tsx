@@ -7,7 +7,7 @@ import type { CitiesResponse, CityCapability } from "../../types/city";
 import type { InvestigationRequest, InvestigationResult } from "../../types/investigation";
 import { CityMap, type FocusedMapPlace } from "../map/CityMap";
 import { InvestigationResultPanel } from "./InvestigationResultPanel";
-import { QuestionComposer } from "./QuestionComposer";
+import { QuestionComposer, type ExamplePreset } from "./QuestionComposer";
 import { SUPPORTED_LOCALES, useLocale } from "../../lib/i18n";
 
 type WorkspaceServices = {
@@ -16,6 +16,17 @@ type WorkspaceServices = {
 };
 
 const defaultServices: WorkspaceServices = { getCities, investigate };
+const SURPRISE_DESTINATIONS: Record<string, string[]> = {
+  london: ["Camden Market", "Richmond Park", "Greenwich Park"],
+  new_york: ["Central Park", "Brooklyn Bridge Park", "Prospect Park"],
+  chicago: ["Lincoln Park", "Millennium Park", "Navy Pier"],
+  washington_dc: ["National Mall", "Tidal Basin", "Georgetown Waterfront"],
+  paris: ["Jardin du Luxembourg", "Bastille", "Bois de Vincennes"],
+  copenhagen: ["The Lakes", "Amager Strandpark", "Fælledparken"],
+  barcelona: ["Parc de la Ciutadella", "Port Olímpic", "Montjuïc"],
+  madrid: ["Retiro Park", "Madrid Río", "Casa de Campo"],
+  rome: ["Villa Borghese", "Circus Maximus", "Terme di Caracalla"],
+};
 const fallbackCities: CityCapability[] = [
   { id: "london", name: "London", historical: true, routes: true, live_network: false, timezone: "Europe/London", bounds: [51.28, -0.52, 51.72, 0.34] },
   { id: "new_york", name: "New York City", historical: true, routes: true, live_network: true, timezone: "America/New_York", bounds: [40.49, -74.30, 40.92, -73.68] },
@@ -47,6 +58,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [distanceKm, setDistanceKm] = useState("");
   const [plannedStop, setPlannedStop] = useState("");
   const [facilityCategories, setFacilityCategories] = useState<string[]>([]);
+  const [lastSurpriseDestination, setLastSurpriseDestination] = useState<string | null>(null);
   const [previousTurns, setPreviousTurns] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
 
   const useCurrentLocation = useCallback(() => {
@@ -73,15 +85,20 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     return () => { cancelled = true; };
   }, [services]);
 
-  const submitQuestion = useCallback(async () => {
-    const trimmedQuestion = question.trim();
-    if (!trimmedQuestion || investigating) return;
+  const submitQuestion = useCallback(async (overrides?: { destination?: string; question?: string }) => {
+    const trimmedQuestion = (overrides?.question ?? question).trim();
+    const selectedDestination = (overrides?.destination ?? destination).trim();
+    if (investigating) return;
+    if (!startLocation.trim() || !selectedDestination) {
+      setInvestigationError(copy.destinationNeeded);
+      return;
+    }
     setInvestigating(true);
     setInvestigationError(null);
     try {
       const request = {
         city: selectedCity.id,
-        question: [`Plan this as a ${journeyMode === "running" ? "running" : "cycling"} route.`, startLocation.trim() ? `Start at ${startLocation.trim()}.` : "", destination.trim() ? `Go to ${destination.trim()}.` : "", distanceKm ? `Target ${distanceKm} km.` : "", trimmedQuestion].filter(Boolean).join(" "),
+        question: [`Plan this as a ${journeyMode === "running" ? "running" : "cycling"} route.`, `Start at ${startLocation.trim()}.`, `Go to ${selectedDestination}.`, distanceKm ? `Target ${distanceKm} km.` : "", trimmedQuestion].filter(Boolean).join(" "),
           context: {
           selected_h3_cells: selectedH3Cell ? [selectedH3Cell] : [],
           previous_turns: previousTurns.slice(-6),
@@ -92,7 +109,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
           start_location: startLocation.trim() || undefined,
           origin_latitude: originCoordinates?.latitude,
           origin_longitude: originCoordinates?.longitude,
-          destination: destination.trim() || undefined,
+          destination: selectedDestination,
           journey_type: "a_to_b",
           distance_km: distanceKm ? Number(distanceKm) : undefined,
           planned_stops: plannedStop.trim() ? [plannedStop.trim()] : [],
@@ -101,14 +118,37 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
       } satisfies InvestigationRequest;
       const result = await services.investigate(request);
       setInvestigation(result);
-      setPreviousTurns((turns) => [...turns, { role: "user" as const, content: trimmedQuestion }, { role: "assistant" as const, content: result.answer }].slice(-6));
+      setPreviousTurns((turns) => [...turns, { role: "user" as const, content: trimmedQuestion || `Plan a route to ${selectedDestination}.` }, { role: "assistant" as const, content: result.answer }].slice(-6));
       setSelectedH3Cell(result.map_layers[0]?.h3_cell ?? null);
-    } catch {
-      setInvestigationError(copy.unavailableProvider);
+    } catch (error) {
+      setInvestigationError(error instanceof Error && error.message ? error.message : copy.unavailableProvider);
     } finally {
       setInvestigating(false);
     }
   }, [copy, destination, distanceKm, facilityCategories, investigation?.answer, investigating, journeyMode, locale, originCoordinates, originMode, plannedStop, previousTurns, question, selectedCity.id, selectedH3Cell, services, startLocation]);
+
+  const applyExample = useCallback((example: ExamplePreset) => {
+    setStartLocation(example.start);
+    setOriginMode("named");
+    setOriginCoordinates(null);
+    setDestination(example.destination);
+    setQuestion(example.question);
+    setFacilityCategories(example.facilities ?? []);
+  }, []);
+
+  const surpriseMe = useCallback(() => {
+    const candidates = SURPRISE_DESTINATIONS[selectedCity.id] ?? [];
+    const available = candidates.filter((candidate) => candidate !== startLocation.trim() && candidate !== lastSurpriseDestination);
+    const candidate = available[0] ?? candidates.find((item) => item !== startLocation.trim());
+    if (!candidate) {
+      setInvestigationError(copy.surpriseUnavailable);
+      return;
+    }
+    setLastSurpriseDestination(candidate);
+    setDestination(candidate);
+    setQuestion("");
+    void submitQuestion({ destination: candidate, question: "Find a pleasant, activity-appropriate adventure with useful optional stops." });
+  }, [copy.surpriseUnavailable, lastSurpriseDestination, selectedCity.id, startLocation, submitQuestion]);
 
   const selectCity = useCallback((cityId: string) => {
     const city = cities.find((item) => item.id === cityId);
@@ -124,6 +164,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     setOriginMode("named");
     setOriginCoordinates(null);
     setDestination("");
+    setLastSurpriseDestination(null);
   }, [cities]);
 
   const investigationCells = useMemo(() => investigation?.map_layers.map((layer) => ({
@@ -146,20 +187,20 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
         </a>
         <label className="locale-switcher"><span className="sr-only">Language</span><select aria-label="Language" value={locale} onChange={(event) => setLocale(event.target.value as typeof locale)}>{SUPPORTED_LOCALES.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
       </header>
-      <section className="dashboard-intro" aria-labelledby="page-title"><div><p className="eyebrow">CityScope</p><h1 id="page-title">Discover your city with AI-powered routes.</h1></div><p>Turn everyday runs and rides into new adventures. Explore interesting places with personalised routes powered by AI.</p></section>
+      <section className="dashboard-intro" aria-labelledby="page-title"><div><p className="eyebrow">CityScope</p><h1 id="page-title">{copy.headline}</h1></div><p>{copy.supportingText}</p></section>
       <label className="city-switcher">{copy.city}<select value={selectedCity.id} onChange={(event) => selectCity(event.target.value)}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}</select></label>
       <section id="explore" className="command-surface" aria-label={`${selectedCity.name} route planner`}>
-        <QuestionComposer cityName={selectedCity.name} value={question} mode={journeyMode} onModeChange={setJourneyMode} isSubmitting={investigating} error={investigationError} onChange={setQuestion} onSubmit={() => void submitQuestion()} startLocation={startLocation} onStartLocationChange={(value) => { setOriginMode("named"); setOriginCoordinates(null); setStartLocation(value); }} originMode={originMode} onUseCurrentLocation={useCurrentLocation} locationError={locationError} destination={destination} onDestinationChange={setDestination} distanceKm={distanceKm} onDistanceKmChange={setDistanceKm} plannedStop={plannedStop} onPlannedStopChange={setPlannedStop} facilityCategories={facilityCategories} onFacilityCategoriesChange={setFacilityCategories} />
+        <QuestionComposer cityName={selectedCity.name} value={question} mode={journeyMode} onModeChange={setJourneyMode} isSubmitting={investigating} error={investigationError} onChange={setQuestion} onSubmit={() => void submitQuestion()} onSurprise={surpriseMe} onApplyExample={applyExample} canSubmit={Boolean(startLocation.trim() && destination.trim())} canSurprise={Boolean(startLocation.trim())} startLocation={startLocation} onStartLocationChange={(value) => { setOriginMode("named"); setOriginCoordinates(null); setStartLocation(value); }} originMode={originMode} onUseCurrentLocation={useCurrentLocation} locationError={locationError} destination={destination} onDestinationChange={setDestination} distanceKm={distanceKm} onDistanceKmChange={setDistanceKm} plannedStop={plannedStop} onPlannedStopChange={setPlannedStop} facilityCategories={facilityCategories} onFacilityCategoriesChange={setFacilityCategories} />
         {investigationError && <button type="button" className="secondary-button retry-investigation" onClick={() => void submitQuestion()}>{copy.retry}</button>}
       </section>
       <section className="route-workspace" aria-label={`${selectedCity.name} route results`}>
-        <section className="map-card" aria-labelledby="map-heading"><div className="map-card-heading"><div><p className="eyebrow">{copy.route}</p><h2 id="map-heading">{selectedCity.name}</h2></div><MapLegend hasPlaces={mapPlaces.length > 0} hasRoute={Boolean(investigation?.route)} /></div><CityMap cells={investigationCells} places={mapPlaces} focusedPlace={focusedPlace} route={investigation?.route} onSelectPlace={setFocusedPlace} cityName={selectedCity.name} bounds={selectedCity.bounds} locale={locale} ariaLabel={`${selectedCity.name} route map`} /></section>
-        <div className="route-result-column">{investigation ? <InvestigationResultPanel result={investigation} onSuggestion={setQuestion} onSelectPlace={(place) => setFocusedPlace({ place_id: place.place_id, name: place.name ?? place.attribution_title?.replace(/\s+-\s+Google Maps$/i, "") ?? "Google Maps place", latitude: place.latitude, longitude: place.longitude, maps_uri: place.maps_uri })} /> : <div className="route-empty"><p className="eyebrow">Ready when you are</p><h2>Where will you explore?</h2><p>Pick a city, choose a ride or run, and tell us what would make the route special.</p></div>}</div>
+        <section className="map-card" aria-labelledby="map-heading"><div className="map-card-heading"><div><p className="eyebrow">{copy.route}</p><h2 id="map-heading">{selectedCity.name}</h2></div><MapLegend hasPlaces={mapPlaces.length > 0} hasRoute={Boolean(investigation?.route)} copy={copy} /></div><CityMap cells={investigationCells} places={mapPlaces} focusedPlace={focusedPlace} route={investigation?.route} onSelectPlace={setFocusedPlace} cityName={selectedCity.name} bounds={selectedCity.bounds} locale={locale} ariaLabel={`${selectedCity.name} route map`} /></section>
+        <div className="route-result-column">{investigation ? <InvestigationResultPanel result={investigation} onSuggestion={setQuestion} onSelectPlace={(place) => setFocusedPlace({ place_id: place.place_id, name: place.name ?? place.attribution_title?.replace(/\s+-\s+Google Maps$/i, "") ?? "Google Maps place", latitude: place.latitude, longitude: place.longitude, maps_uri: place.maps_uri })} /> : <div className="route-empty"><p className="eyebrow">{copy.readyWhen}</p><h2>{copy.emptyPrompt}</h2><p>{copy.emptyDescription}</p></div>}</div>
       </section>
     </main>
   );
 }
 
-function MapLegend({ hasPlaces, hasRoute }: { hasPlaces: boolean; hasRoute: boolean }) {
-  return <div className="map-legend" role="group" aria-label="Map legend">{hasPlaces && <span><i className="legend-swatch legend-swatch--place" />Stops</span>}{hasRoute && <><span><i className="legend-swatch legend-swatch--route" />Route</span><span><i className="legend-swatch legend-swatch--endpoint" />Start / finish</span></>}</div>;
+function MapLegend({ hasPlaces, hasRoute, copy }: { hasPlaces: boolean; hasRoute: boolean; copy: ReturnType<typeof useLocale>["copy"] }) {
+  return <div className="map-legend" role="group" aria-label="Map legend">{hasPlaces && <span><i className="legend-swatch legend-swatch--place" />{copy.mapStops}</span>}{hasRoute && <><span><i className="legend-swatch legend-swatch--route" />{copy.mapRoute}</span><span><i className="legend-swatch legend-swatch--endpoint" />{copy.mapStartFinish}</span></>}</div>;
 }

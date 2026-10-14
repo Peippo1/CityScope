@@ -2,233 +2,128 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useLocale } from "../../lib/i18n";
 
 type SpeechRecognition = {
-  lang: string;
-  interimResults: boolean;
+  lang: string; interimResults: boolean;
   onresult: (event: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
-  onerror: () => void;
-  onend: () => void;
-  start: () => void;
+  onerror: () => void; onend: () => void; start: () => void;
 };
 
-const LONDON_EXAMPLES = [
-  {
-    label: "Fulham scenic loop",
-    question: "I'm in Fulham and would like a scenic loop to Richmond Park with bathrooms, coffee, lunch, and interesting things to see.",
-  },
-  {
-    label: "Coffee and bathroom stop",
-    question: "Plan a quiet park route with a coffee shop and public bathroom stop.",
-  },
-  {
-    label: "Lunch after a ride",
-    question: "Suggest a good lunch stop after a scenic bicycle ride.",
-  },
-  {
-    label: "Interesting quiet route",
-    question: "Find interesting places along a quiet scenic route.",
-  },
-  {
-    label: "Plan a running route",
-    question: "Plan a 10K running route from King's Cross to Camden with interesting sights and coffee at the finish.",
-  },
-] as const;
+export type ExamplePreset = { label: string; start: string; destination: string; question: string; facilities?: string[] };
 
-const CITY_EXAMPLES: Record<string, { start: string; destination: string; examples: readonly { label: string; question: string }[] }> = {
-  "New York City": {
-    start: "Chelsea or Central Park",
-    destination: "Prospect Park or the Hudson River Greenway",
-    examples: [
-      { label: "Hudson scenic ride", question: "I'm in Chelsea and would like a scenic ride along the Hudson River Greenway with coffee and interesting stops." },
-      { label: "Central Park loop", question: "Plan a quiet loop around Central Park with a bathroom and lunch stop." },
-      { label: "Brooklyn waterfront", question: "Find a waterfront route from DUMBO to Brooklyn Bridge Park with cafes." },
-      { label: "Brooklyn 10K run", question: "Plan a 10K run from DUMBO to Prospect Park with coffee at the finish." },
-    ],
-  },
-  Chicago: {
-    start: "Lincoln Park or The Loop",
-    destination: "Hyde Park or the Lakefront Trail",
-    examples: [
-      { label: "Lakefront scenic ride", question: "I'm in Lincoln Park and want a scenic ride along the Lakefront Trail with coffee and bathrooms." },
-      { label: "606 park route", question: "Plan a quiet ride from Wicker Park along the 606 with lunch nearby." },
-      { label: "River architecture ride", question: "Find interesting architecture and restaurants along a Chicago River route." },
-    ],
-  },
-  "Washington, DC": {
-    start: "Georgetown or the National Mall",
-    destination: "Bethesda or the Tidal Basin",
-    examples: [
-      { label: "Capital Crescent ride", question: "I'm in Georgetown and would like a quiet scenic ride to Bethesda with coffee and lunch." },
-      { label: "Monuments loop", question: "Plan a scenic loop around the National Mall and Tidal Basin with bathrooms." },
-      { label: "Mount Vernon route", question: "Find interesting places along a riverside ride toward Alexandria." },
-    ],
-  },
-  Paris: {
-    start: "the Louvre or Bastille",
-    destination: "the Eiffel Tower or Bois de Vincennes",
-    examples: [
-      { label: "Seine scenic ride", question: "I'm near the Louvre and want a scenic ride along the Seine with cafes and interesting sites." },
-      { label: "Canal route", question: "Plan a quiet ride along Canal Saint-Martin with a bathroom and lunch stop." },
-      { label: "Park loop", question: "Find a green loop through Bois de Vincennes with coffee nearby." },
-    ],
-  },
-  Copenhagen: {
-    start: "Nyhavn or Nørrebro",
-    destination: "Amager Strand or the harbour",
-    examples: [
-      { label: "Harbour scenic ride", question: "I'm in Nyhavn and would like a scenic ride to Amager Strand with coffee and interesting stops." },
-      { label: "Quiet lakes loop", question: "Plan a quiet loop around the Copenhagen Lakes with a bathroom and lunch stop." },
-      { label: "Coastal route", question: "Find a green coastal ride toward Klampenborg with cafes." },
-    ],
-  },
-  Barcelona: {
-    start: "Barceloneta or Eixample",
-    destination: "Port Olímpic or Montjuïc",
-    examples: [
-      { label: "Waterfront scenic ride", question: "I'm in Barceloneta and want a scenic ride to Port Olímpic with coffee and interesting places." },
-      { label: "Montjuïc route", question: "Plan a park route to Montjuïc with bathrooms and lunch." },
-      { label: "Besòs greenway", question: "Find a quiet ride along the Besòs River with a cafe stop." },
-    ],
-  },
-  Madrid: {
-    start: "Centro or Retiro",
-    destination: "Madrid Río or Casa de Campo",
-    examples: [
-      { label: "Madrid Río ride", question: "I'm in Centro and would like a scenic ride along Madrid Río with coffee and interesting stops." },
-      { label: "Casa de Campo loop", question: "Plan a quiet loop through Casa de Campo with a bathroom and lunch stop." },
-      { label: "Park-to-park route", question: "Find a green ride from Retiro to Casa de Campo with cafes." },
-    ],
-  },
-  Rome: {
-    start: "the Colosseum or Piazza del Popolo",
-    destination: "Circus Maximus or Villa Borghese",
-    examples: [
-      { label: "Ancient Rome ride", question: "Plan a cycling route from the Colosseum to Circus Maximus with a coffee stop." },
-      { label: "Villa Borghese run", question: "Plan a running route from Piazza del Popolo to Villa Borghese with useful stops." },
-    ],
-  },
+const CITY_EXAMPLES: Record<string, ExamplePreset[]> = {
+  London: [
+    { label: "Scenic park journey", start: "King's Cross", destination: "Camden Market", question: "Keep the route scenic and near green space." },
+    { label: "Coffee along the way", start: "King's Cross", destination: "Camden Market", question: "Find coffee shops along the way.", facilities: ["cafe"] },
+  ],
+  Paris: [
+    { label: "Seine park journey", start: "Place de la République", destination: "Bastille", question: "Keep the route pleasant and near green space." },
+    { label: "Coffee along the way", start: "Place de la République", destination: "Bastille", question: "Find coffee shops along the way.", facilities: ["cafe"] },
+  ],
+  Madrid: [
+    { label: "Park journey", start: "Plaza de España", destination: "Madrid Río", question: "Keep the route pleasant and near green space." },
+    { label: "Coffee along the way", start: "Plaza de España", destination: "Madrid Río", question: "Find coffee shops along the way.", facilities: ["cafe"] },
+  ],
+  Rome: [
+    { label: "Ancient park journey", start: "Colosseum", destination: "Circus Maximus", question: "Keep the route pleasant and near green space." },
+    { label: "Coffee along the way", start: "Colosseum", destination: "Circus Maximus", question: "Find coffee shops along the way.", facilities: ["cafe"] },
+  ],
+  "New York City": [
+    { label: "Park journey", start: "Chelsea", destination: "Central Park", question: "Keep the route scenic and near green space." },
+    { label: "Coffee along the way", start: "Chelsea", destination: "Brooklyn Bridge Park", question: "Find coffee shops along the way.", facilities: ["cafe"] },
+  ],
+  Chicago: [
+    { label: "Lakefront journey", start: "Lincoln Park", destination: "Navy Pier", question: "Keep the route scenic and near the lakefront." },
+    { label: "Coffee along the way", start: "Lincoln Park", destination: "Millennium Park", question: "Find coffee shops along the way.", facilities: ["cafe"] },
+  ],
+  "Washington, DC": [
+    { label: "Monuments journey", start: "Georgetown Waterfront", destination: "National Mall", question: "Keep the route scenic and near the river." },
+    { label: "Coffee along the way", start: "Georgetown", destination: "Tidal Basin", question: "Find coffee shops along the way.", facilities: ["cafe"] },
+  ],
+  Copenhagen: [
+    { label: "Harbour journey", start: "Nyhavn", destination: "Amager Strandpark", question: "Keep the route scenic and near the harbour." },
+    { label: "Coffee along the way", start: "Nørrebro", destination: "The Lakes", question: "Find coffee shops along the way.", facilities: ["cafe"] },
+  ],
+  Barcelona: [
+    { label: "Waterfront journey", start: "Barceloneta", destination: "Port Olímpic", question: "Keep the route scenic and near the water." },
+    { label: "Coffee along the way", start: "Eixample", destination: "Parc de la Ciutadella", question: "Find coffee shops along the way.", facilities: ["cafe"] },
+  ],
 };
-
-function examplesForCity(cityName: string, mode: "bicycle" | "running") {
-  const cityExamples = CITY_EXAMPLES[cityName]?.examples;
-  const examples = cityExamples ? [...cityExamples] : LONDON_EXAMPLES;
-  return mode === "running" ? [LONDON_EXAMPLES[LONDON_EXAMPLES.length - 1], ...(cityName === "New York City" ? [{ label: "Brooklyn 10K run", question: "Plan a 10K run from DUMBO to Prospect Park with coffee at the finish." }] : [])] : examples;
-}
-
-function cityPromptContext(cityName: string) {
-  const context = CITY_EXAMPLES[cityName];
-  return context ?? { start: "Fulham or Greenwich", destination: "Richmond Park or a riverside route" };
-}
+const DEFAULT_EXAMPLES: ExamplePreset[] = [
+  { label: "Scenic park journey", start: "Fulham", destination: "Richmond Park", question: "Keep the route scenic and near green space." },
+  { label: "Coffee along the way", start: "King's Cross", destination: "Camden Market", question: "Find coffee shops along the way.", facilities: ["cafe"] },
+];
 
 type QuestionComposerProps = {
-  cityName: string;
-  datasetName?: string | null;
-  value: string;
-  isSubmitting: boolean;
-  error?: string | null;
-  onChange: (value: string) => void;
-  onSubmit: () => void;
-  mode?: "bicycle" | "running";
-  onModeChange?: (mode: "bicycle" | "running") => void;
-  startLocation?: string;
-  onStartLocationChange?: (value: string) => void;
-  originMode?: "named" | "current_location";
-  onUseCurrentLocation?: () => void;
-  locationError?: string | null;
-  destination?: string;
-  onDestinationChange?: (value: string) => void;
-  distanceKm?: string;
-  onDistanceKmChange?: (value: string) => void;
-  facilityCategories?: string[];
-  onFacilityCategoriesChange?: (categories: string[]) => void;
-  plannedStop?: string;
-  onPlannedStopChange?: (value: string) => void;
+  cityName: string; value: string; isSubmitting: boolean; error?: string | null;
+  onChange: (value: string) => void; onSubmit: () => void; onSurprise?: () => void;
+  onApplyExample?: (example: ExamplePreset) => void; canSubmit?: boolean; canSurprise?: boolean;
+  mode?: "bicycle" | "running"; onModeChange?: (mode: "bicycle" | "running") => void;
+  startLocation?: string; onStartLocationChange?: (value: string) => void;
+  originMode?: "named" | "current_location"; onUseCurrentLocation?: () => void;
+  locationError?: string | null; destination?: string; onDestinationChange?: (value: string) => void;
+  distanceKm?: string; onDistanceKmChange?: (value: string) => void;
+  facilityCategories?: string[]; onFacilityCategoriesChange?: (categories: string[]) => void;
+  plannedStop?: string; onPlannedStopChange?: (value: string) => void;
 };
 
-export function QuestionComposer({ cityName, value, isSubmitting, error, onChange, onSubmit, mode = "bicycle", onModeChange, startLocation = "", onStartLocationChange = () => undefined, originMode = "named", onUseCurrentLocation = () => undefined, locationError, destination = "", onDestinationChange = () => undefined, distanceKm = "", onDistanceKmChange = () => undefined, facilityCategories = [], onFacilityCategoriesChange = () => undefined, plannedStop = "", onPlannedStopChange = () => undefined }: QuestionComposerProps) {
+export function QuestionComposer({ cityName, value, isSubmitting, error, onChange, onSubmit, onSurprise = () => undefined, onApplyExample = () => undefined, canSubmit = false, canSurprise = false, mode = "bicycle", onModeChange, startLocation = "", onStartLocationChange = () => undefined, originMode = "named", onUseCurrentLocation = () => undefined, locationError, destination = "", onDestinationChange = () => undefined, distanceKm = "", onDistanceKmChange = () => undefined, facilityCategories = [], onFacilityCategoriesChange = () => undefined, plannedStop = "", onPlannedStopChange = () => undefined }: QuestionComposerProps) {
   const { copy, locale } = useLocale();
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [listening, setListening] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
-  const examples = examplesForCity(cityName, mode);
-  const promptContext = cityPromptContext(cityName);
+  const examples = CITY_EXAMPLES[cityName] ?? DEFAULT_EXAMPLES;
   useEffect(() => { setVoiceAvailable(typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)); }, []);
-  const generationMessages = cityName === "Paris"
-    ? ["Finding a belle route…", "Connecting the sights…", "Picking a café stop…"]
-    : cityName === "Copenhagen"
-      ? ["Finding the hyggelig way…", "Following the harbour…", "Picking a coffee stop…"]
-      : ["Thinking about the good bits…", "Drawing your route…", "Picking lovely stops…"];
+  const generationMessages = ["Finding a good route…", "Checking the journey…", "Looking for useful stops…"];
   useEffect(() => {
     if (!isSubmitting) { setGenerationStep(0); return; }
     const timer = window.setInterval(() => setGenerationStep((step) => (step + 1) % generationMessages.length), 1200);
     return () => window.clearInterval(timer);
-  }, [isSubmitting, generationMessages.length]);
+  }, [isSubmitting]);
   function toggleVoice() {
     if (!voiceAvailable || typeof window === "undefined") return;
     const Recognition = (window as Window & { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition }).SpeechRecognition ?? (window as Window & { webkitSpeechRecognition?: new () => SpeechRecognition }).webkitSpeechRecognition;
     if (!Recognition) return;
-    const recognition = new Recognition();
-    recognition.lang = locale;
-    recognition.interimResults = false;
+    const recognition = new Recognition(); recognition.lang = locale; recognition.interimResults = false;
     recognition.onresult = (event) => { onChange(event.results[0][0].transcript); setListening(false); };
-    recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
-    setListening(true);
-    recognition.start();
+    recognition.onerror = () => setListening(false); recognition.onend = () => setListening(false);
+    setListening(true); recognition.start();
   }
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (value.trim() && !isSubmitting) onSubmit();
-  }
+  function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (canSubmit && !isSubmitting) onSubmit(); }
 
   return (
     <section className="composer" aria-labelledby="investigate-heading">
       <div className="section-heading">
-        <p className="eyebrow">{copy.ask}</p>
-        <h2 id="investigate-heading">{copy.planJourney === "Plan a journey" ? `Plan a ${cityName} journey` : `${copy.planJourney} · ${cityName}`}</h2>
-        <p>{copy.journeyIntro}</p>
+        <p className="eyebrow">{copy.ask}</p><h2 id="investigate-heading">{copy.routePlanner}</h2>
+        <p>{copy.journeyIntro}</p><p className="composer-note">{copy.surpriseIntro}</p>
       </div>
-      <div className="activity-mode" role="group" aria-label="Journey type">
-        <button type="button" className={mode === "bicycle" ? "is-selected" : ""} aria-pressed={mode === "bicycle"} onClick={() => onModeChange?.("bicycle")}>{copy.cycling}</button>
-        <button type="button" className={mode === "running" ? "is-selected" : ""} aria-pressed={mode === "running"} onClick={() => onModeChange?.("running")}>{copy.running}</button>
-      </div>
-      <div className="route-controls" aria-label="Route constraints">
-        <label>{copy.startingPoint}<select value={originMode} onChange={(event) => event.target.value === "current_location" ? onUseCurrentLocation() : onStartLocationChange("")}><option value="named">{copy.chooseStartingPoint}</option><option value="current_location">{copy.currentLocation}</option></select></label>
-        <label>{originMode === "current_location" ? copy.currentLocation : (copy.planJourney === "Plan a journey" ? "Start location" : copy.startingPoint)}<input value={startLocation} onChange={(event) => onStartLocationChange(event.target.value)} placeholder={promptContext.start} maxLength={120} readOnly={originMode === "current_location"} /></label>
+      <div className="planner-fields">
+        <fieldset className="activity-field"><legend>{copy.travelMode}</legend><div className="activity-mode" role="group" aria-label={copy.travelMode}>
+          <button type="button" className={mode === "bicycle" ? "is-selected" : ""} aria-pressed={mode === "bicycle"} onClick={() => onModeChange?.("bicycle")}>{copy.cycling}</button>
+          <button type="button" className={mode === "running" ? "is-selected" : ""} aria-pressed={mode === "running"} onClick={() => onModeChange?.("running")}>{copy.running}</button>
+        </div></fieldset>
+        <div className="route-controls" aria-label={copy.routeConstraints}>
+          <label>{copy.startingPoint}<input value={startLocation} onChange={(event) => onStartLocationChange(event.target.value)} placeholder={copy.chooseStartingPoint} maxLength={120} readOnly={originMode === "current_location"} /></label>
+          <button type="button" className="location-button" onClick={originMode === "current_location" ? () => onStartLocationChange("") : onUseCurrentLocation}>{originMode === "current_location" ? copy.changeStartingPoint : copy.useCurrentLocation}</button>
+          <label>{copy.destination} <span className="field-hint">({destination ? copy.required : copy.destinationOptional})</span><input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder={copy.destinationPlaceholder} maxLength={120} /></label>
+        </div>
         {locationError && <p className="inline-error" role="alert">{locationError}</p>}
-        <label>{copy.destination} ({copy.required})<input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder={promptContext.destination} maxLength={120} /></label>
-        <label>{copy.targetDistance} ({copy.optional})<input type="number" min="0.5" max="100" step="0.5" value={distanceKm} onChange={(event) => onDistanceKmChange(event.target.value)} placeholder="10" /></label>
-      </div>
-      <details className="advanced-route-controls">
-        <summary>{copy.addStops}</summary>
-        <label>{copy.plannedStop}<input value={plannedStop} onChange={(event) => onPlannedStopChange(event.target.value)} placeholder="e.g. a café near the finish" maxLength={120} /></label>
-        <fieldset><legend>{copy.facilities}</legend>{[["cafe", "Cafés"], ["restaurant", "Restaurants"], ["public_bathroom", "Public toilets"], ["shop", "Water or useful shops"]].map(([category, label]) => <label key={category}><input type="checkbox" checked={facilityCategories.includes(category)} onChange={(event) => onFacilityCategoriesChange(event.target.checked ? [...facilityCategories, category] : facilityCategories.filter((item) => item !== category))} />{label}</label>)}</fieldset>
-      </details>
-      <div className="prompt-list" aria-label="Example questions">
-        {examples.map((example) => (
-          <button key={example.label} type="button" className="prompt-chip" onClick={() => onChange(example.question)}>
-            {example.label}
-          </button>
-        ))}
+        <details className="advanced-route-controls">
+          <summary>{copy.advancedOptions}</summary>
+          <label>{copy.preferences}<input value={value} onChange={(event) => onChange(event.target.value)} placeholder={copy.preferencesPlaceholder} maxLength={500} /></label>
+          <label>{copy.plannedStop}<input value={plannedStop} onChange={(event) => onPlannedStopChange(event.target.value)} placeholder={copy.plannedStopPlaceholder} maxLength={120} /></label>
+          <label>{copy.targetDistance} ({copy.optional})<input type="number" min="0.5" max="100" step="0.5" value={distanceKm} onChange={(event) => onDistanceKmChange(event.target.value)} placeholder="10" /></label>
+          <fieldset><legend>{copy.facilities}</legend>{[["cafe", copy.cafes], ["restaurant", copy.restaurants], ["public_bathroom", copy.publicToilets], ["shop", copy.usefulShops]].map(([category, label]) => <label key={category}><input type="checkbox" checked={facilityCategories.includes(category)} onChange={(event) => onFacilityCategoriesChange(event.target.checked ? [...facilityCategories, category] : facilityCategories.filter((item) => item !== category))} />{label}</label>)}</fieldset>
+        </details>
       </div>
       <form onSubmit={submit}>
-        <label htmlFor="investigation-question">{copy.describeRoute}</label>
         <div className="question-row">
-          <input
-            id="investigation-question"
-            value={value}
-            onChange={(event) => onChange(event.target.value)}
-            placeholder={`e.g. a scenic loop from ${promptContext.start} to ${promptContext.destination} with coffee and lunch`}
-            maxLength={500}
-            aria-describedby={error ? "investigation-error" : "question-help"}
-          />
-          {voiceAvailable && <button type="button" className="secondary-button" onClick={toggleVoice} aria-label={listening ? "Listening" : "Use voice input"}>{listening ? "Listening…" : "🎙 Voice"}</button>}
-          <button type="submit" className={isSubmitting ? "create-route-button is-generating" : "create-route-button"} disabled={isSubmitting || !value.trim()} aria-busy={isSubmitting}>
-          {isSubmitting ? copy.planning : copy.planRoute}
-          </button>
+          {voiceAvailable && <button type="button" className="secondary-button" onClick={toggleVoice} aria-label={listening ? copy.listening : copy.voiceInput}>{listening ? `${copy.listening}…` : `🎙 ${copy.voiceInput}`}</button>}
+          <button type="submit" className={isSubmitting ? "create-route-button is-generating" : "create-route-button"} disabled={isSubmitting || !canSubmit} aria-busy={isSubmitting}>{isSubmitting ? copy.planning : copy.planRoute}</button>
+          <button type="button" className="secondary-button surprise-button" onClick={onSurprise} disabled={isSubmitting || !canSurprise}>{copy.surpriseMe}</button>
         </div>
-        <p id="question-help" className="helper-text">{isSubmitting ? <span className="generation-status" role="status" aria-live="polite"><span className="generation-spinner" aria-hidden="true" />{generationMessages[generationStep]}</span> : <>Choose a destination for this release. Target distance is advisory and is compared with the calculated A-to-B route; loop optimisation is planned for a future release.</>}</p>
+        <p className="helper-text">{isSubmitting ? <span className="generation-status" role="status" aria-live="polite"><span className="generation-spinner" aria-hidden="true" />{generationMessages[generationStep]}</span> : copy.surpriseHint}</p>
         {error && <p id="investigation-error" className="inline-error" role="alert">{error}</p>}
       </form>
+      <div className="prompt-list" aria-label={copy.exampleJourneys}>{examples.map((example, index) => <button key={example.label} type="button" className="prompt-chip" onClick={() => onApplyExample({ ...example, question: index === 0 ? copy.scenicPreference : copy.coffeePreference })}>{index === 0 ? copy.exampleScenic : copy.exampleCoffee}</button>)}</div>
     </section>
   );
 }
