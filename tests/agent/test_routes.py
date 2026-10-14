@@ -3,7 +3,15 @@ from __future__ import annotations
 import asyncio
 import pytest
 
-from apps.api.app.agent.route_service import GoogleRoutesService, RouteLocation, RouteWaypoint, select_waypoints
+from apps.api.app.agent.route_service import (
+    GoogleRoutesService,
+    RouteLocation,
+    RouteWaypoint,
+    is_explicit_waypoint_query,
+    waypoint_detour_ratio,
+    waypoint_is_near_route,
+    select_waypoints,
+)
 
 
 def test_waypoint_selection_is_bounded_and_deterministic() -> None:
@@ -18,6 +26,30 @@ def test_waypoint_selection_is_bounded_and_deterministic() -> None:
     second = select_waypoints(origin, destination, cells)
     assert [item.h3_cell for item in first] == [item.h3_cell for item in second]
     assert len(first) <= 2
+
+
+def test_generic_waypoint_queries_are_not_treated_as_explicit_places() -> None:
+    assert not is_explicit_waypoint_query("a café halfway")
+    assert not is_explicit_waypoint_query("find a cafe nearby")
+    assert is_explicit_waypoint_query("Foundry Coffee")
+
+
+def test_waypoint_corridor_rejects_extreme_detours_but_allows_nearby_stops() -> None:
+    origin = RouteLocation(name="King's Cross", latitude=51.5316, longitude=-0.1236)
+    destination = RouteLocation(name="Camden", latitude=51.5390, longitude=-0.1426)
+    nearby = RouteWaypoint(h3_cell="near", latitude=51.535, longitude=-0.132, mobility_value=0, score=1, reason="test")
+    distant = RouteWaypoint(h3_cell="far", latitude=51.4408, longitude=0.0876, mobility_value=0, score=1, reason="test")
+
+    assert waypoint_is_near_route(origin, destination, nearby)
+    assert not waypoint_is_near_route(origin, destination, distant)
+    assert waypoint_detour_ratio(origin, destination, distant) > 0.75
+
+
+def test_route_distance_validation_uses_waypoint_detour_not_global_distance() -> None:
+    origin = RouteLocation(name="A", latitude=51.50, longitude=-0.14)
+    destination = RouteLocation(name="B", latitude=51.51, longitude=-0.08)
+    nearby = RouteWaypoint(h3_cell="near", latitude=51.505, longitude=-0.11, mobility_value=0, score=1, reason="test")
+    assert waypoint_detour_ratio(origin, destination, nearby) < 0.75
 
 
 def test_routes_request_is_bicycle_and_uses_place_ids(monkeypatch) -> None:

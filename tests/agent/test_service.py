@@ -115,6 +115,8 @@ class RouteMaps(FakeMaps):
         self.resolution_calls.append(f"{query}:{city}")
         if query == "King's Cross":
             return ResolvedPlace(name=query, place_id="place-origin", latitude=51.5308, longitude=-0.1238, maps_uri="https://maps.google.com/origin")
+        if query == "a café halfway":
+            return ResolvedPlace(name=query, place_id="place-far", latitude=51.4408, longitude=0.0876, maps_uri="https://maps.google.com/far")
         return ResolvedPlace(name=query, place_id="place-destination", latitude=51.5033, longitude=-0.1195, maps_uri="https://maps.google.com/destination")
 
 
@@ -430,6 +432,23 @@ def test_route_intent_resolves_explicit_planned_stop_as_waypoint() -> None:
     assert route_service.calls[0][2] == 1
     assert result.planned_stops and result.planned_stops[0].name == "Foundry Coffee"
     assert result.journey_plan is not None and result.journey_plan.selected_stops[0].name == "Foundry Coffee"
+
+
+def test_generic_planned_stop_is_not_allowed_to_create_an_extreme_detour() -> None:
+    maps = RouteMaps()
+    route_service = FakeRouteService()
+    service = InvestigationService(mcp_client=FakeMcp(), maps_client=maps, route_service=route_service, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "King's Cross", "destination": "Borough"}),
+    ]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(
+        question="Cycle from King's Cross to Borough with a café halfway.",
+        context={"planned_stops": ["a café halfway"]},
+    )))
+
+    assert result.status == "answered"
+    assert route_service.calls[0][2] == 0
+    assert any("outside the intended route corridor" in limitation for limitation in result.limitations)
 
 
 def test_route_intent_includes_curated_template_metadata() -> None:

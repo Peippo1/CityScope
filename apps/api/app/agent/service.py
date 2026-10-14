@@ -20,7 +20,7 @@ from .adk_runtime import ADKInvestigationModel, heuristic_route_decision
 from .model import GemmaJourneyCharacterScorer
 from .places import AmenitySearchPlan, GoogleMapsGroundingClient, deterministic_amenity_analysis, normalize_amenity_plan
 from .policy import ExecutionBudget, GuardrailPolicy, PolicyCode, PolicyDecision, PolicyOutcome
-from .route_service import GoogleRoutesService, RouteDetails, RouteExecutor, RouteWaypoint, select_waypoints
+from .route_service import GoogleRoutesService, RouteDetails, RouteExecutor, RouteWaypoint, is_explicit_waypoint_query, select_waypoints, waypoint_is_near_route, waypoint_detour_ratio
 from .route_templates import match_route_templates
 from .journey_planner import JourneyPlanner
 from .schemas import InvestigationRequest, InvestigationResult, TraceEvent, ToolDecision, JourneyPlan, JourneySegment, PlaceResult
@@ -342,6 +342,7 @@ class InvestigationService:
             envelope.limitations.append(limitations_hint)
         planned_stop_places: list[PlaceResult] = []
         planned_stop_waypoints: list[RouteWaypoint] = []
+        explicit_planned_detour = False
         planned_queries = list(dict.fromkeys(request_context.planned_stops))
         if planned_queries:
             resolution_gate = self.policy.reserve_maps_resolution(budget, len(planned_queries))
@@ -350,8 +351,14 @@ class InvestigationService:
                     resolved_planned = await asyncio.gather(*(self.maps_client.resolve_location(query, city) for query in planned_queries))
                     for place in resolved_planned:
                         cell = h3.latlng_to_cell(place.latitude, place.longitude, 9)
+                        waypoint = RouteWaypoint(h3_cell=cell, latitude=place.latitude, longitude=place.longitude, mobility_value=0, score=1, reason="User-selected planned stop.")
+                        if not is_explicit_waypoint_query(place.name) and not waypoint_is_near_route(origin, destination, waypoint):
+                            envelope.limitations.append("A generic planned stop resolved outside the intended route corridor, so it was not added as a waypoint.")
+                            continue
+                        if is_explicit_waypoint_query(place.name) and not waypoint_is_near_route(origin, destination, waypoint):
+                            explicit_planned_detour = True
                         planned_stop_places.append(PlaceResult(place_id=place.place_id or f"planned-{cell}", name=place.name, latitude=place.latitude, longitude=place.longitude, maps_uri=place.maps_uri, category="point_of_interest", h3_cell=cell))
-                        planned_stop_waypoints.append(RouteWaypoint(h3_cell=cell, latitude=place.latitude, longitude=place.longitude, mobility_value=0, score=1, reason="User-selected planned stop."))
+                        planned_stop_waypoints.append(waypoint)
                     self.record(iid, trace, kind="tool_call", label="Resolved user-selected planned stops", status="completed", provider="google_maps", tool="maps.search_places", policy=resolution_gate, count=len(planned_stop_places), call=budget.maps_calls, limit=self.policy.max_maps_calls)
                 except Exception:
                     limitations_hint = "One or more planned stops could not be resolved; the route used the remaining constraints."
@@ -376,6 +383,9 @@ class InvestigationService:
         self.record(iid,trace,kind="tool_call",label=f"Called Google Routes API: deterministic {mode_label} route",status="completed",provider="google_routes",tool=route_tool,policy=route_gate,count=1,call=budget.routes_calls,limit=self.policy.max_routes_calls)
         segments = [JourneySegment(label="Outbound", purpose="Start to destination", route=route)]
         limitations = list(dict.fromkeys(envelope.limitations + [route.warning] + (["The route was computed directly after waypoint routing failed."] if fallback and not route.waypoints else [])))
+        if explicit_planned_detour:
+            detour = max(waypoint_detour_ratio(origin, destination, waypoint) for waypoint in planned_stop_waypoints)
+            limitations.append(f"An explicitly selected stop creates a substantial straight-line detour ({detour * 100:.0f}% beyond the direct journey); review the route before travelling.")
         requested_distance_km = request_context.distance_km
         if requested_distance_km is not None and abs((route.distance_m / 1000) - requested_distance_km) / requested_distance_km > 0.35:
             limitations.append(f"The requested distance was {requested_distance_km:.1f} km; the resolved endpoints produced {route.distance_m / 1000:.1f} km. Refine the endpoints or ask for a longer or shorter route.")

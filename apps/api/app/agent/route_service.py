@@ -10,6 +10,15 @@ from h3 import cell_to_latlng
 from pydantic import BaseModel, Field
 from .errors import ProviderPayloadError, ProviderUnavailableError
 
+ROUTE_CORRIDOR_METERS = 3000.0
+MAX_AUTOMATIC_WAYPOINT_DETOUR = 0.75
+_GENERIC_WAYPOINT_QUERY = re.compile(
+    r"^(?:a|an|any|some)\s+(?:.+\s+)?(?:cafe|caf[eé]|coffee shop|restaurant|toilet|bathroom)"
+    r"(?:\s+(?:nearby|halfway|along the way|on the route))?$|"
+    r"\b(?:nearby|halfway|along the way|on the route)\b",
+    re.IGNORECASE,
+)
+
 def h3_centroid(cell: str) -> tuple[float, float]:
     return tuple(cell_to_latlng(cell))
 
@@ -69,6 +78,36 @@ def _distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:
     return 6_371_000 * 2 * math.asin(math.sqrt(hav))
 
 
+def waypoint_detour_ratio(origin: RouteLocation, destination: RouteLocation, waypoint: RouteWaypoint) -> float:
+    """Return the waypoint's straight-line detour relative to the endpoint pair."""
+    if any(value is None for value in (origin.latitude, origin.longitude, destination.latitude, destination.longitude)):
+        return float("inf")
+    direct = max(_distance_m((origin.latitude, origin.longitude), (destination.latitude, destination.longitude)), 1.0)
+    via_waypoint = (
+        _distance_m((origin.latitude, origin.longitude), (waypoint.latitude, waypoint.longitude))
+        + _distance_m((waypoint.latitude, waypoint.longitude), (destination.latitude, destination.longitude))
+    )
+    return max(0.0, (via_waypoint - direct) / direct)
+
+
+def waypoint_is_near_route(origin: RouteLocation, destination: RouteLocation, waypoint: RouteWaypoint) -> bool:
+    """Bound automatic stops to a corridor around the requested A-to-B journey."""
+    if any(value is None for value in (origin.latitude, origin.longitude, destination.latitude, destination.longitude)):
+        return False
+    start, end = (origin.latitude, origin.longitude), (destination.latitude, destination.longitude)
+    x1, y1 = start[1], start[0]
+    x2, y2 = end[1], end[0]
+    t = max(0.0, min(1.0, ((waypoint.longitude - x1) * (x2 - x1) + (waypoint.latitude - y1) * (y2 - y1)) / max((x2 - x1) ** 2 + (y2 - y1) ** 2, 1e-12)))
+    projected = (y1 + t * (y2 - y1), x1 + t * (x2 - x1))
+    perpendicular = _distance_m((waypoint.latitude, waypoint.longitude), projected)
+    return perpendicular <= ROUTE_CORRIDOR_METERS and waypoint_detour_ratio(origin, destination, waypoint) <= MAX_AUTOMATIC_WAYPOINT_DETOUR
+
+
+def is_explicit_waypoint_query(query: str) -> bool:
+    """Recognize named stops separately from generic model/place-search requests."""
+    return not _GENERIC_WAYPOINT_QUERY.search(query.strip())
+
+
 def select_waypoints(origin: RouteLocation, destination: RouteLocation, hotspots: list[dict[str, Any]]) -> list[RouteWaypoint]:
     """Select at most two high-activity cells near the straight-line route."""
     if origin.latitude is None or origin.longitude is None or destination.latitude is None or destination.longitude is None:
@@ -92,9 +131,9 @@ def select_waypoints(origin: RouteLocation, destination: RouteLocation, hotspots
         x2, y2 = end[1], end[0]
         t = max(0.0, min(1.0, ((lon - x1) * (x2 - x1) + (lat - y1) * (y2 - y1)) / max((x2 - x1) ** 2 + (y2 - y1) ** 2, 1e-12)))
         perpendicular = _distance_m(candidate, (y1 + t * (y2 - y1), x1 + t * (x2 - x1)))
-        if perpendicular > 3000 or detour > 0.75:
+        if perpendicular > ROUTE_CORRIDOR_METERS or detour > MAX_AUTOMATIC_WAYPOINT_DETOUR:
             continue
-        score = value / max_value - min(perpendicular / 3000, 1.0) * 0.5 - min(detour / 0.75, 1.0) * 0.5
+        score = value / max_value - min(perpendicular / ROUTE_CORRIDOR_METERS, 1.0) * 0.5 - min(detour / MAX_AUTOMATIC_WAYPOINT_DETOUR, 1.0) * 0.5
         if score <= 0:
             continue
         scored.append(RouteWaypoint(h3_cell=cell, latitude=lat, longitude=lon, mobility_value=value, score=score, reason=f"Historical activity {value:g} in the May 2026 snapshot; selected as a high-activity cell near the route corridor."))
