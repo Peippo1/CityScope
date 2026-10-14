@@ -11,7 +11,18 @@
 apps/web/node_modules
 apps/web/.next
 apps/web/out
+apps/web
 apps/web/test-results
 apps/web/playwright-report
+tests
+evals
+docs
+.firebase
+*.DS_Store
+CityScope- PRD__.pdf
+data/generated/*_fixture_*.parquet
+data/generated/london_cycling_journeys.parquet
+data/generated/london_cycling_activity.parquet
+data/metadata/*-fixture.json
 data/raw
 data/quarantine

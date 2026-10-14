@@ -8,8 +8,20 @@ __pycache__/
 .env.*
 apps/web/node_modules/
 apps/web/.next/
+apps/web/
 apps/web/test-results/
 apps/web/playwright-report/
+tests/
+evals/
+docs/
+.firebase/
+*.DS_Store
+CityScope- PRD__.pdf
+cityscope.egg-info/
+data/generated/*_fixture_*.parquet
+data/generated/london_cycling_journeys.parquet
+data/generated/london_cycling_activity.parquet
+data/metadata/*-fixture.json
 data/raw/
 data/quarantine/
 security_best_practices_report.md
