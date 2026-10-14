@@ -61,7 +61,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     try {
       const request = {
         city: selectedCity.id,
-        question: `Plan this as a ${journeyMode === "running" ? "running" : "cycling"} route: ${trimmedQuestion}`,
+        question: [`Plan this as a ${journeyMode === "running" ? "running" : "cycling"} route.`, startLocation.trim() ? `Start at ${startLocation.trim()}.` : "", distanceKm ? `Target ${distanceKm} km.` : "", trimmedQuestion].filter(Boolean).join(" "),
         context: {
           selected_h3_cells: selectedH3Cell ? [selectedH3Cell] : [],
           previous_turns: previousTurns.slice(-6),
@@ -82,7 +82,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     } finally {
       setInvestigating(false);
     }
-  }, [investigating, journeyMode, question, selectedCity.id, selectedH3Cell, services]);
+  }, [distanceKm, facilityCategories, investigation?.answer, investigating, journeyMode, plannedStop, previousTurns, question, selectedCity.id, selectedH3Cell, services, startLocation]);
 
   const selectCity = useCallback((cityId: string) => {
     const city = cities.find((item) => item.id === cityId);

@@ -32,9 +32,11 @@ describe("CityScopeWorkspace", () => {
     render(<CityScopeWorkspace services={{ investigate }} />);
     await user.selectOptions(screen.getByRole("combobox", { name: "City" }), "new_york");
     await user.click(screen.getByRole("button", { name: /Running/ }));
+    await user.type(screen.getByLabelText("Start location"), "Brooklyn");
+    await user.type(screen.getByLabelText("Distance (km)"), "10");
     await user.type(screen.getByRole("textbox", { name: "Describe your route" }), "A 10K around Brooklyn with coffee");
     await user.click(screen.getByRole("button", { name: "Plan my route" }));
-    expect(investigate).toHaveBeenCalledWith(expect.objectContaining({ city: "new_york", question: "Plan this as a running route: A 10K around Brooklyn with coffee" }));
+    expect(investigate).toHaveBeenCalledWith(expect.objectContaining({ city: "new_york", question: "Plan this as a running route. Start at Brooklyn. Target 10 km. A 10K around Brooklyn with coffee", context: expect.objectContaining({ start_location: "Brooklyn", distance_km: 10 }) }));
     expect(await screen.findByText("A lovely route with places to pause.")).toBeVisible();
     expect(screen.getByRole("heading", { name: "Nearby optional facilities" })).toBeVisible();
     expect(investigate).toHaveBeenLastCalledWith(expect.objectContaining({ context: expect.objectContaining({ activity: "running", facility_categories: [] }) }));
