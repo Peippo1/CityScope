@@ -3,6 +3,36 @@ import type { InvestigationRequest, InvestigationResult } from "../types/investi
 
 const API_URL = process.env.NEXT_PUBLIC_CITYSCOPE_API_URL ?? "http://localhost:8000";
 
+async function getApiErrorMessage(response: Response, failureMessage: string): Promise<string> {
+  let detail: unknown;
+  try {
+    const payload: unknown = await response.clone().json();
+    if (payload && typeof payload === "object" && "detail" in payload) {
+      detail = payload.detail;
+    }
+  } catch {
+    // Keep the status-specific fallback when the provider returns no JSON body.
+  }
+
+  if (response.status === 400 || response.status === 422) {
+    return typeof detail === "string"
+      ? `Request needs attention: ${detail}`
+      : "Request needs attention. Check the journey details and try again.";
+  }
+  if (response.status === 429) {
+    return "CityScope is busy or the request limit was reached. Try again shortly.";
+  }
+  if (response.status === 502 || response.status === 503) {
+    return "A mapping or AI provider is temporarily unavailable. Try again shortly.";
+  }
+  if (response.status === 504) {
+    return typeof detail === "string"
+      ? detail
+      : "The route service timed out. Try a narrower request.";
+  }
+  return `${failureMessage} (${response.status})`;
+}
+
 async function apiRequest<T>(path: string, init: RequestInit | undefined, failureMessage: string): Promise<T> {
   let response: Response;
   const method = (init?.method ?? "GET").toUpperCase();
@@ -21,7 +51,7 @@ async function apiRequest<T>(path: string, init: RequestInit | undefined, failur
       await new Promise((resolve) => setTimeout(resolve, 350));
       continue;
     }
-    throw new Error(`${failureMessage} (${response.status})`);
+    throw new Error(await getApiErrorMessage(response, failureMessage));
   }
   throw new Error(`${failureMessage} (503)`);
 }

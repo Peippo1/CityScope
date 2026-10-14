@@ -18,7 +18,28 @@ describe("CityScope API client", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
 
     await expect(getLondonActivity()).rejects.toThrow(
-      "CityScope activity data could not be loaded (503)",
+      "A mapping or AI provider is temporarily unavailable. Try again shortly.",
+    );
+  });
+
+  it("distinguishes rate limits and provider timeouts for investigations", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce(Response.json({ detail: "Too many requests" }, { status: 429 }))
+        .mockResolvedValueOnce(Response.json({ detail: "Investigation timed out. Try a narrower question." }, { status: 504 })),
+    );
+    const payload = {
+      city: "london" as const,
+      question: "Plan a route from King's Cross to Camden.",
+      context: { selected_h3_cells: [], previous_turns: [] },
+    };
+
+    await expect(investigate(payload)).rejects.toThrow(
+      "CityScope is busy or the request limit was reached. Try again shortly.",
+    );
+    await expect(investigate(payload)).rejects.toThrow(
+      "Investigation timed out. Try a narrower question.",
     );
   });
 

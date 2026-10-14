@@ -57,4 +57,14 @@ describe("InvestigationResultPanel", () => {
     expect(screen.queryByText("Cafe Two")).not.toBeInTheDocument();
     expect(screen.getByText("Landmark One")).toBeVisible();
   });
+
+  it.each([
+    ["null", null, null, "Unavailable", "Unavailable"],
+    ["undefined", undefined, undefined, "Unavailable", "Unavailable"],
+    ["zero", 0, 0, "0.0 km", "0 min"],
+  ])("renders %s route metrics without crashing", (_label, distance_m, duration_seconds, expectedDistance, expectedDuration) => {
+    render(<InvestigationResultPanel result={{ ...result, requested_distance_km: null, route: { ...result.route!, distance_m, duration_seconds } }} onSuggestion={vi.fn()} />);
+    expect(screen.getByText("Calculated distance").parentElement).toHaveTextContent(expectedDistance);
+    expect(screen.getByText("Estimated time").parentElement).toHaveTextContent(expectedDuration);
+  });
 });
