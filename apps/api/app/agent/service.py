@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import re
 import time
@@ -27,6 +28,12 @@ from .schemas import InvestigationRequest, InvestigationResult, TraceEvent, Tool
 from .telemetry import TelemetryAdapter, TelemetryEvent, telemetry_from_env
 from ..observability import request_id, set_request_context, reset_request_context
 
+ROUTE_TERMS = (
+    "route", "run", "running", "cycle", "cycling", "bike", "ride", "journey", "10k",
+    "itinéraire", "itineraire", "vélo", "velo", "course", "ruta", "recorrido", "ciclismo", "bicicleta",
+    "percorso", "corsa", "bici", "bicicletta",
+)
+
 
 class InvestigationService:
     def __init__(self, mcp_client: Any = None, live_mcp_client: Any = None, maps_client: Any = None, model: InvestigationModel | None = None, route_service: RouteExecutor | None = None, policy: GuardrailPolicy | None = None, telemetry: TelemetryAdapter | None = None, gemma_scorer: GemmaJourneyCharacterScorer | None = None) -> None:
@@ -51,6 +58,29 @@ class InvestigationService:
             result = InvestigationResult(investigation_id=result.investigation_id, status="failed", answer="The investigation result could not be returned safely.", limitations=["Provider details were removed by the response safety policy."])
         self.telemetry.emit(TelemetryEvent(investigation_id=result.investigation_id, event_type="final_result", status=result.status, policy_code=safety.code.value))
         return result
+
+    async def _resolve_location(self, query: str, city: str, locale: str):
+        resolver = self.maps_client.resolve_location
+        if "locale" in inspect.signature(resolver).parameters:
+            return await resolver(query, city, locale=locale)
+        return await resolver(query, city)
+
+    async def _search_places(self, category: str, cell: str, city: str, locale: str):
+        searcher = self.maps_client.search_places
+        if "locale" in inspect.signature(searcher).parameters:
+            return await searcher(category, cell, city, locale=locale)
+        return await searcher(category, cell, city)
+
+    @staticmethod
+    def _route_answer(locale: str, mode_label: str, origin: str, destination: str, distance_km: float, minutes: float, return_to_origin: bool) -> str:
+        suffix = " and back" if return_to_origin else ""
+        if locale == "fr-FR":
+            return f"L’itinéraire {mode_label} validé de {origin} à {destination}{' et retour' if return_to_origin else ''} mesure {distance_km:.1f} km à l’aller et prend environ {minutes:.0f} minutes."
+        if locale == "es-ES":
+            return f"La ruta de {mode_label} validada de {origin} a {destination}{' y vuelta' if return_to_origin else ''} mide {distance_km:.1f} km de ida y dura unos {minutes:.0f} minutos."
+        if locale == "it-IT":
+            return f"Il percorso {mode_label} verificato da {origin} a {destination}{' e ritorno' if return_to_origin else ''} è lungo {distance_km:.1f} km all’andata e dura circa {minutes:.0f} minuti."
+        return f"The validated {mode_label} journey from {origin} to {destination}{suffix} is {distance_km:.1f} km outbound and about {minutes:.0f} minutes."
 
     @staticmethod
     def _comparison_unit(metric: str) -> str:
@@ -115,7 +145,8 @@ class InvestigationService:
         if gate.outcome != PolicyOutcome.ALLOW:
             self.record(iid, trace, kind="planning", label="Rejected request at the deterministic policy boundary", status="rejected", policy=gate)
             return self.finish(InvestigationResult(investigation_id=iid, status="unsupported", answer=gate.message, limitations=["No model or provider call was made."], trace=trace))
-        if request.city == "paris" and not any(term in request.question.lower() for term in ("route", "cycling", "cycle", "bicycle", "ride", "journey")):
+        is_route_question = request.context.activity is not None or any(term in request.question.lower() for term in ROUTE_TERMS)
+        if request.city == "paris" and not is_route_question:
             return await self._paris_live(iid, trace)
         if self.adk_runtime:
             self.record(iid, trace, kind="planning", label="CityScope ADK investigation started", status="completed", provider="gemini", call=1, limit=self.policy.max_model_rounds)
@@ -123,7 +154,7 @@ class InvestigationService:
         self.record(iid, trace, kind="planning", label="Classify question and select a City Data MCP tool", status="completed", policy=gate)
         context, tool_results = json.dumps({"city": request.city, "context": request.context.model_dump(mode="json")}), []
         character_score = None
-        route_request = any(term in request.question.lower() for term in ("route", "run", "running", "cycle", "cycling", "bike", "ride", "journey", "10k"))
+        route_request = is_route_question
         # Keep the optional character scorer off the critical route path. It
         # enriches analytics questions, but should never add latency or a
         # second model dependency to the visitor's route request.
@@ -146,6 +177,18 @@ class InvestigationService:
                 )
             except Exception:
                 failure = self.policy.provider_error("Gemini")
+                if is_route_question and request.context.start_location and request.context.destination:
+                    decision = ToolDecision(
+                        kind="call_tool",
+                        tool="route.intent",
+                        arguments={
+                            "origin": request.context.start_location,
+                            "destination": request.context.destination,
+                            "travel_mode": "walking" if request.context.activity == "running" else "bicycle",
+                        },
+                    )
+                    self.record(iid, trace, kind="planning", label="Used deterministic route fallback after model unavailability", status="completed", provider="gemini", policy=failure)
+                    return await self._route(iid, request.city, request.question, decision, request.context, trace, budget)
                 self.record(iid, trace, kind="planning", label="Model decision unavailable", status="failed", provider="gemini", policy=failure, ms=round((time.perf_counter()-started)*1000), call=budget.model_rounds, limit=self.policy.max_model_rounds)
                 return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The investigation could not be planned.", limitations=[failure.message], trace=trace))
             self.telemetry.emit(TelemetryEvent(investigation_id=iid, event_type="planning", provider="gemini", status="completed", policy_code="allowed", duration_ms=round((time.perf_counter()-started)*1000), call_number=budget.model_rounds, budget_limit=self.policy.max_model_rounds))
@@ -155,7 +198,7 @@ class InvestigationService:
                 # A provider can return a malformed route intent even when the
                 # user request is safe. Recover with the same bounded parser
                 # used during provider outages, then apply policy again.
-                if self.adk_runtime and decision.tool == "route.intent" and any(term in request.question.lower() for term in ("run", "running", "cycle", "cycling", "bike", "ride", "route")):
+                if self.adk_runtime and decision.tool == "route.intent" and is_route_question:
                     decision = heuristic_route_decision(request.question)
                     gate = self.policy.check_model_decision(decision)
                 if gate.outcome == PolicyOutcome.ALLOW:
@@ -185,7 +228,7 @@ class InvestigationService:
                     self.record(iid, trace, kind="tool_call", label="Rejected Maps enrichment", status="rejected", tool="maps.search_places", policy=gate)
                     return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer="The place search was rejected.", limitations=[gate.message], trace=trace))
                 async def search(cell: str, category: str):
-                    began = time.perf_counter(); result = await self.maps_client.search_places(category, cell, request.city)
+                    began = time.perf_counter(); result = await self._search_places(category, cell, request.city, request.context.locale)
                     return cell, category, result, round((time.perf_counter()-began)*1000)
                 try:
                     found = await asyncio.gather(*(search(c, a) for c in plan.h3_cells for a in plan.categories))
@@ -332,7 +375,7 @@ class InvestigationService:
             hints = [hint for hint in template.waypoint_hints if hint.casefold() not in {origin.name.casefold(), destination.name.casefold()}][:2]
             if hints and self.policy.reserve_maps_resolution(budget, len(hints)).outcome == PolicyOutcome.ALLOW:
                 try:
-                    resolved_hints = await asyncio.gather(*(self.maps_client.resolve_location(hint, city) for hint in hints))
+                    resolved_hints = await asyncio.gather(*(self._resolve_location(hint, city, request_context.locale) for hint in hints))
                     waypoints = [RouteWaypoint(h3_cell=h3.latlng_to_cell(place.latitude, place.longitude, 9), latitude=place.latitude, longitude=place.longitude, mobility_value=0, score=1, reason=f"Curated route hint from {template.name}.") for place in resolved_hints]
                 except Exception:
                     limitations_hint = "A curated waypoint could not be resolved; the route was computed using the named endpoints."
@@ -348,7 +391,7 @@ class InvestigationService:
             resolution_gate = self.policy.reserve_maps_resolution(budget, len(planned_queries))
             if resolution_gate.outcome == PolicyOutcome.ALLOW:
                 try:
-                    resolved_planned = await asyncio.gather(*(self.maps_client.resolve_location(query, city) for query in planned_queries))
+                    resolved_planned = await asyncio.gather(*(self._resolve_location(query, city, request_context.locale) for query in planned_queries))
                     for place in resolved_planned:
                         cell = h3.latlng_to_cell(place.latitude, place.longitude, 9)
                         waypoint = RouteWaypoint(h3_cell=cell, latitude=place.latitude, longitude=place.longitude, mobility_value=0, score=1, reason="User-selected planned stop.")
@@ -412,7 +455,7 @@ class InvestigationService:
                     maps_gate = self.policy.check_maps_plan(plan, trusted_cells, budget)
                     if maps_gate.outcome == PolicyOutcome.ALLOW:
                         async def search(cell: str, category: str):
-                            return await self.maps_client.search_places(category, cell, city)
+                            return await self._search_places(category, cell, city, request_context.locale)
                         found = await asyncio.gather(*(search(cell, category) for cell in plan.h3_cells for category in plan.categories))
                         for result in found:
                             selected_stops.extend(result.places)
@@ -454,7 +497,7 @@ class InvestigationService:
             self.record(iid,trace,kind="synthesis",label="validate_route",status="completed",provider="google_routes",tool=route_tool,call=budget.routes_calls,limit=self.policy.max_routes_calls)
             self.record(iid,trace,kind="synthesis",label="compose_result",status="completed",policy=self.policy.allow())
             self.record(iid,trace,kind="synthesis",label="Investigation complete",status="completed",provider="gemini",policy=self.policy.allow())
-        return self.finish(InvestigationResult(investigation_id=iid,status="answered",answer=f"The validated {mode_label} journey from {origin.name} to {destination.name}" + (" and back" if return_to_origin else "") + f" is {route.distance_m/1000:.1f} km outbound and about {route.duration_seconds/60:.0f} minutes.",dataset=envelope.dataset,evidence=evidence,map_layers=envelope.map_layers,city_insights=envelope.results,route=route,journey_plan=journey,places=planned_stop_places + selected_stops,planned_stops=planned_stop_places,facilities=selected_stops,requested_distance_km=requested_distance_km,limitations=limitations,trace=trace))
+        return self.finish(InvestigationResult(investigation_id=iid,status="answered",answer=self._route_answer(request_context.locale, mode_label, origin.name, destination.name, route.distance_m / 1000, route.duration_seconds / 60, return_to_origin),dataset=envelope.dataset,evidence=evidence,map_layers=envelope.map_layers,city_insights=envelope.results,route=route,journey_plan=journey,places=planned_stop_places + selected_stops,planned_stops=planned_stop_places,facilities=selected_stops,requested_distance_km=requested_distance_km,limitations=limitations,trace=trace))
 
     @staticmethod
     def _apply_route_context(decision: ToolDecision, question: str, request_context: Any) -> ToolDecision:
@@ -491,4 +534,4 @@ class InvestigationService:
                 latitude=latitude,
                 longitude=longitude,
             )
-        return await self.maps_client.resolve_location(name or query, city)
+        return await self._resolve_location(name or query, city, request_context.locale)

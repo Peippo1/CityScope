@@ -39,6 +39,14 @@ def test_google_search_arguments_follow_the_selected_city() -> None:
     assert arguments["region_code"] == "US"
 
 
+def test_google_search_arguments_localize_provider_results_without_changing_geometry() -> None:
+    arguments = google_search_arguments("cafe", CELL, "rome", "it-IT")
+
+    assert arguments["language_code"] == "it"
+    assert arguments["region_code"] == "IT"
+    assert arguments["location_bias"]["circle"]["radius_meters"] == MAX_SEARCH_RADIUS_M
+
+
 def test_maps_client_uses_server_credential_and_official_endpoint_defaults() -> None:
     client = GoogleMapsGroundingClient(api_key="server-only-test-key")
 

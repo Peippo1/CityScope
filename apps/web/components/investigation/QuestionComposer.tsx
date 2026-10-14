@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { useLocale } from "../../lib/i18n";
 
 type SpeechRecognition = {
   lang: string;
@@ -97,6 +98,14 @@ const CITY_EXAMPLES: Record<string, { start: string; destination: string; exampl
       { label: "Park-to-park route", question: "Find a green ride from Retiro to Casa de Campo with cafes." },
     ],
   },
+  Rome: {
+    start: "the Colosseum or Piazza del Popolo",
+    destination: "Circus Maximus or Villa Borghese",
+    examples: [
+      { label: "Ancient Rome ride", question: "Plan a cycling route from the Colosseum to Circus Maximus with a coffee stop." },
+      { label: "Villa Borghese run", question: "Plan a running route from Piazza del Popolo to Villa Borghese with useful stops." },
+    ],
+  },
 };
 
 function examplesForCity(cityName: string, mode: "bicycle" | "running") {
@@ -136,6 +145,7 @@ type QuestionComposerProps = {
 };
 
 export function QuestionComposer({ cityName, value, isSubmitting, error, onChange, onSubmit, mode = "bicycle", onModeChange, startLocation = "", onStartLocationChange = () => undefined, originMode = "named", onUseCurrentLocation = () => undefined, locationError, destination = "", onDestinationChange = () => undefined, distanceKm = "", onDistanceKmChange = () => undefined, facilityCategories = [], onFacilityCategoriesChange = () => undefined, plannedStop = "", onPlannedStopChange = () => undefined }: QuestionComposerProps) {
+  const { copy, locale } = useLocale();
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [listening, setListening] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
@@ -157,7 +167,7 @@ export function QuestionComposer({ cityName, value, isSubmitting, error, onChang
     const Recognition = (window as Window & { SpeechRecognition?: new () => SpeechRecognition; webkitSpeechRecognition?: new () => SpeechRecognition }).SpeechRecognition ?? (window as Window & { webkitSpeechRecognition?: new () => SpeechRecognition }).webkitSpeechRecognition;
     if (!Recognition) return;
     const recognition = new Recognition();
-    recognition.lang = "en-GB";
+    recognition.lang = locale;
     recognition.interimResults = false;
     recognition.onresult = (event) => { onChange(event.results[0][0].transcript); setListening(false); };
     recognition.onerror = () => setListening(false);
@@ -173,25 +183,25 @@ export function QuestionComposer({ cityName, value, isSubmitting, error, onChang
   return (
     <section className="composer" aria-labelledby="investigate-heading">
       <div className="section-heading">
-        <p className="eyebrow">Ask CityScope</p>
-        <h2 id="investigate-heading">Plan a {cityName} journey</h2>
-        <p>Tell us where you want to go and what would make the {mode === "running" ? "run" : "ride"} memorable.</p>
+        <p className="eyebrow">{copy.ask}</p>
+        <h2 id="investigate-heading">{copy.planJourney === "Plan a journey" ? `Plan a ${cityName} journey` : `${copy.planJourney} · ${cityName}`}</h2>
+        <p>{copy.journeyIntro}</p>
       </div>
       <div className="activity-mode" role="group" aria-label="Journey type">
-        <button type="button" className={mode === "bicycle" ? "is-selected" : ""} aria-pressed={mode === "bicycle"} onClick={() => onModeChange?.("bicycle")}>🚲 Cycling</button>
-        <button type="button" className={mode === "running" ? "is-selected" : ""} aria-pressed={mode === "running"} onClick={() => onModeChange?.("running")}>🏃 Running</button>
+        <button type="button" className={mode === "bicycle" ? "is-selected" : ""} aria-pressed={mode === "bicycle"} onClick={() => onModeChange?.("bicycle")}>{copy.cycling}</button>
+        <button type="button" className={mode === "running" ? "is-selected" : ""} aria-pressed={mode === "running"} onClick={() => onModeChange?.("running")}>{copy.running}</button>
       </div>
       <div className="route-controls" aria-label="Route constraints">
-        <label>Starting point<select value={originMode} onChange={(event) => event.target.value === "current_location" ? onUseCurrentLocation() : onStartLocationChange("")}><option value="named">Choose a starting point</option><option value="current_location">Use my current location</option></select></label>
-        <label>{originMode === "current_location" ? "Current location" : "Start location"}<input value={startLocation} onChange={(event) => onStartLocationChange(event.target.value)} placeholder={promptContext.start} maxLength={120} readOnly={originMode === "current_location"} /></label>
+        <label>{copy.startingPoint}<select value={originMode} onChange={(event) => event.target.value === "current_location" ? onUseCurrentLocation() : onStartLocationChange("")}><option value="named">{copy.chooseStartingPoint}</option><option value="current_location">{copy.currentLocation}</option></select></label>
+        <label>{originMode === "current_location" ? copy.currentLocation : (copy.planJourney === "Plan a journey" ? "Start location" : copy.startingPoint)}<input value={startLocation} onChange={(event) => onStartLocationChange(event.target.value)} placeholder={promptContext.start} maxLength={120} readOnly={originMode === "current_location"} /></label>
         {locationError && <p className="inline-error" role="alert">{locationError}</p>}
-        <label>Destination (required)<input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder={promptContext.destination} maxLength={120} /></label>
-        <label>Target distance (optional)<input type="number" min="0.5" max="100" step="0.5" value={distanceKm} onChange={(event) => onDistanceKmChange(event.target.value)} placeholder="10" /></label>
+        <label>{copy.destination} ({copy.required})<input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder={promptContext.destination} maxLength={120} /></label>
+        <label>{copy.targetDistance} ({copy.optional})<input type="number" min="0.5" max="100" step="0.5" value={distanceKm} onChange={(event) => onDistanceKmChange(event.target.value)} placeholder="10" /></label>
       </div>
       <details className="advanced-route-controls">
-        <summary>Add stops and facilities</summary>
-        <label>Planned stop<input value={plannedStop} onChange={(event) => onPlannedStopChange(event.target.value)} placeholder="e.g. a café near the finish" maxLength={120} /></label>
-        <fieldset><legend>Nearby optional facilities</legend>{[["cafe", "Cafés"], ["restaurant", "Restaurants"], ["public_bathroom", "Public toilets"], ["shop", "Water or useful shops"]].map(([category, label]) => <label key={category}><input type="checkbox" checked={facilityCategories.includes(category)} onChange={(event) => onFacilityCategoriesChange(event.target.checked ? [...facilityCategories, category] : facilityCategories.filter((item) => item !== category))} />{label}</label>)}</fieldset>
+        <summary>{copy.addStops}</summary>
+        <label>{copy.plannedStop}<input value={plannedStop} onChange={(event) => onPlannedStopChange(event.target.value)} placeholder="e.g. a café near the finish" maxLength={120} /></label>
+        <fieldset><legend>{copy.facilities}</legend>{[["cafe", "Cafés"], ["restaurant", "Restaurants"], ["public_bathroom", "Public toilets"], ["shop", "Water or useful shops"]].map(([category, label]) => <label key={category}><input type="checkbox" checked={facilityCategories.includes(category)} onChange={(event) => onFacilityCategoriesChange(event.target.checked ? [...facilityCategories, category] : facilityCategories.filter((item) => item !== category))} />{label}</label>)}</fieldset>
       </details>
       <div className="prompt-list" aria-label="Example questions">
         {examples.map((example) => (
@@ -201,7 +211,7 @@ export function QuestionComposer({ cityName, value, isSubmitting, error, onChang
         ))}
       </div>
       <form onSubmit={submit}>
-        <label htmlFor="investigation-question">Describe your route</label>
+        <label htmlFor="investigation-question">{copy.describeRoute}</label>
         <div className="question-row">
           <input
             id="investigation-question"
@@ -213,7 +223,7 @@ export function QuestionComposer({ cityName, value, isSubmitting, error, onChang
           />
           {voiceAvailable && <button type="button" className="secondary-button" onClick={toggleVoice} aria-label={listening ? "Listening" : "Use voice input"}>{listening ? "Listening…" : "🎙 Voice"}</button>}
           <button type="submit" className={isSubmitting ? "create-route-button is-generating" : "create-route-button"} disabled={isSubmitting || !value.trim()} aria-busy={isSubmitting}>
-            {isSubmitting ? "Planning route…" : "Plan my route"}
+          {isSubmitting ? copy.planning : copy.planRoute}
           </button>
         </div>
         <p id="question-help" className="helper-text">{isSubmitting ? <span className="generation-status" role="status" aria-live="polite"><span className="generation-spinner" aria-hidden="true" />{generationMessages[generationStep]}</span> : <>Choose a destination for this release. Target distance is advisory and is compared with the calculated A-to-B route; loop optimisation is planned for a future release.</>}</p>

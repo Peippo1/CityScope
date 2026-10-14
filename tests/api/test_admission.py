@@ -30,7 +30,7 @@ def test_api_adds_security_headers_and_rejects_oversized_request(monkeypatch):
 def test_investigation_rate_limit_returns_retry_after(monkeypatch):
     monkeypatch.setattr(config, "INVESTIGATION_RATE_LIMIT", 1)
     client = ApiClient(app)
-    payload = {"city": "rome", "question": "What are the hotspots?"}
+    payload = {"city": "tokyo", "question": "What are the hotspots?"}
 
     first = client.post("/investigate", json=payload)
     second = client.post("/investigate", json=payload)

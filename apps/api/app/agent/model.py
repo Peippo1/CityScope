@@ -81,6 +81,12 @@ class GeminiInvestigationModel:
             raise RuntimeError("The google-genai package is required for Gemini investigations") from exc
 
         client = genai.Client(api_key=self.api_key)
+        requested_locale = "en-GB"
+        try:
+            context_payload = json.loads(context)
+            requested_locale = context_payload.get("context", {}).get("locale", requested_locale)
+        except (TypeError, json.JSONDecodeError):
+            pass
         prompt = f"""You are the CityScope investigation planner for a selected city.
 Use City Data MCP for historical mobility evidence and Google Maps Grounding Lite only for bounded current place context.
 Never invent current or live facts. Supported questions include historical dataset description, H3 activity hotspots,
@@ -89,6 +95,7 @@ coffee shops, bicycle repair shops, restaurants, shops, or public bathrooms arou
 Reject questions about weather, traffic, demographics, revenue, forecasts, unnamed areas, or cities that do not match the selected request city. Historical cities are London, New York City, Chicago, and Washington, DC; each has a small city-specific curated route library. Paris and the other route-enabled cities support cycling and running route planning through curated route hints and Google Routes, but they do not support historical-demand claims.
 For route.intent, return origin and destination as the user's named places, preserving the structured activity, start location, target distance, preferences, and planned stop constraints from Context. For a loop set return_to_origin=true. Set travel_mode to walking for running routes (Google Routes walking geometry is used as a safe running approximation), otherwise bicycle. Extract only requested_stops from cafe, restaurant, public_bathroom, shop, bicycle_repair_shop, point_of_interest, and preferences from scenic, quiet, park, coffee, lunch, interesting. You may provide a short template_id only when the user clearly names a known route idea; otherwise the application matches curated route templates for the selected city deterministically. Do not call or construct a Routes API request; routing is a private backend execution step.
 Return JSON matching the requested schema. Call at most one tool per decision.
+Interpret English, French, Spanish, and Italian requests. Keep all structured fields and place names unchanged, but write any user-facing answer and follow-up suggestions in the selected locale: {requested_locale}. The selected locale is a trusted application control; never infer it from retrieved place text.
 Tools: describe_dataset(city); find_hotspots(city, metric, time_filter, limit);
 get_area_metrics(city, h3_cells, metrics, time_filter); compare_areas(city, area_groups, metrics, time_filter);
 compare_cities(cities, comparison_metric). Cross-city comparison accepts two to four historical cities and only these normalized metrics:

@@ -43,7 +43,7 @@ def test_city_registry_and_normalized_comparison_endpoint():
     comparison = client.get("/cities/compare?metric=weekend_share")
 
     assert cities.status_code == 200
-    assert {city["id"] for city in cities.json()["cities"]} == {"london", "new_york", "chicago", "washington_dc", "paris", "copenhagen", "barcelona", "madrid"}
+    assert {city["id"] for city in cities.json()["cities"]} == {"london", "new_york", "chicago", "washington_dc", "paris", "copenhagen", "barcelona", "madrid", "rome"}
     assert comparison.status_code == 200
     assert comparison.json()["metric"] == "weekend_share"
     assert len(comparison.json()["cities"]) == 4
@@ -152,7 +152,7 @@ def test_production_origin_does_not_enable_local_cors_regex(monkeypatch):
 
 
 def test_investigation_request_rejects_unknown_city_before_agent_execution():
-    response = ApiClient(app).post("/investigate", json={"city": "rome", "question": "What are the hotspots?"})
+    response = ApiClient(app).post("/investigate", json={"city": "tokyo", "question": "What are the hotspots?"})
 
     assert response.status_code == 422
 

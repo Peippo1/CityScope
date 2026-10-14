@@ -27,7 +27,7 @@ Gemini never receives authority to construct coordinates, Place IDs, Routes payl
 
 ## Endpoint authority
 
-`InvestigationContext` carries the request-scoped route state: activity, origin mode, named or selected origin, destination, optional target distance, planned stops, nearby facility categories, preferences, and bounded conversation history.
+`InvestigationContext` carries the request-scoped route state: activity, selected locale (`en-GB`, `fr-FR`, `es-ES`, or `it-IT`), origin mode, named or selected origin, destination, optional target distance, planned stops, nearby facility categories, preferences, and bounded conversation history.
 
 Authority rules are deterministic:
 
@@ -37,6 +37,8 @@ Authority rules are deterministic:
 4. Place IDs pass directly to Google Routes. Routes returns endpoint coordinates, which CityScope validates before rendering.
 5. Generic endpoints such as “City centre” are rejected rather than silently substituted for explicit controls.
 6. Conversation refinements preserve the existing origin, destination, activity, and route context unless the user changes them.
+
+The selected locale is a typed application control. It is passed to Gemini as an output-language constraint and to Google Maps resolution where supported; retrieved place text cannot change the locale or routing authority. Place names remain provider names rather than being machine-translated.
 
 Current-location coordinates are used only for the active request. They are not sent to Gemini and are not persisted in saved investigations.
 

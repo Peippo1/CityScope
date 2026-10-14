@@ -19,7 +19,7 @@ export type ActivityResponse = {
 };
 
 export type CityCapability = {
-  id: "london" | "new_york" | "chicago" | "washington_dc" | "paris" | "copenhagen" | "barcelona" | "madrid";
+  id: "london" | "new_york" | "chicago" | "washington_dc" | "paris" | "copenhagen" | "barcelona" | "madrid" | "rome";
   name: string;
   historical: boolean;
   routes: boolean;

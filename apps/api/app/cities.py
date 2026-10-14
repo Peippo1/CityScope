@@ -6,7 +6,7 @@ from math import hypot
 
 
 HistoricalCityId = Literal["london", "new_york", "chicago", "washington_dc"]
-CityId = Literal["london", "new_york", "chicago", "washington_dc", "paris", "copenhagen", "barcelona", "madrid"]
+CityId = Literal["london", "new_york", "chicago", "washington_dc", "paris", "copenhagen", "barcelona", "madrid", "rome"]
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ CITIES: dict[CityId, CityDefinition] = {
     "copenhagen": CityDefinition("copenhagen", "Copenhagen", "Europe/Copenhagen", (55.55, 12.40, 55.82, 12.75), False, True, False, "Copenhagen, Denmark", "DK", "https://www.visitcopenhagen.com/copenhagen/planning/cycling-copenhagen", "VisitCopenhagen public guidance"),
     "barcelona": CityDefinition("barcelona", "Barcelona", "Europe/Madrid", (41.30, 2.02, 41.50, 2.30), False, True, False, "Barcelona, Spain", "ES", "https://www.barcelona.cat/en/what-to-do-in-bcn/sport/cycling", "Barcelona public guidance"),
     "madrid": CityDefinition("madrid", "Madrid", "Europe/Madrid", (40.30, -3.85, 40.55, -3.55), False, True, False, "Madrid, Spain", "ES", "https://www.esmadrid.com/en/madrid-cycling", "Madrid public guidance"),
+    "rome": CityDefinition("rome", "Rome", "Europe/Rome", (41.75, 12.30, 42.05, 12.65), False, True, False, "Rome, Italy", "IT", "https://www.turismoroma.it/en", "Roma Capitale public guidance"),
 }
 
 # Human-readable anchors used to explain H3 cells in the UI. These are labels
@@ -46,6 +47,7 @@ AREA_ANCHORS: dict[CityId, tuple[tuple[str, float, float], ...]] = {
     "copenhagen": (("City Centre",55.68,12.57),("Nørrebro",55.70,12.55),("Nyhavn",55.68,12.59),("Amager",55.65,12.61),("Østerbro",55.70,12.58)),
     "barcelona": (("Eixample",41.39,2.16),("Barceloneta",41.38,2.19),("Gràcia",41.40,2.15),("Montjuïc",41.36,2.15),("Poblenou",41.40,2.20)),
     "madrid": (("Centro",40.42,-3.70),("Retiro",40.42,-3.68),("Arganzuela",40.40,-3.70),("Casa de Campo",40.42,-3.75),("Salamanca",40.43,-3.68)),
+    "rome": (("Colosseum",41.89,12.49),("Centro Storico",41.90,12.48),("Villa Borghese",41.91,12.48),("Trastevere",41.89,12.47),("EUR",41.83,12.47)),
 }
 
 

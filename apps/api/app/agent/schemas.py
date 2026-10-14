@@ -11,6 +11,7 @@ from services.city_data_mcp.schemas import DatasetMetadata, Evidence, MapLayer
 AmenityCategory = Literal["cafe", "coffee_shop", "bicycle_repair_shop", "restaurant", "shop", "public_bathroom", "point_of_interest"]
 JourneyStopCategory = Literal["cafe", "restaurant", "public_bathroom", "shop", "bicycle_repair_shop", "point_of_interest"]
 ActivityMode = Literal["running", "cycling"]
+Locale = Literal["en-GB", "fr-FR", "es-ES", "it-IT"]
 OriginMode = Literal["named", "selected_place", "current_location"]
 JourneyType = Literal["a_to_b", "distance_based"]
 
@@ -26,6 +27,7 @@ class InvestigationContext(BaseModel):
     previous_turns: list[ConversationTurn] = Field(default_factory=list, max_length=6)
     evidence_summary: str | None = Field(default=None, max_length=2000)
     activity: ActivityMode | None = None
+    locale: Locale = "en-GB"
     origin_mode: OriginMode = "named"
     start_location: str | None = Field(default=None, max_length=120)
     origin_place_id: str | None = Field(default=None, max_length=300)

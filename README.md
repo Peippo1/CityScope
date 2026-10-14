@@ -25,6 +25,7 @@ CityScope is designed around a clear A-to-B journey:
 - discover nearby cafés, restaurants, toilets, or useful shops without automatic detours;
 - compare an advisory target distance with the route's calculated distance; and
 - refine the request while preserving the original route context.
+- switch the planner between English, French, Spanish, and Italian; browser language is detected by default and a manual choice is remembered.
 
 ![CityScope production route result with map, metrics, planned stop and nearby facilities](docs/assets/screenshots/cityscope-route-result-desktop.png)
 
@@ -39,6 +40,8 @@ The screenshot above is a production King’s Cross → Camden Market cycling ro
 ![CityScope production architecture overview](docs/assets/architecture/cityscope-architecture-overview.svg)
 
 The FastAPI service is the trust boundary. Gemini interprets intent and preferences; Google Maps Grounding resolves places; Google Routes calculates walking or bicycle geometry; deterministic CityScope code owns endpoint authority, provider budgets, waypoint validation, and the public response.
+
+Route-only coverage currently includes London, Paris, Madrid, Rome, Copenhagen, Barcelona, New York City, Chicago, and Washington, DC. Historical mobility enrichment remains limited to the cities with an available CityScope dataset; live Google Maps and Routes coverage is used independently where supported.
 
 [Open the editable architecture in Figma](https://www.figma.com/design/oCm6LzC2ZAACrkFTm4PllS) · [View the detailed request flow](docs/assets/architecture/cityscope-agentic-request-flow.svg) · [Read the route-navigation notes](docs/architecture/route-navigation.md)
 

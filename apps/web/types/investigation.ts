@@ -1,11 +1,14 @@
+export type Locale = "en-GB" | "fr-FR" | "es-ES" | "it-IT";
+
 export type InvestigationRequest = {
-  city: "london" | "new_york" | "chicago" | "washington_dc" | "paris" | "copenhagen" | "barcelona" | "madrid";
+  city: "london" | "new_york" | "chicago" | "washington_dc" | "paris" | "copenhagen" | "barcelona" | "madrid" | "rome";
   question: string;
   context: {
     selected_h3_cells: string[];
     previous_turns: { role: "user" | "assistant"; content: string }[];
     evidence_summary?: string;
     activity?: "running" | "cycling";
+    locale?: Locale;
     origin_mode?: "named" | "selected_place" | "current_location";
     start_location?: string;
     origin_place_id?: string;

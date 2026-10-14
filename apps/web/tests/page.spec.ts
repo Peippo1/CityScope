@@ -21,7 +21,7 @@ test("renders a concise route result with stops and no legacy panels", async ({ 
 
 test("switches city and running mode without loading activity data", async ({ page }) => {
   await page.goto("/");
-  await page.selectOption("select", "new_york");
+  await page.locator(".city-switcher select").selectOption("new_york");
   await page.getByRole("button", { name: /Running/ }).click();
   await expect(page.getByRole("heading", { name: "Plan a New York City journey" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Brooklyn 10K run" })).toBeVisible();

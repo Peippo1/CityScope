@@ -36,6 +36,9 @@ CATEGORY_QUERY = {
     "point_of_interest": "interesting places and landmarks",
 }
 
+LOCALE_LANGUAGE = {"en-GB": "en", "fr-FR": "fr", "es-ES": "es", "it-IT": "it"}
+CITY_LANGUAGE = {"FR": "fr", "ES": "es", "IT": "it"}
+
 
 def _safe_google_url(value: Any) -> str | None:
     """Keep provider-supplied links navigable without trusting arbitrary URLs."""
@@ -105,7 +108,7 @@ def h3_centroid(cell: str) -> tuple[float, float]:
     return float(latitude), float(longitude)
 
 
-def google_search_arguments(category: AmenityCategory, cell: str, city: CityId = "london") -> dict[str, Any]:
+def google_search_arguments(category: AmenityCategory, cell: str, city: CityId = "london", locale: str | None = None) -> dict[str, Any]:
     latitude, longitude = h3_centroid(cell)
     city_definition = get_city(city)
     return {
@@ -116,7 +119,7 @@ def google_search_arguments(category: AmenityCategory, cell: str, city: CityId =
                 "radius_meters": MAX_SEARCH_RADIUS_M,
             }
         },
-        "language_code": "en",
+        "language_code": LOCALE_LANGUAGE.get(locale or "", CITY_LANGUAGE.get(city_definition.region_code, "en")),
         "region_code": city_definition.region_code,
     }
 
@@ -129,10 +132,10 @@ class GoogleMapsGroundingClient:
         self.api_key = api_key or os.getenv("GOOGLE_MAPS_GROUNDING_API_KEY") or os.getenv("GOOGLE_MAPS_API_KEY")
         self.timeout_s = timeout_s
 
-    async def search_places(self, category: AmenityCategory, cell: str, city: CityId = "london") -> MapsSearchResult:
+    async def search_places(self, category: AmenityCategory, cell: str, city: CityId = "london", locale: str | None = None) -> MapsSearchResult:
         if not self.api_key:
             raise ProviderUnavailableError("Google Maps", "API key is not configured")
-        arguments = google_search_arguments(category, cell, city)
+        arguments = google_search_arguments(category, cell, city, locale)
         headers = {
             "X-Goog-Api-Key": self.api_key,
             "Accept": "application/json, text/event-stream",
@@ -150,13 +153,14 @@ class GoogleMapsGroundingClient:
                     payload = _structured_payload(result)
                     return parse_search_result(payload, category, cell, city)
 
-    async def resolve_location(self, query: str, city: CityId = "london") -> ResolvedPlace:
+    async def resolve_location(self, query: str, city: CityId = "london", locale: str | None = None) -> ResolvedPlace:
         """Resolve a named endpoint through Grounding search; never accept model coordinates."""
         if not self.api_key:
             raise ProviderUnavailableError("Google Maps", "API key is not configured")
         headers = {"X-Goog-Api-Key": self.api_key, "Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
         city_definition = get_city(city)
-        arguments = {"text_query": f"{query}, {city_definition.maps_location}", "language_code": "en", "region_code": city_definition.region_code}
+        language = LOCALE_LANGUAGE.get(locale or "", CITY_LANGUAGE.get(city_definition.region_code, "en"))
+        arguments = {"text_query": f"{query}, {city_definition.maps_location}", "language_code": language, "region_code": city_definition.region_code}
         async with httpx.AsyncClient(headers=headers, timeout=self.timeout_s) as http_client:
             async with streamable_http_client(self.url, http_client=http_client) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=self.timeout_s)) as session:
