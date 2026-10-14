@@ -20,6 +20,7 @@ from .model import GeminiInvestigationModel, InvestigationModel
 from .adk_runtime import ADKInvestigationModel, heuristic_route_decision
 from .model import GemmaJourneyCharacterScorer
 from .places import AmenitySearchPlan, GoogleMapsGroundingClient, deterministic_amenity_analysis, normalize_amenity_plan
+from .errors import ProviderDiagnostic, classify_provider_exception, contains_cancellation
 from .policy import ExecutionBudget, GuardrailPolicy, PolicyCode, PolicyDecision, PolicyOutcome
 from .route_discovery import RouteDiscoveryAgent
 from .route_service import GoogleRoutesService, RouteDetails, RouteExecutor, RouteWaypoint, is_explicit_waypoint_query, select_waypoints, waypoint_is_near_route, waypoint_detour_ratio
@@ -48,10 +49,10 @@ class InvestigationService:
         self.policy = policy or GuardrailPolicy()
         self.telemetry = telemetry or telemetry_from_env()
 
-    def record(self, iid: str, trace: list[TraceEvent], *, kind: str, label: str, status: str, tool: str | None = None, provider: str | None = None, policy: PolicyDecision | None = None, count: int | None = None, ms: int | None = None, call: int | None = None, limit: int | None = None) -> None:
+    def record(self, iid: str, trace: list[TraceEvent], *, kind: str, label: str, status: str, tool: str | None = None, provider: str | None = None, policy: PolicyDecision | None = None, count: int | None = None, ms: int | None = None, call: int | None = None, limit: int | None = None, diagnostic: ProviderDiagnostic | None = None) -> None:
         code = policy.code.value if policy else None
         trace.append(TraceEvent(kind=kind, label=label, status=status, tool=tool, provider=provider, result_count=count, latency_ms=ms, policy_code=code, call_number=call, budget_limit=limit))
-        self.telemetry.emit(TelemetryEvent(investigation_id=iid, event_type=kind, provider=provider, tool=tool, status=status, policy_code=code, error_category=code if status in {"failed", "rejected"} else None, duration_ms=ms, result_count=count, call_number=call, budget_limit=limit))
+        self.telemetry.emit(TelemetryEvent(investigation_id=iid, event_type=kind, provider=provider, tool=tool, status=status, policy_code=code, error_category=diagnostic.category if diagnostic else (code if status in {"failed", "rejected"} else None), duration_ms=ms, result_count=count, call_number=call, budget_limit=limit, request_id=request_id(), operation=tool, upstream_http_status=diagnostic.http_status if diagnostic else None, upstream_response_received=diagnostic.response_received if diagnostic else None))
 
     def finish(self, result: InvestigationResult) -> InvestigationResult:
         safety = self.policy.validate_public_result(result)
@@ -327,8 +328,11 @@ class InvestigationService:
                 await self._resolve_endpoint(decision.arguments["origin"], city, request_context, "origin"),
                 await self._resolve_endpoint(decision.arguments["destination"], city, request_context, "destination"),
             ]
-        except Exception:
-            failure=self.policy.provider_error("Google Maps Grounding Lite"); self.record(iid,trace,kind="tool_call",label="Google Maps location resolution unavailable",status="failed",provider="google_maps",tool="maps.search_places",policy=failure)
+        except BaseException as exc:
+            diagnostic = classify_provider_exception(exc)
+            failure=self.policy.provider_error("Google Maps Grounding Lite"); self.record(iid,trace,kind="tool_call",label="Google Maps location resolution unavailable",status="failed",provider="google_maps",tool="maps.search_places",policy=failure,ms=round((time.perf_counter()-started)*1000),diagnostic=diagnostic)
+            if contains_cancellation(exc):
+                raise
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="The route endpoints could not be resolved.",limitations=[failure.message],trace=trace))
         self.record(iid,trace,kind="tool_call",label="Resolved route endpoints with Google Maps Grounding MCP: search_places",status="completed",provider="google_maps",tool="maps.search_places",policy=gate,count=2,ms=round((time.perf_counter()-started)*1000),call=budget.maps_calls,limit=self.policy.max_maps_calls)
         origin,destination=(x.as_location() for x in resolved); location_gate = self.policy.check_route_locations(city, [origin, destination])

@@ -5,6 +5,7 @@ from typing import Any
 import asyncio
 import time
 import pytest
+import httpx
 
 from apps.api.app.agent.schemas import InvestigationRequest, ToolDecision
 from apps.api.app.agent.places import MapsSearchResult
@@ -12,6 +13,7 @@ from apps.api.app.agent.model import GeminiInvestigationModel
 from apps.api.app.agent.route_service import ResolvedPlace, RouteDetails
 from apps.api.app.agent.service import InvestigationService
 from apps.api.app.agent.policy import GuardrailPolicy
+from apps.api.app.agent.telemetry import TelemetryEvent
 from apps.api.app import config
 from services.city_data_mcp.schemas import DatasetMetadata, Evidence, MapLayer, ToolEnvelope
 
@@ -86,6 +88,36 @@ def test_model_timeout_returns_a_sanitized_failure(monkeypatch) -> None:
     assert result.status == "failed"
     assert result.answer == "The investigation could not be planned."
     assert result.trace[-1].policy_code == "provider_unavailable"
+
+
+def test_route_maps_failure_records_safe_diagnostic_metadata() -> None:
+    class PermissionDeniedMaps(FakeMaps):
+        async def resolve_location(self, query: str, city: str = "london") -> ResolvedPlace:
+            request = httpx.Request("POST", "https://mapstools.googleapis.com/mcp")
+            raise httpx.HTTPStatusError("Authorization: Bearer secret", request=request, response=httpx.Response(403, request=request))
+
+    class CaptureTelemetry:
+        def __init__(self) -> None:
+            self.events: list[TelemetryEvent] = []
+
+        def emit(self, event: TelemetryEvent) -> None:
+            self.events.append(event)
+
+    telemetry = CaptureTelemetry()
+    result = asyncio.run(InvestigationService(
+        mcp_client=FakeMcp(),
+        maps_client=PermissionDeniedMaps(),
+        telemetry=telemetry,
+        model=FakeModel([ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "King's Cross", "destination": "Camden"})]),
+    ).investigate(InvestigationRequest(question="Cycle from King's Cross to Camden", context={"activity": "cycling"})))
+
+    failure = next(event for event in telemetry.events if event.status == "failed" and event.provider == "google_maps")
+    assert result.status == "failed"
+    assert failure.error_category == "permission"
+    assert failure.operation == "maps.search_places"
+    assert failure.request_id
+    assert failure.upstream_http_status == 403
+    assert failure.upstream_response_received is True
 
 
 class FakeMaps:

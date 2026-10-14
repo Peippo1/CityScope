@@ -15,7 +15,7 @@ from .. import config  # noqa: F401  # Load the project environment before readi
 from ..cities import CityId, get_city
 from .schemas import AmenityCategory, PlaceResult
 from .route_service import ResolvedPlace
-from .errors import ProviderPayloadError, ProviderUnavailableError
+from .errors import ProviderOperationError, ProviderPayloadError, ProviderUnavailableError
 
 MAPS_MCP_URL = "https://mapstools.googleapis.com/mcp"
 DEFAULT_CANDIDATE_CELLS = 3
@@ -149,7 +149,7 @@ class GoogleMapsGroundingClient:
                         raise ProviderPayloadError("Google Maps", "search_places tool is unavailable")
                     result = await session.call_tool("search_places", arguments)
                     if result.isError:
-                        raise ProviderUnavailableError("Google Maps", "search_places call failed")
+                        raise ProviderOperationError("Google Maps", "search_places call failed")
                     payload = _structured_payload(result)
                     return parse_search_result(payload, category, cell, city)
 
@@ -169,7 +169,7 @@ class GoogleMapsGroundingClient:
                         raise ProviderPayloadError("Google Maps", "search_places tool is unavailable")
                     result = await session.call_tool("search_places", arguments)
                     if result.isError:
-                        raise ProviderUnavailableError("Google Maps", "location resolution failed")
+                        raise ProviderOperationError("Google Maps", "location resolution failed")
                     payload = _structured_payload(result)
         raw = next(iter(payload.get("places", [])), None)
         if not raw or not raw.get("location"):

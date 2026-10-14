@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 
+import httpx
+
 from apps.api.app.agent.places import (
     MAX_SEARCH_RADIUS_M,
     AmenitySearchPlan,
@@ -17,9 +19,42 @@ from apps.api.app.agent.places import (
     normalize_amenity_plan,
     MapsSearchResult,
 )
+from apps.api.app.agent.errors import ProviderOperationError, ProviderPayloadError, classify_provider_exception, contains_cancellation
 
 
 CELL = "892a100d2d7ffff"
+
+
+def test_provider_diagnostics_classify_http_statuses_without_copying_payloads() -> None:
+    request = httpx.Request("POST", "https://mapstools.googleapis.com/mcp")
+    for status, category in ((401, "authentication"), (403, "permission"), (429, "quota_or_rate_limit"), (500, "upstream_5xx"), (502, "upstream_5xx"), (503, "upstream_5xx")):
+        error = httpx.HTTPStatusError("secret=must-not-escape", request=request, response=httpx.Response(status, request=request))
+        diagnostic = classify_provider_exception(error)
+        assert diagnostic.category == category
+        assert diagnostic.http_status == status
+        assert diagnostic.response_received is True
+
+
+def test_provider_diagnostics_classify_transport_timeout_cancellation_and_payload() -> None:
+    request = httpx.Request("POST", "https://mapstools.googleapis.com/mcp")
+    assert classify_provider_exception(httpx.ConnectError("api-key=secret", request=request)).category == "transport"
+    assert classify_provider_exception(httpx.ReadTimeout("timed out", request=request)).category == "timeout"
+    assert classify_provider_exception(asyncio.CancelledError()).category == "transport"
+    assert classify_provider_exception(ProviderPayloadError("Google Maps")).category == "invalid_response"
+    assert classify_provider_exception(ProviderOperationError("Google Maps")).response_received is True
+    assert contains_cancellation(BaseExceptionGroup("cancelled", [asyncio.CancelledError()])) is True
+
+
+def test_provider_diagnostics_unwrap_nested_exception_groups_and_unknowns() -> None:
+    request = httpx.Request("POST", "https://mapstools.googleapis.com/mcp")
+    nested = ExceptionGroup("mcp failure", [RuntimeError("token=secret"), ExceptionGroup("upstream", [httpx.HTTPStatusError("forbidden", request=request, response=httpx.Response(403, request=request))])])
+    diagnostic = classify_provider_exception(nested)
+    assert diagnostic.category == "permission"
+    assert diagnostic.http_status == 403
+    assert classify_provider_exception(ValueError("coordinates=51.5,-0.1")).category == "unknown"
+    invalid_status = classify_provider_exception(httpx.HTTPStatusError("invalid", request=request, response=httpx.Response(600, request=request)))
+    assert invalid_status.category == "unknown"
+    assert invalid_status.http_status is None
 
 
 def test_h3_centroid_and_google_wire_schema_are_deterministic() -> None:

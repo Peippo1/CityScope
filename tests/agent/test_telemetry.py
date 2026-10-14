@@ -14,6 +14,25 @@ def test_local_telemetry_contains_only_sanitized_schema(capsys):
     assert "question" not in payload and "headers" not in payload and "prompt" not in payload
 
 
+def test_provider_diagnostic_telemetry_contains_category_not_exception_details(capsys):
+    LocalTelemetryAdapter().emit(TelemetryEvent(
+        investigation_id="id",
+        event_type="tool_call",
+        provider="google_maps",
+        tool="maps.search_places",
+        status="failed",
+        error_category="transport",
+        operation="maps.search_places",
+        duration_ms=1250,
+        upstream_response_received=False,
+    ))
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error_category"] == "transport"
+    assert payload["operation"] == "maps.search_places"
+    assert payload["upstream_response_received"] is False
+    assert "secret" not in json.dumps(payload)
+
+
 def test_export_failure_never_breaks_request():
     class Broken:
         def emit(self,_): raise RuntimeError("secret provider payload")
