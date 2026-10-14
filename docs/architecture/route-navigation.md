@@ -53,6 +53,8 @@ Generic inferred stops must remain within 3 km of the origin-to-destination corr
 
 These checks are route-relative rather than a global maximum-distance rule, so legitimate long journeys are not rejected solely because they are long. Google Routes remains the source of the final route distance; straight-line distance is used only for bounded waypoint-quality checks.
 
+Optional discovery runs only after Google Routes returns verified geometry. `RouteDiscoveryAgent` samples at most two positions along the encoded route, asks the existing Maps provider for real places around those positions, and then treats every result as untrusted. Deterministic geometry calculates each candidate's shortest distance to the route and progress along it. Candidates outside the activity-aware corridor are rejected; the remaining candidates are ranked against the requested journey position and capped at three. This capability makes no additional Gemini call and cannot add a waypoint or recalculate the route by itself.
+
 ## Trust boundaries and guardrails
 
 The FastAPI service is the primary trust boundary:
@@ -94,5 +96,6 @@ Logs intentionally exclude raw prompts, conversation history, coordinates, reque
 - Target distance is advisory and is displayed separately from calculated Google Routes distance.
 - Running uses Google walking geometry as a planning approximation.
 - Facility results do not prove public access, opening hours, or current availability.
+- The public result currently shows verified facility details but not the calculated distance-to-route or route-progress metadata; richer recommendation explanations are future UI work.
 - Browser maps still use legacy markers because Advanced Markers require an approved compatible Map ID configuration.
 - Historical mobility context is optional and reflects a matched May 2026 snapshot, not live cycling conditions.

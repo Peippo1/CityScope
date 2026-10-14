@@ -12,6 +12,10 @@ from .errors import ProviderPayloadError, ProviderUnavailableError
 
 ROUTE_CORRIDOR_METERS = 3000.0
 MAX_AUTOMATIC_WAYPOINT_DETOUR = 0.75
+MIN_RUNNING_FACILITY_CORRIDOR_METERS = 250.0
+MIN_CYCLING_FACILITY_CORRIDOR_METERS = 500.0
+FACILITY_CORRIDOR_ROUTE_RATIO = 0.05
+MAX_ENCODED_POLYLINE_CHARS = 500_000
 _GENERIC_WAYPOINT_QUERY = re.compile(
     r"^(?:a|an|any|some)\s+(?:.+\s+)?(?:cafe|caf[eé]|coffee shop|restaurant|toilet|bathroom)"
     r"(?:\s+(?:nearby|halfway|along the way|on the route))?$|"
@@ -73,9 +77,135 @@ class RouteExecutor(Protocol):
 
 def _distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:
     lat1, lon1, lat2, lon2 = map(math.radians, (a[0], a[1], b[0], b[1]))
-    dlat, dlon = lat2 - lat1, lon2 - lon1
+    dlat = lat2 - lat1
+    dlon = math.radians(_longitude_delta(a[1], b[1]))
     hav = math.sin(dlat / 2) ** 2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon / 2) ** 2
     return 6_371_000 * 2 * math.asin(math.sqrt(hav))
+
+
+def _longitude_delta(start: float, end: float) -> float:
+    """Return the shortest signed longitude delta in degrees."""
+    return (end - start + 180.0) % 360.0 - 180.0
+
+
+def _normalize_longitude(longitude: float) -> float:
+    return (longitude + 180.0) % 360.0 - 180.0
+
+
+def decode_route_polyline(encoded: str) -> list[tuple[float, float]]:
+    """Decode a Google encoded polyline without adding a runtime dependency."""
+    if len(encoded) > MAX_ENCODED_POLYLINE_CHARS:
+        raise ValueError("Encoded route polyline is too large")
+    coordinates: list[tuple[float, float]] = []
+    latitude = longitude = index = 0
+    while index < len(encoded):
+        deltas: list[int] = []
+        for _ in range(2):
+            result = shift = 0
+            while True:
+                if index >= len(encoded):
+                    raise ValueError("Truncated encoded route polyline")
+                value = ord(encoded[index]) - 63
+                index += 1
+                if not 0 <= value <= 0x3F:
+                    raise ValueError("Encoded route polyline contains invalid characters")
+                result |= (value & 0x1F) << shift
+                shift += 5
+                if shift >= 30 and value >= 0x20:
+                    raise ValueError("Encoded route polyline contains an oversized coordinate delta")
+                if value < 0x20:
+                    break
+            deltas.append(~(result >> 1) if result & 1 else result >> 1)
+        latitude += deltas[0]
+        longitude += deltas[1]
+        point = (latitude / 100_000, longitude / 100_000)
+        if not (-90 <= point[0] <= 90 and -180 <= point[1] <= 180):
+            raise ValueError("Encoded route polyline contains invalid coordinates")
+        coordinates.append(point)
+    if len(coordinates) < 2:
+        raise ValueError("A route polyline requires at least two points")
+    return coordinates
+
+
+def route_geometry(route: RouteDetails) -> list[tuple[float, float]]:
+    """Return decoded provider geometry, or no geometry when it is invalid."""
+    try:
+        return decode_route_polyline(route.polyline)
+    except ValueError:
+        return []
+
+
+def point_along_route(points: list[tuple[float, float]], fraction: float) -> tuple[float, float]:
+    """Interpolate by cumulative route distance rather than endpoint midpoint."""
+    if len(points) < 2:
+        raise ValueError("Route geometry requires at least two points")
+    segment_lengths = [_distance_m(start, end) for start, end in zip(points, points[1:])]
+    target = sum(segment_lengths) * max(0.0, min(1.0, fraction))
+    travelled = 0.0
+    for (start, end), length in zip(zip(points, points[1:]), segment_lengths):
+        if travelled + length >= target:
+            ratio = 0.0 if length == 0 else (target - travelled) / length
+            longitude = start[1] + _longitude_delta(start[1], end[1]) * ratio
+            return (start[0] + (end[0] - start[0]) * ratio, _normalize_longitude(longitude))
+        travelled += length
+    return points[-1]
+
+
+def route_search_points(route: RouteDetails, target_fraction: float, limit: int = 2) -> list[tuple[float, float]]:
+    """Return a bounded set of search centres sampled from actual route geometry."""
+    points = route_geometry(route)
+    if len(points) < 2:
+        return []
+    fractions = [target_fraction, 0.85 if target_fraction < 0.7 else 0.5]
+    return [point_along_route(points, fraction) for fraction in fractions[:limit]]
+
+
+def route_place_metrics(route: RouteDetails, latitude: float, longitude: float) -> tuple[float, float]:
+    """Return shortest metres to the route and fractional position along it."""
+    points = route_geometry(route)
+    if len(points) < 2 or not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+        return float("inf"), 0.0
+    segment_lengths = [_distance_m(start, end) for start, end in zip(points, points[1:])]
+    total = max(sum(segment_lengths), 1.0)
+    best_distance, best_position = float("inf"), 0.0
+    travelled = 0.0
+    for (start, end), length in zip(zip(points, points[1:]), segment_lengths):
+        reference_latitude = math.radians((start[0] + end[0] + latitude) / 3)
+        scale_x = 111_320 * math.cos(reference_latitude)
+        scale_y = 110_540
+        segment_x = _longitude_delta(start[1], end[1]) * scale_x
+        segment_y = (end[0] - start[0]) * scale_y
+        point_x = _longitude_delta(start[1], longitude) * scale_x
+        point_y = (latitude - start[0]) * scale_y
+        denominator = segment_x * segment_x + segment_y * segment_y
+        projection = 0.0 if denominator == 0 else max(0.0, min(1.0, (point_x * segment_x + point_y * segment_y) / denominator))
+        distance = math.hypot(point_x - projection * segment_x, point_y - projection * segment_y)
+        if distance < best_distance:
+            best_distance = distance
+            best_position = (travelled + projection * length) / total
+        travelled += length
+    return best_distance, best_position
+
+
+def facility_corridor_meters(route: RouteDetails) -> float:
+    minimum = MIN_RUNNING_FACILITY_CORRIDOR_METERS if route.travel_mode == "walking" else MIN_CYCLING_FACILITY_CORRIDOR_METERS
+    return min(ROUTE_CORRIDOR_METERS, max(minimum, route.distance_m * FACILITY_CORRIDOR_ROUTE_RATIO))
+
+
+def select_route_places(route: RouteDetails, places: list[Any], target_fraction: float, limit: int = 3) -> list[Any]:
+    """Filter and rank provider places by route proximity and requested position."""
+    corridor = facility_corridor_meters(route)
+    ranked: list[tuple[float, float, str, Any]] = []
+    for place in places:
+        latitude, longitude = getattr(place, "latitude", None), getattr(place, "longitude", None)
+        if latitude is None or longitude is None:
+            continue
+        distance, position = route_place_metrics(route, float(latitude), float(longitude))
+        if distance > corridor:
+            continue
+        ranked.append((distance / corridor + abs(position - target_fraction), distance, str(getattr(place, "place_id", "")), place))
+    ranked.sort(key=lambda item: (item[0], item[1], item[2]))
+    return [item[3] for item in ranked[:limit]]
 
 
 def waypoint_detour_ratio(origin: RouteLocation, destination: RouteLocation, waypoint: RouteWaypoint) -> float:
@@ -173,6 +303,10 @@ class GoogleRoutesService:
         match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)s", str(duration))
         if not polyline or not match or float(route.get("distanceMeters", 0)) <= 0 or float(match.group(1)) <= 0:
             raise ProviderPayloadError("Google Routes", f"Google Routes API returned an invalid {travel_mode.lower()} route")
+        try:
+            decode_route_polyline(polyline)
+        except ValueError as exc:
+            raise ProviderPayloadError("Google Routes", f"Google Routes API returned invalid {travel_mode.lower()} route geometry") from exc
         legs = route.get("legs", [])
         start = (legs[0].get("startLocation") or {}).get("latLng") if legs else None
         end = (legs[-1].get("endLocation") or {}).get("latLng") if legs else None

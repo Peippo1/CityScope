@@ -133,6 +133,92 @@ class FakeRouteService:
         return RouteDetails(travel_mode="walking", distance_m=2400, duration_seconds=900, polyline="encoded-route", origin=origin, destination=destination, waypoints=waypoints)
 
 
+def encode_polyline(points: list[tuple[float, float]]) -> str:
+    encoded: list[str] = []
+    previous_latitude = previous_longitude = 0
+    for latitude, longitude in points:
+        current_latitude = round(latitude * 100_000)
+        current_longitude = round(longitude * 100_000)
+        for delta in (current_latitude - previous_latitude, current_longitude - previous_longitude):
+            value = ~(delta << 1) if delta < 0 else delta << 1
+            while value >= 0x20:
+                encoded.append(chr((0x20 | (value & 0x1F)) + 63))
+                value >>= 5
+            encoded.append(chr(value + 63))
+        previous_latitude, previous_longitude = current_latitude, current_longitude
+    return "".join(encoded)
+
+
+class RouteGeometryService(FakeRouteService):
+    async def compute_bicycle_route(self, origin, destination, waypoints):
+        self.calls.append((origin.place_id or "", destination.place_id or "", len(waypoints)))
+        return RouteDetails(
+            distance_m=2400,
+            duration_seconds=900,
+            polyline=encode_polyline([
+                (51.5308, -0.1238),
+                (51.5200, -0.1215),
+                (51.5033, -0.1195),
+            ]),
+            origin=origin,
+            destination=destination,
+            waypoints=waypoints,
+        )
+
+
+class RouteFacilityMaps(RouteMaps):
+    async def search_places(self, category: str, cell: str, city: str = "london", locale: str | None = None) -> MapsSearchResult:
+        self.calls.append((category, cell, city))
+        return MapsSearchResult.model_validate({"places": [
+            {
+                "place_id": "cafe-pedlar",
+                "name": "Café Pedlar",
+                "latitude": 51.4620,
+                "longitude": -0.0670,
+                "category": category,
+                "h3_cell": cell,
+            },
+            {
+                "place_id": "route-cafe",
+                "name": "Route Cafe",
+                "latitude": 51.5198,
+                "longitude": -0.1214,
+                "category": category,
+                "h3_cell": cell,
+            },
+        ]})
+
+
+class ConcurrencySensitiveRouteMaps(RouteFacilityMaps):
+    """Model a transport that supports bounded calls but not overlapping sessions."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.active_calls = 0
+        self.max_active_calls = 0
+
+    async def _enter_call(self) -> None:
+        self.active_calls += 1
+        self.max_active_calls = max(self.max_active_calls, self.active_calls)
+        await asyncio.sleep(0)
+        if self.active_calls > 1:
+            raise RuntimeError("overlapping MCP sessions")
+
+    async def resolve_location(self, query: str, city: str = "london", locale: str | None = None) -> ResolvedPlace:
+        try:
+            await self._enter_call()
+            return await super().resolve_location(query, city)
+        finally:
+            self.active_calls -= 1
+
+    async def search_places(self, category: str, cell: str, city: str = "london", locale: str | None = None) -> MapsSearchResult:
+        try:
+            await self._enter_call()
+            return await super().search_places(category, cell, city, locale)
+        finally:
+            self.active_calls -= 1
+
+
 class ConcurrentMaps(FakeMaps):
     def __init__(self) -> None:
         super().__init__()
@@ -327,6 +413,95 @@ def test_route_intent_executes_city_data_then_private_route_adapter_without_rout
     assert result.route is not None and result.route.polyline == "encoded-route"
     assert all("secret" not in event.label for event in result.trace)
     assert "compute_routes" not in {event.tool for event in result.trace}
+
+
+def test_route_facilities_reject_repeated_provider_result_outside_actual_geometry() -> None:
+    maps = RouteFacilityMaps()
+    route_service = RouteGeometryService()
+    service = InvestigationService(
+        mcp_client=FakeMcp(),
+        maps_client=maps,
+        route_service=route_service,
+        model=FakeModel([
+            ToolDecision(kind="call_tool", tool="route.intent", arguments={
+                "origin": "King's Cross",
+                "destination": "Borough",
+                "requested_stops": ["cafe"],
+            }),
+        ]),
+    )
+
+    result = asyncio.run(service.investigate(InvestigationRequest(
+        question="Cycle from King's Cross to Borough and show coffee stops along the route.",
+        context={"activity": "cycling", "facility_categories": ["cafe"]},
+    )))
+
+    assert [place.name for place in result.facilities] == ["Route Cafe"]
+    assert result.planned_stops == []
+    assert route_service.calls == [("place-origin", "place-destination", 0)]
+    assert len(maps.calls) == 2
+    assert len({cell for _, cell, _ in maps.calls}) == 2
+    assert all(cell != "892a100d2d7ffff" for _, cell, _ in maps.calls)
+
+
+def test_route_maps_calls_do_not_overlap_streamable_http_sessions() -> None:
+    maps = ConcurrencySensitiveRouteMaps()
+    service = InvestigationService(
+        mcp_client=FakeMcp(),
+        maps_client=maps,
+        route_service=RouteGeometryService(),
+        model=FakeModel([
+            ToolDecision(kind="call_tool", tool="route.intent", arguments={
+                "origin": "King's Cross",
+                "destination": "Borough",
+                "requested_stops": ["cafe"],
+            }),
+        ]),
+    )
+
+    result = asyncio.run(service.investigate(InvestigationRequest(
+        question="Cycle from King's Cross to Borough and show coffee stops along the route.",
+        context={"activity": "cycling", "facility_categories": ["cafe"]},
+    )))
+
+    assert result.status == "answered"
+    assert maps.max_active_calls == 1
+    assert [place.name for place in result.facilities] == ["Route Cafe"]
+
+
+def test_route_facilities_report_when_no_provider_candidate_is_nearby() -> None:
+    class FarOnlyMaps(RouteFacilityMaps):
+        async def search_places(self, category: str, cell: str, city: str = "london", locale: str | None = None) -> MapsSearchResult:
+            self.calls.append((category, cell, city))
+            return MapsSearchResult.model_validate({"places": [{
+                "place_id": "cafe-pedlar",
+                "name": "Café Pedlar",
+                "latitude": 51.4620,
+                "longitude": -0.0670,
+                "category": category,
+                "h3_cell": cell,
+            }]})
+
+    service = InvestigationService(
+        mcp_client=FakeMcp(),
+        maps_client=FarOnlyMaps(),
+        route_service=RouteGeometryService(),
+        model=FakeModel([
+            ToolDecision(kind="call_tool", tool="route.intent", arguments={
+                "origin": "King's Cross",
+                "destination": "Borough",
+                "requested_stops": ["cafe"],
+            }),
+        ]),
+    )
+
+    result = asyncio.run(service.investigate(InvestigationRequest(
+        question="Cycle from King's Cross to Borough and show coffee stops along the route.",
+        context={"activity": "cycling", "facility_categories": ["cafe"]},
+    )))
+
+    assert result.facilities == []
+    assert any("No requested facilities could be verified near this route" in limitation for limitation in result.limitations)
 
 
 def test_route_intent_uses_explicit_context_when_model_returns_generic_endpoints() -> None:

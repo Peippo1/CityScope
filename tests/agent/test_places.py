@@ -113,6 +113,15 @@ def test_google_result_parser_rejects_places_outside_the_selected_city() -> None
     assert [place.place_id for place in parsed.places] == ["chicago"]
 
 
+def test_google_result_parser_discards_places_without_trusted_coordinates() -> None:
+    parsed = parse_search_result({"places": [
+        {"id": "missing-location", "displayName": "Unknown Cafe"},
+        {"id": "missing-longitude", "location": {"latitude": 51.5}},
+    ]}, "cafe", CELL)
+
+    assert parsed.places == []
+
+
 def test_google_result_parser_discards_untrusted_place_links() -> None:
     parsed = parse_search_result({"places": [{
         "id": "abc", "location": {"latitude": 51.5, "longitude": -0.1},

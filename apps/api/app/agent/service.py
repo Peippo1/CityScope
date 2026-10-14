@@ -21,6 +21,7 @@ from .adk_runtime import ADKInvestigationModel, heuristic_route_decision
 from .model import GemmaJourneyCharacterScorer
 from .places import AmenitySearchPlan, GoogleMapsGroundingClient, deterministic_amenity_analysis, normalize_amenity_plan
 from .policy import ExecutionBudget, GuardrailPolicy, PolicyCode, PolicyDecision, PolicyOutcome
+from .route_discovery import RouteDiscoveryAgent
 from .route_service import GoogleRoutesService, RouteDetails, RouteExecutor, RouteWaypoint, is_explicit_waypoint_query, select_waypoints, waypoint_is_near_route, waypoint_detour_ratio
 from .route_templates import match_route_templates
 from .journey_planner import JourneyPlanner
@@ -319,10 +320,13 @@ class InvestigationService:
         if gate.outcome != PolicyOutcome.ALLOW: return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Route resolution was rejected.",limitations=[gate.message],trace=trace))
         started=time.perf_counter()
         try:
-            resolved = await asyncio.gather(
-                self._resolve_endpoint(decision.arguments["origin"], city, request_context, "origin"),
-                self._resolve_endpoint(decision.arguments["destination"], city, request_context, "destination"),
-            )
+            # The streamable-HTTP MCP transport can cancel sibling work when
+            # one overlapping session fails. Two bounded sequential calls are
+            # more predictable and ensure each session exits before the next.
+            resolved = [
+                await self._resolve_endpoint(decision.arguments["origin"], city, request_context, "origin"),
+                await self._resolve_endpoint(decision.arguments["destination"], city, request_context, "destination"),
+            ]
         except Exception:
             failure=self.policy.provider_error("Google Maps Grounding Lite"); self.record(iid,trace,kind="tool_call",label="Google Maps location resolution unavailable",status="failed",provider="google_maps",tool="maps.search_places",policy=failure)
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="The route endpoints could not be resolved.",limitations=[failure.message],trace=trace))
@@ -375,7 +379,10 @@ class InvestigationService:
             hints = [hint for hint in template.waypoint_hints if hint.casefold() not in {origin.name.casefold(), destination.name.casefold()}][:2]
             if hints and self.policy.reserve_maps_resolution(budget, len(hints)).outcome == PolicyOutcome.ALLOW:
                 try:
-                    resolved_hints = await asyncio.gather(*(self._resolve_location(hint, city, request_context.locale) for hint in hints))
+                    resolved_hints = [
+                        await self._resolve_location(hint, city, request_context.locale)
+                        for hint in hints
+                    ]
                     waypoints = [RouteWaypoint(h3_cell=h3.latlng_to_cell(place.latitude, place.longitude, 9), latitude=place.latitude, longitude=place.longitude, mobility_value=0, score=1, reason=f"Curated route hint from {template.name}.") for place in resolved_hints]
                 except Exception:
                     limitations_hint = "A curated waypoint could not be resolved; the route was computed using the named endpoints."
@@ -391,7 +398,10 @@ class InvestigationService:
             resolution_gate = self.policy.reserve_maps_resolution(budget, len(planned_queries))
             if resolution_gate.outcome == PolicyOutcome.ALLOW:
                 try:
-                    resolved_planned = await asyncio.gather(*(self._resolve_location(query, city, request_context.locale) for query in planned_queries))
+                    resolved_planned = [
+                        await self._resolve_location(query, city, request_context.locale)
+                        for query in planned_queries
+                    ]
                     for place in resolved_planned:
                         cell = h3.latlng_to_cell(place.latitude, place.longitude, 9)
                         waypoint = RouteWaypoint(h3_cell=cell, latitude=place.latitude, longitude=place.longitude, mobility_value=0, score=1, reason="User-selected planned stop.")
@@ -445,10 +455,12 @@ class InvestigationService:
         requested_stops = ([food] if food else []) + non_food[:1]
         selected_stops = []
         if requested_stops:
-            trusted_cells = [item.h3_cell for item in envelope.map_layers[:2]]
-            if not trusted_cells:
-                trusted_cells = [h3.latlng_to_cell(origin.latitude, origin.longitude, 9), h3.latlng_to_cell(destination.latitude, destination.longitude, 9)]
-            trusted_cells = list(dict.fromkeys(trusted_cells + [waypoint.h3_cell for waypoint in waypoints]))[:2]
+            discovery = RouteDiscoveryAgent()
+            target_fraction = discovery.target_fraction(question)
+            trusted_cells = list(dict.fromkeys(
+                h3.latlng_to_cell(latitude, longitude, 9)
+                for latitude, longitude in discovery.search_points(route, target_fraction)
+            ))
             if trusted_cells:
                 try:
                     plan = AmenitySearchPlan(h3_cells=trusted_cells, categories=requested_stops)
@@ -456,17 +468,23 @@ class InvestigationService:
                     if maps_gate.outcome == PolicyOutcome.ALLOW:
                         async def search(cell: str, category: str):
                             return await self._search_places(category, cell, city, request_context.locale)
-                        found = await asyncio.gather(*(search(cell, category) for cell in plan.h3_cells for category in plan.categories))
+                        found = [
+                            await search(cell, category)
+                            for cell in plan.h3_cells
+                            for category in plan.categories
+                        ]
                         for result in found:
                             selected_stops.extend(result.places)
-                        # Keep the public itinerary bounded and stable even
-                        # when adjacent cells return the same Places result.
-                        selected_stops = list({place.place_id: place for place in selected_stops}.values())[:4]
+                        # Provider results are untrusted until their coordinates
+                        # are validated against the completed route geometry.
+                        unique_places = list({place.place_id: place for place in selected_stops}.values())
+                        selected_stops = discovery.recommend(route, unique_places, target_fraction=target_fraction)
                         self.record(iid, trace, kind="tool_call", label="Called Google Maps Grounding MCP: journey amenity search", status="completed", provider="google_maps", tool="maps.search_places", policy=maps_gate, count=len(selected_stops), call=budget.maps_calls, limit=self.policy.max_maps_calls)
                         if selected_stops:
                             evidence = list(envelope.evidence) + [Evidence(metric="journey_place_count", value=len(selected_stops), unit="places", source_aggregate="maps.search_places", filters_applied={"categories": plan.categories}, h3_cells=plan.h3_cells)]
                         else:
                             evidence = envelope.evidence
+                            limitations.append(discovery.empty_result_message(request_context.locale))
                     else:
                         evidence = envelope.evidence
                 except Exception:
@@ -474,6 +492,7 @@ class InvestigationService:
                     limitations.append("Google Maps place suggestions were unavailable; verify stops locally.")
             else:
                 evidence = envelope.evidence
+                limitations.append(discovery.empty_result_message(request_context.locale))
         else:
             evidence = envelope.evidence
         provenance = ["Google Maps Grounding for named places", f"Google Routes API for {mode_label} routing", "City Data MCP historical evidence"]
