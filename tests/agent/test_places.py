@@ -116,6 +116,16 @@ def test_google_result_parser_discards_untrusted_place_links() -> None:
     assert parsed.places[0].attribution_url is None
 
 
+def test_google_result_parser_keeps_script_payloads_as_inert_text_only() -> None:
+    parsed = parse_search_result({"places": [{
+        "id": "abc", "name": "<script>alert(1)</script>",
+        "location": {"latitude": 51.5, "longitude": -0.1},
+    }]}, "cafe", CELL)
+
+    assert parsed.places[0].name == "<script>alert(1)</script>"
+    assert parsed.places[0].maps_uri is None
+
+
 def test_deterministic_amenity_analysis_ranks_raw_counts_without_composite_score() -> None:
     result = MapsSearchResult.model_validate({"places": [{
         "place_id": "abc", "latitude": 51.5, "longitude": -0.1, "category": "cafe", "h3_cell": CELL,

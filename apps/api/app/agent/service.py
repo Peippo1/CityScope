@@ -25,6 +25,7 @@ from .route_templates import match_route_templates
 from .journey_planner import JourneyPlanner
 from .schemas import InvestigationRequest, InvestigationResult, TraceEvent, ToolDecision, JourneyPlan, JourneySegment, PlaceResult
 from .telemetry import TelemetryAdapter, TelemetryEvent, telemetry_from_env
+from ..observability import request_id, set_request_context, reset_request_context
 
 
 class InvestigationService:
@@ -42,7 +43,7 @@ class InvestigationService:
     def record(self, iid: str, trace: list[TraceEvent], *, kind: str, label: str, status: str, tool: str | None = None, provider: str | None = None, policy: PolicyDecision | None = None, count: int | None = None, ms: int | None = None, call: int | None = None, limit: int | None = None) -> None:
         code = policy.code.value if policy else None
         trace.append(TraceEvent(kind=kind, label=label, status=status, tool=tool, provider=provider, result_count=count, latency_ms=ms, policy_code=code, call_number=call, budget_limit=limit))
-        self.telemetry.emit(TelemetryEvent(investigation_id=iid, event_type=kind, provider=provider, tool=tool, status=status, policy_code=code, duration_ms=ms, result_count=count, call_number=call, budget_limit=limit))
+        self.telemetry.emit(TelemetryEvent(investigation_id=iid, event_type=kind, provider=provider, tool=tool, status=status, policy_code=code, error_category=code if status in {"failed", "rejected"} else None, duration_ms=ms, result_count=count, call_number=call, budget_limit=limit))
 
     def finish(self, result: InvestigationResult) -> InvestigationResult:
         safety = self.policy.validate_public_result(result)
@@ -103,6 +104,13 @@ class InvestigationService:
 
     async def investigate(self, request: InvestigationRequest) -> InvestigationResult:
         iid, trace, budget = str(uuid.uuid4()), [], ExecutionBudget()
+        context_tokens = set_request_context(request_id() or iid, request.context.activity)
+        try:
+            return await self._investigate(request, iid, trace, budget)
+        finally:
+            reset_request_context(context_tokens)
+
+    async def _investigate(self, request: InvestigationRequest, iid: str, trace: list[TraceEvent], budget: ExecutionBudget) -> InvestigationResult:
         gate = self.policy.check_request(request)
         if gate.outcome != PolicyOutcome.ALLOW:
             self.record(iid, trace, kind="planning", label="Rejected request at the deterministic policy boundary", status="rejected", policy=gate)

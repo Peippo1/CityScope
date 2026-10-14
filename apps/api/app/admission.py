@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from fastapi import HTTPException, Request, status
 
 from . import config
+from .observability import emit_event
 
 
 @dataclass
@@ -36,6 +37,7 @@ class InvestigationAdmission:
             for key in stale_clients:
                 self._clients.pop(key, None)
             if client not in self._clients and len(self._clients) >= self.max_tracked_clients:
+                emit_event("admission.rejected", reason="tracked_client_capacity", status_code=429)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail="CityScope is at capacity. Try again shortly.",
@@ -45,6 +47,7 @@ class InvestigationAdmission:
             while window.requests and window.requests[0] <= threshold:
                 window.requests.popleft()
             if len(window.requests) >= config.INVESTIGATION_RATE_LIMIT:
+                emit_event("admission.rejected", reason="rate_limit", status_code=429)
                 retry_after = max(1, int(window.requests[0] + config.INVESTIGATION_RATE_WINDOW_SECONDS - now) + 1)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -52,6 +55,7 @@ class InvestigationAdmission:
                     headers={"Retry-After": str(retry_after)},
                 )
             if self._active >= config.INVESTIGATION_CONCURRENCY_LIMIT:
+                emit_event("admission.rejected", reason="concurrency_limit", status_code=429)
                 raise HTTPException(
                     status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                     detail="CityScope is at capacity. Try again shortly.",

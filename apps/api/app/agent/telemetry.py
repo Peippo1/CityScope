@@ -9,6 +9,8 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
+from ..observability import activity, request_id
+
 
 LOGGER = logging.getLogger("cityscope.telemetry")
 
@@ -24,6 +26,9 @@ class TelemetryEvent(BaseModel):
     result_count: int | None = Field(default=None, ge=0)
     call_number: int | None = Field(default=None, ge=1)
     budget_limit: int | None = Field(default=None, ge=1)
+    request_id: str | None = None
+    activity: str | None = None
+    error_category: str | None = None
 
 
 class TelemetryAdapter(Protocol):
@@ -40,7 +45,10 @@ class LocalTelemetryAdapter:
         self.logger = logger or LOGGER
 
     def emit(self, event: TelemetryEvent) -> None:
-        self.logger.info(json.dumps(event.model_dump(mode="json", exclude_none=True), sort_keys=True))
+        payload = event.model_dump(mode="json", exclude_none=True)
+        payload.setdefault("request_id", request_id())
+        payload.setdefault("activity", activity())
+        self.logger.info(json.dumps({"event": "investigation.telemetry", **{k: v for k, v in payload.items() if v is not None}}, sort_keys=True, separators=(",", ":")))
 
 
 class SafeTelemetryAdapter:

@@ -1,0 +1,42 @@
+import logging
+
+from apps.api.app.agent.telemetry import LocalTelemetryAdapter, SafeTelemetryAdapter, TelemetryEvent
+from apps.api.app.observability import new_request_id, set_request_context, reset_request_context
+
+
+def test_request_ids_are_bounded_and_invalid_values_are_replaced():
+    assert new_request_id("release-123") == "release-123"
+    generated = new_request_id("prompt with spaces")
+    assert generated != "prompt with spaces"
+    assert len(generated) <= 64
+
+
+def test_local_telemetry_contains_metadata_only(caplog):
+    tokens = set_request_context("release-123", "cycling")
+    try:
+        with caplog.at_level(logging.INFO, logger="cityscope.telemetry"):
+            LocalTelemetryAdapter().emit(TelemetryEvent(
+                investigation_id="investigation-123",
+                event_type="tool_call",
+                provider="google_routes",
+                status="completed",
+                duration_ms=42,
+            ))
+    finally:
+        reset_request_context(tokens)
+
+    message = caplog.records[-1].message
+    assert "release-123" in message
+    assert "cycling" in message
+    assert "prompt" not in message
+    assert "coordinates" not in message
+
+
+def test_telemetry_failure_is_non_fatal():
+    class BrokenAdapter:
+        def emit(self, event):
+            raise RuntimeError("telemetry unavailable")
+
+    SafeTelemetryAdapter(BrokenAdapter()).emit(TelemetryEvent(
+        investigation_id="investigation-123", event_type="final_result", status="answered"
+    ))
