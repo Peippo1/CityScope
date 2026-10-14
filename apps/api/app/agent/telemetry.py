@@ -28,6 +28,7 @@ class TelemetryEvent(BaseModel):
     request_id: str | None = None
     activity: str | None = None
     error_category: str | None = None
+    error_reason_code: str | None = None
     operation: str | None = None
     upstream_http_status: int | None = Field(default=None, ge=100, le=599)
     upstream_response_received: bool | None = None

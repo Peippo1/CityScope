@@ -22,12 +22,14 @@ def test_provider_diagnostic_telemetry_contains_category_not_exception_details(c
         tool="maps.search_places",
         status="failed",
         error_category="transport",
+        error_reason_code="tool_error",
         operation="maps.search_places",
         duration_ms=1250,
         upstream_response_received=False,
     ))
     payload = json.loads(capsys.readouterr().out)
     assert payload["error_category"] == "transport"
+    assert payload["error_reason_code"] == "tool_error"
     assert payload["operation"] == "maps.search_places"
     assert payload["upstream_response_received"] is False
     assert "secret" not in json.dumps(payload)

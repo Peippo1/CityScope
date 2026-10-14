@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import os
+import json
+import math
+import re
 from datetime import timedelta
 from typing import Any
 from urllib.parse import urlsplit
@@ -25,6 +28,7 @@ MAX_CATEGORIES = 2
 MAX_SEARCH_RADIUS_M = 800
 MAX_PLACES_PER_SEARCH = 10
 MAX_MAPS_SEARCH_CALLS = MAX_CANDIDATE_CELLS * MAX_CATEGORIES
+GENERIC_LOCATION_TOKENS = {"city", "centre", "center", "district", "road", "street", "st", "station", "uk", "usa"}
 
 CATEGORY_QUERY = {
     "cafe": "cafes",
@@ -146,7 +150,7 @@ class GoogleMapsGroundingClient:
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=self.timeout_s)) as session:
                     tools = await session.list_tools()
                     if "search_places" not in {tool.name for tool in tools.tools}:
-                        raise ProviderPayloadError("Google Maps", "search_places tool is unavailable")
+                        raise ProviderPayloadError("Google Maps", "search_places tool is unavailable", reason_code="tool_unavailable")
                     result = await session.call_tool("search_places", arguments)
                     if result.isError:
                         raise ProviderOperationError("Google Maps", "search_places call failed")
@@ -166,17 +170,12 @@ class GoogleMapsGroundingClient:
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=self.timeout_s)) as session:
                     tools = await session.list_tools()
                     if "search_places" not in {tool.name for tool in tools.tools}:
-                        raise ProviderPayloadError("Google Maps", "search_places tool is unavailable")
+                        raise ProviderPayloadError("Google Maps", "search_places tool is unavailable", reason_code="tool_unavailable")
                     result = await session.call_tool("search_places", arguments)
                     if result.isError:
                         raise ProviderOperationError("Google Maps", "location resolution failed")
                     payload = _structured_payload(result)
-        raw = next(iter(payload.get("places", [])), None)
-        if not raw or not raw.get("location"):
-            raise ProviderPayloadError("Google Maps", "named location could not be resolved")
-        location = raw["location"]
-        links = raw.get("googleMapsLinks") or {}
-        return ResolvedPlace(name=raw.get("displayName") or raw.get("name") or query, place_id=raw.get("id"), latitude=float(location["latitude"]), longitude=float(location["longitude"]), maps_uri=_safe_google_url(links.get("placeUrl")))
+        return resolve_place_from_payload(payload, query, city)
 
     @staticmethod
     def resolve_selected_location(
@@ -198,17 +197,82 @@ class GoogleMapsGroundingClient:
 
 def _structured_payload(result: Any) -> dict[str, Any]:
     structured = getattr(result, "structuredContent", None)
-    if isinstance(structured, dict):
-        return structured.get("result", structured)
+    if structured is not None:
+        if not isinstance(structured, dict):
+            raise ProviderPayloadError("Google Maps", reason_code="structured_wrapper_invalid")
+        if "result" in structured:
+            structured = structured["result"]
+            if not isinstance(structured, dict):
+                raise ProviderPayloadError("Google Maps", reason_code="structured_wrapper_invalid")
+        return structured
+    saw_text = False
     for content in getattr(result, "content", []):
         text = getattr(content, "text", None)
         if text:
-            import json
-
-            value = json.loads(text)
+            saw_text = True
+            try:
+                value = json.loads(text)
+            except (TypeError, ValueError) as exc:
+                raise ProviderPayloadError("Google Maps", reason_code="json_content_invalid") from exc
             if isinstance(value, dict):
                 return value
-    raise ProviderPayloadError("Google Maps", "structured search result was missing")
+            raise ProviderPayloadError("Google Maps", reason_code="json_content_invalid")
+    reason_code = "json_content_invalid" if saw_text else "structured_content_missing"
+    raise ProviderPayloadError("Google Maps", "structured search result was missing", reason_code=reason_code)
+
+
+def resolve_place_from_payload(payload: dict[str, Any], query: str, city: CityId) -> ResolvedPlace:
+    """Select the first verified in-city candidate, skipping incomplete results."""
+    if "places" not in payload:
+        raise ProviderPayloadError("Google Maps", reason_code="places_collection_missing")
+    places = payload["places"]
+    if not isinstance(places, list):
+        raise ProviderPayloadError("Google Maps", reason_code="places_collection_invalid")
+    if not places:
+        raise ProviderPayloadError("Google Maps", "named location was not found", reason_code="places_empty")
+
+    south, west, north, east = get_city(city).bounds
+    saw_outside_city = False
+    saw_invalid_geometry = False
+    saw_incomplete_or_unrelated = False
+    city_tokens = {token for token in re.findall(r"[\w]+", get_city(city).name.casefold()) if len(token) > 1}
+    query_tokens = {
+        token for token in re.findall(r"[\w]+", query.casefold())
+        if len(token) > 1 and token not in city_tokens and token not in GENERIC_LOCATION_TOKENS
+    }
+    for raw in places[:MAX_PLACES_PER_SEARCH]:
+        if not isinstance(raw, dict):
+            saw_incomplete_or_unrelated = True
+            continue
+        location = raw.get("location")
+        place_id = raw.get("id")
+        if not isinstance(location, dict) or not isinstance(place_id, str) or not place_id.strip():
+            saw_incomplete_or_unrelated = True
+            continue
+        latitude = location.get("latitude")
+        longitude = location.get("longitude")
+        if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)) or not math.isfinite(latitude) or not math.isfinite(longitude) or not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+            saw_invalid_geometry = True
+            continue
+        if not (south <= latitude <= north and west <= longitude <= east):
+            saw_outside_city = True
+            continue
+        candidate_name = raw.get("displayName") or raw.get("name")
+        candidate_tokens = {token for token in re.findall(r"[\w]+", candidate_name.casefold()) if len(token) > 1} if isinstance(candidate_name, str) else set()
+        if not query_tokens or not query_tokens.intersection(candidate_tokens):
+            saw_incomplete_or_unrelated = True
+            continue
+        links = raw.get("googleMapsLinks") or {}
+        return ResolvedPlace(name=raw.get("displayName") or raw.get("name") or query, place_id=place_id, latitude=float(latitude), longitude=float(longitude), maps_uri=_safe_google_url(links.get("placeUrl")))
+    if saw_outside_city and not saw_invalid_geometry and not saw_incomplete_or_unrelated:
+        reason_code = "candidate_outside_city"
+    elif saw_invalid_geometry:
+        reason_code = "invalid_candidate_geometry"
+    elif saw_incomplete_or_unrelated:
+        reason_code = "candidate_not_relevant"
+    else:
+        reason_code = "no_usable_candidate"
+    raise ProviderPayloadError("Google Maps", "named location could not be resolved", reason_code=reason_code)
 
 
 def parse_search_result(payload: dict[str, Any], category: AmenityCategory, h3_cell: str, city: CityId = "london") -> MapsSearchResult:

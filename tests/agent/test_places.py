@@ -18,6 +18,8 @@ from apps.api.app.agent.places import (
     MAX_CATEGORIES,
     normalize_amenity_plan,
     MapsSearchResult,
+    resolve_place_from_payload,
+    _structured_payload,
 )
 from apps.api.app.agent.errors import ProviderOperationError, ProviderPayloadError, classify_provider_exception, contains_cancellation
 
@@ -41,6 +43,8 @@ def test_provider_diagnostics_classify_transport_timeout_cancellation_and_payloa
     assert classify_provider_exception(httpx.ReadTimeout("timed out", request=request)).category == "timeout"
     assert classify_provider_exception(asyncio.CancelledError()).category == "transport"
     assert classify_provider_exception(ProviderPayloadError("Google Maps")).category == "invalid_response"
+    assert classify_provider_exception(ProviderPayloadError("Google Maps", reason_code="places_empty")).category == "no_match"
+    assert classify_provider_exception(ProviderOperationError("Google Maps")).reason_code == "tool_error"
     assert classify_provider_exception(ProviderOperationError("Google Maps")).response_received is True
     assert contains_cancellation(BaseExceptionGroup("cancelled", [asyncio.CancelledError()])) is True
 
@@ -88,6 +92,104 @@ def test_maps_client_uses_server_credential_and_official_endpoint_defaults() -> 
     assert client.url == "https://mapstools.googleapis.com/mcp"
     assert client.api_key == "server-only-test-key"
     assert client.timeout_s == 20.0
+
+
+def test_structured_payload_accepts_direct_and_result_wrapped_objects() -> None:
+    class Result:
+        def __init__(self, structured):
+            self.structuredContent = structured
+            self.content = []
+
+    payload = {"places": []}
+    assert _structured_payload(Result(payload)) == payload
+    assert _structured_payload(Result({"result": payload})) == payload
+
+
+def test_structured_payload_classifies_missing_invalid_and_unexpected_content() -> None:
+    class Content:
+        def __init__(self, text):
+            self.text = text
+
+    class Result:
+        def __init__(self, structured=None, content=None):
+            self.structuredContent = structured
+            self.content = content or []
+
+    for result, reason in (
+        (Result(content=[]), "structured_content_missing"),
+        (Result(structured=[]), "structured_wrapper_invalid"),
+        (Result(content=[Content("not-json")]), "json_content_invalid"),
+        (Result(content=[Content("[]")]), "json_content_invalid"),
+    ):
+        try:
+            _structured_payload(result)
+        except ProviderPayloadError as exc:
+            assert exc.reason_code == reason
+        else:
+            raise AssertionError(f"expected {reason}")
+
+
+def test_endpoint_resolution_distinguishes_empty_results() -> None:
+    try:
+        resolve_place_from_payload({"places": []}, "King's Cross", "london")
+    except ProviderPayloadError as exc:
+        assert exc.reason_code == "places_empty"
+    else:
+        raise AssertionError("empty results should not be treated as malformed")
+
+
+def test_endpoint_resolution_skips_incomplete_first_candidate_for_valid_later_candidate() -> None:
+    resolved = resolve_place_from_payload({"places": [
+        {"id": "incomplete", "displayName": "Incomplete result"},
+        {"id": "valid", "displayName": "King's Cross", "location": {"latitude": 51.5308, "longitude": -0.1238}},
+    ]}, "King's Cross", "london")
+
+    assert resolved.place_id == "valid"
+    assert resolved.latitude == 51.5308
+
+
+def test_endpoint_resolution_does_not_substitute_unrelated_later_candidate() -> None:
+    try:
+        resolve_place_from_payload({"places": [
+            {"id": "incomplete"},
+            {"id": "unrelated", "displayName": "Café Pedlar", "location": {"latitude": 51.5308, "longitude": -0.1238}},
+        ]}, "King's Cross", "london")
+    except ProviderPayloadError as exc:
+        assert exc.reason_code == "candidate_not_relevant"
+    else:
+        raise AssertionError("unrelated candidate should not replace the requested endpoint")
+
+
+def test_endpoint_resolution_does_not_match_on_city_name_only() -> None:
+    try:
+        resolve_place_from_payload({"places": [
+            {"id": "unrelated", "displayName": "London Cafe", "location": {"latitude": 51.5308, "longitude": -0.1238}},
+        ]}, "London", "london")
+    except ProviderPayloadError as exc:
+        assert exc.reason_code == "candidate_not_relevant"
+    else:
+        raise AssertionError("city name alone must not authorize an unrelated place")
+
+
+def test_endpoint_resolution_rejects_out_of_city_candidates_without_substitution() -> None:
+    try:
+        resolve_place_from_payload({"places": [{"id": "chicago", "location": {"latitude": 41.88, "longitude": -87.63}}]}, "King's Cross", "london")
+    except ProviderPayloadError as exc:
+        assert exc.reason_code == "candidate_outside_city"
+    else:
+        raise AssertionError("outside-city candidate should be rejected")
+
+
+def test_endpoint_resolution_requires_verified_id_and_finite_geometry() -> None:
+    try:
+        resolve_place_from_payload({"places": [
+            {"location": {"latitude": 51.5, "longitude": -0.1}},
+            {"id": "nan", "location": {"latitude": float("nan"), "longitude": -0.1}},
+        ]}, "King's Cross", "london")
+    except ProviderPayloadError as exc:
+        assert exc.reason_code == "invalid_candidate_geometry"
+    else:
+        raise AssertionError("unverified candidate should be rejected")
 
 
 def test_amenity_plan_rejects_invalid_categories_and_untrusted_cells() -> None:
