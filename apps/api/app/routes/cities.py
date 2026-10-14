@@ -39,8 +39,8 @@ def get_activity(city: str, limit: int = Query(default=50, ge=1, le=50)) -> Acti
         dataset = ANALYTICS.describe_dataset(city)
         rows = ANALYTICS.find_hotspots(city, "total_activity", TimeFilter(), limit)
         area_metrics = {row["h3_cell"]: row for row in ANALYTICS.get_area_metrics(city, [item["h3_cell"] for item in rows], ["starts", "ends"], TimeFilter())}
-    except (ValueError, FileNotFoundError) as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (ValueError, FileNotFoundError):
+        raise HTTPException(status_code=503, detail="Historical activity is temporarily unavailable for this city") from None
     return ActivityResponse(
         city=city, dataset_name=dataset["dataset_name"], observation_period="2026-05-01/2026-05-31",
         attribution_text=dataset["attribution_text"], historical_snapshot=True, h3_resolution=dataset["h3_resolution"],
@@ -59,5 +59,5 @@ async def live_network(city: str, limit: int = Query(default=25, ge=1, le=100)) 
         raise HTTPException(status_code=404, detail="Live network data is unavailable for this city")
     try:
         return await CityLiveMcpClient().get_status(city, limit)
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"{definition.name} live network data is temporarily unavailable") from exc
+    except Exception:
+        raise HTTPException(status_code=503, detail=f"{definition.name} live network data is temporarily unavailable") from None

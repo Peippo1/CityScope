@@ -77,6 +77,16 @@ def test_cross_city_runtime_failure_is_sanitized(monkeypatch):
     assert "private database path" not in response.text
 
 
+def test_activity_runtime_failure_is_sanitized(monkeypatch):
+    monkeypatch.setattr(ANALYTICS, "describe_dataset", lambda *_: (_ for _ in ()).throw(FileNotFoundError("/private/dataset/path")))
+
+    response = ApiClient(app).get("/cities/london/activity?limit=1")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Historical activity is temporarily unavailable for this city"
+    assert "/private/dataset/path" not in response.text
+
+
 def test_unknown_city_is_rejected():
     response = ApiClient(app).get("/cities/paris/activity")
 
@@ -99,6 +109,18 @@ def test_live_network_endpoint_rejects_a_historical_only_city():
     response = ApiClient(app).get("/cities/london/live-network")
 
     assert response.status_code == 404
+
+
+def test_live_network_runtime_failure_is_sanitized(monkeypatch):
+    async def fail(*_args, **_kwargs):
+        raise RuntimeError("upstream token=secret-value")
+
+    monkeypatch.setattr(CityLiveMcpClient, "get_status", fail)
+    response = ApiClient(app).get("/cities/paris/live-network")
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Paris live network data is temporarily unavailable"
+    assert "secret-value" not in response.text
 
 
 def test_live_network_endpoint_rejects_an_unknown_city():
