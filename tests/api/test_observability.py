@@ -2,6 +2,7 @@ import json
 
 from apps.api.app.agent.telemetry import LocalTelemetryAdapter, SafeTelemetryAdapter, TelemetryEvent
 from apps.api.app.observability import new_request_id, set_request_context, reset_request_context
+import apps.api.app.observability as observability
 
 
 def test_request_ids_are_bounded_and_invalid_values_are_replaced():
@@ -40,3 +41,15 @@ def test_telemetry_failure_is_non_fatal():
     SafeTelemetryAdapter(BrokenAdapter()).emit(TelemetryEvent(
         investigation_id="investigation-123", event_type="final_result", status="answered"
     ))
+
+
+def test_observability_export_failure_is_non_fatal(monkeypatch):
+    class BrokenStream:
+        def write(self, _: str) -> int:
+            raise OSError("stream unavailable")
+
+        def flush(self) -> None:
+            raise OSError("stream unavailable")
+
+    monkeypatch.setattr(observability.sys, "stdout", BrokenStream())
+    observability.emit_event("request.completed", status_code=200)

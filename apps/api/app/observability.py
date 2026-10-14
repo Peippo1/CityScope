@@ -38,6 +38,15 @@ def activity() -> str | None:
     return _ACTIVITY.get() or None
 
 
+def _write_json(payload: dict[str, object]) -> None:
+    """Best-effort export: observability must never break the request path."""
+    try:
+        sys.stdout.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+        sys.stdout.flush()
+    except Exception:  # pragma: no cover - exercised with a broken stream
+        LOGGER.warning("Structured observability export failed", exc_info=False)
+
+
 def emit_event(event: str, **fields: object) -> None:
     """Emit Cloud Logging-compatible JSON without request content or secrets."""
     payload: dict[str, object] = {"event": event}
@@ -46,14 +55,12 @@ def emit_event(event: str, **fields: object) -> None:
     if activity():
         payload["activity"] = activity()
     payload.update({key: value for key, value in fields.items() if value is not None})
-    sys.stdout.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    sys.stdout.flush()
+    _write_json(payload)
 
 
 def emit_json(payload: dict[str, object]) -> None:
     """Write a pre-shaped sanitized event as one Cloud Logging JSON line."""
-    sys.stdout.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
-    sys.stdout.flush()
+    _write_json(payload)
 
 
 def elapsed_ms(started: float) -> int:
