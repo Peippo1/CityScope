@@ -65,6 +65,26 @@ def test_routes_request_supports_running_as_walking_geometry(monkeypatch) -> Non
     assert result.travel_mode == "walking"
 
 
+def test_place_id_route_hydrates_endpoint_coordinates_from_routes_response(monkeypatch) -> None:
+    class Response:
+        def raise_for_status(self): pass
+        def json(self): return {"routes": [{"distanceMeters": 2400, "duration": "900s", "polyline": {"encodedPolyline": "abc"}, "legs": [{"startLocation": {"latLng": {"latitude": 51.53, "longitude": -0.12}}, "endLocation": {"latLng": {"latitude": 51.54, "longitude": -0.14}}}]}]}
+
+    class Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): pass
+        async def post(self, url, json, headers):
+            assert json["origin"] == {"placeId": "ChIJorigin"}
+            return Response()
+
+    monkeypatch.setattr("apps.api.app.agent.route_service.httpx.AsyncClient", lambda **kwargs: Client())
+    origin = RouteLocation(name="King's Cross", place_id="ChIJorigin")
+    destination = RouteLocation(name="Camden", place_id="ChIJdestination")
+    result = asyncio.run(GoogleRoutesService(api_key="secret").compute_bicycle_route(origin, destination, []))
+    assert result.origin.latitude == 51.53
+    assert result.destination.longitude == -0.14
+
+
 def test_routes_rejects_missing_geometry(monkeypatch) -> None:
     class Response:
         def raise_for_status(self): pass

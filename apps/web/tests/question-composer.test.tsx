@@ -34,12 +34,12 @@ describe("QuestionComposer", () => {
   it("updates route examples and start-point guidance for the selected city", () => {
     const { rerender } = render(<QuestionComposer cityName="London" value="" isSubmitting={false} onChange={vi.fn()} onSubmit={vi.fn()} />);
     expect(screen.getByPlaceholderText(/Fulham or Greenwich to Richmond Park or a riverside route/)).toBeVisible();
-    expect(screen.getByText(/for example Fulham or Greenwich/)).toBeVisible();
+    expect(screen.getByText(/Choose a destination for this release/)).toBeVisible();
 
     rerender(<QuestionComposer cityName="Barcelona" value="" isSubmitting={false} onChange={vi.fn()} onSubmit={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Waterfront scenic ride" })).toBeVisible();
     expect(screen.getByPlaceholderText(/Barceloneta or Eixample to Port Olímpic or Montjuïc/)).toBeVisible();
-    expect(screen.getByText(/for example Barceloneta or Eixample/)).toBeVisible();
+    expect(screen.getByText(/Choose a destination for this release/)).toBeVisible();
     expect(screen.queryByRole("button", { name: "Fulham scenic loop" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /hotspots/i })).not.toBeInTheDocument();
   });
@@ -51,7 +51,7 @@ describe("QuestionComposer", () => {
     const onFacilityCategoriesChange = vi.fn();
     render(<QuestionComposer cityName="London" value="" isSubmitting={false} onChange={vi.fn()} onSubmit={vi.fn()} onStartLocationChange={onStartLocationChange} onDistanceKmChange={onDistanceKmChange} onFacilityCategoriesChange={onFacilityCategoriesChange} />);
     await user.type(screen.getByLabelText("Start location"), "King's Cross");
-    await user.type(screen.getByLabelText("Distance (km)"), "10");
+    await user.type(screen.getByLabelText("Target distance (optional)"), "10");
     await user.click(screen.getByText("Add stops and facilities"));
     await user.click(screen.getByLabelText("Public toilets"));
     expect(onStartLocationChange).toHaveBeenCalled();

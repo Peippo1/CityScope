@@ -101,7 +101,17 @@ class GuardrailPolicy:
         if not city.routes:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message=f"Bicycle routing is unavailable for {city.name} in this release.")
         south, west, north, east = city.bounds
-        if any(not (south <= float(location.latitude) <= north and west <= float(location.longitude) <= east) for location in locations):
+        if any(
+            location.latitude is None or location.longitude is None
+            for location in locations
+            if not getattr(location, "place_id", None)
+        ):
+            return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message=f"Route endpoints must include coordinates or a validated Place ID within {city.name}.")
+        if any(
+            location.latitude is not None and location.longitude is not None
+            and not (south <= float(location.latitude) <= north and west <= float(location.longitude) <= east)
+            for location in locations
+        ):
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.INVALID_ROUTE_INTENT, message=f"Route endpoints must resolve within {city.name}.")
         return self.allow()
 

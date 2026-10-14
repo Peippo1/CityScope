@@ -89,7 +89,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
           origin_latitude: originCoordinates?.latitude,
           origin_longitude: originCoordinates?.longitude,
           destination: destination.trim() || undefined,
-          journey_type: destination.trim() ? "a_to_b" : "distance_based",
+          journey_type: "a_to_b",
           distance_km: distanceKm ? Number(distanceKm) : undefined,
           planned_stops: plannedStop.trim() ? [plannedStop.trim()] : [],
           facility_categories: facilityCategories,

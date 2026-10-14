@@ -28,7 +28,7 @@ const LONDON_EXAMPLES = [
   },
   {
     label: "Plan a running route",
-    question: "I want a 10K running route with interesting sights and coffee at the finish.",
+    question: "Plan a 10K running route from King's Cross to Camden with interesting sights and coffee at the finish.",
   },
 ] as const;
 
@@ -40,7 +40,7 @@ const CITY_EXAMPLES: Record<string, { start: string; destination: string; exampl
       { label: "Hudson scenic ride", question: "I'm in Chelsea and would like a scenic ride along the Hudson River Greenway with coffee and interesting stops." },
       { label: "Central Park loop", question: "Plan a quiet loop around Central Park with a bathroom and lunch stop." },
       { label: "Brooklyn waterfront", question: "Find a waterfront route from DUMBO to Brooklyn Bridge Park with cafes." },
-      { label: "Brooklyn 10K run", question: "I've just got to New York, where can I run around Brooklyn, what should I see and where can I stop for coffee at the end of my 10K?" },
+      { label: "Brooklyn 10K run", question: "Plan a 10K run from DUMBO to Prospect Park with coffee at the finish." },
     ],
   },
   Chicago: {
@@ -102,7 +102,7 @@ const CITY_EXAMPLES: Record<string, { start: string; destination: string; exampl
 function examplesForCity(cityName: string, mode: "bicycle" | "running") {
   const cityExamples = CITY_EXAMPLES[cityName]?.examples;
   const examples = cityExamples ? [...cityExamples] : LONDON_EXAMPLES;
-  return mode === "running" ? [LONDON_EXAMPLES[LONDON_EXAMPLES.length - 1], ...(cityName === "New York City" ? [{ label: "Brooklyn 10K run", question: "I've just got to New York, where can I run around Brooklyn, what should I see and where can I stop for coffee at the end of my 10K?" }] : [])] : examples;
+  return mode === "running" ? [LONDON_EXAMPLES[LONDON_EXAMPLES.length - 1], ...(cityName === "New York City" ? [{ label: "Brooklyn 10K run", question: "Plan a 10K run from DUMBO to Prospect Park with coffee at the finish." }] : [])] : examples;
 }
 
 function cityPromptContext(cityName: string) {
@@ -185,8 +185,8 @@ export function QuestionComposer({ cityName, value, isSubmitting, error, onChang
         <label>Starting point<select value={originMode} onChange={(event) => event.target.value === "current_location" ? onUseCurrentLocation() : onStartLocationChange("")}><option value="named">Choose a starting point</option><option value="current_location">Use my current location</option></select></label>
         <label>{originMode === "current_location" ? "Current location" : "Start location"}<input value={startLocation} onChange={(event) => onStartLocationChange(event.target.value)} placeholder={promptContext.start} maxLength={120} readOnly={originMode === "current_location"} /></label>
         {locationError && <p className="inline-error" role="alert">{locationError}</p>}
-        <label>Destination (optional)<input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder={promptContext.destination} maxLength={120} /></label>
-        <label>Distance (km)<input type="number" min="0.5" max="100" step="0.5" value={distanceKm} onChange={(event) => onDistanceKmChange(event.target.value)} placeholder="10" /></label>
+        <label>Destination (required)<input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder={promptContext.destination} maxLength={120} /></label>
+        <label>Target distance (optional)<input type="number" min="0.5" max="100" step="0.5" value={distanceKm} onChange={(event) => onDistanceKmChange(event.target.value)} placeholder="10" /></label>
       </div>
       <details className="advanced-route-controls">
         <summary>Add stops and facilities</summary>
@@ -216,7 +216,7 @@ export function QuestionComposer({ cityName, value, isSubmitting, error, onChang
             {isSubmitting ? "Planning route…" : "Plan my route"}
           </button>
         </div>
-        <p id="question-help" className="helper-text">{isSubmitting ? <span className="generation-status" role="status" aria-live="polite"><span className="generation-spinner" aria-hidden="true" />{generationMessages[generationStep]}</span> : <>Try a starting point, rough time or distance, and anything you want to see — for example {promptContext.start}. You’ll get a mapped route with places to pause.</>}</p>
+        <p id="question-help" className="helper-text">{isSubmitting ? <span className="generation-status" role="status" aria-live="polite"><span className="generation-spinner" aria-hidden="true" />{generationMessages[generationStep]}</span> : <>Choose a destination for this release. Target distance is advisory and is compared with the calculated A-to-B route; loop optimisation is planned for a future release.</>}</p>
         {error && <p id="investigation-error" className="inline-error" role="alert">{error}</p>}
       </form>
     </section>

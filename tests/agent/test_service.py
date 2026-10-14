@@ -4,6 +4,7 @@ from typing import Any
 
 import asyncio
 import time
+import pytest
 
 from apps.api.app.agent.schemas import InvestigationRequest, ToolDecision
 from apps.api.app.agent.places import MapsSearchResult
@@ -363,6 +364,30 @@ def test_route_intent_uses_selected_coordinates_without_maps_geocoding() -> None
     assert result.route is not None
     assert result.route.origin.latitude == 51.53
     assert result.route.origin.longitude == -0.12
+
+
+def test_route_intent_uses_selected_place_id_without_coordinate_or_maps_resolution() -> None:
+    maps = RouteMaps()
+    route_service = FakeRouteService()
+    service = InvestigationService(mcp_client=FakeMcp(), maps_client=maps, route_service=route_service, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "City centre", "destination": "Camden", "travel_mode": "bicycle"}),
+    ]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(
+        question="Ride to Camden.",
+        context={"origin_mode": "selected_place", "start_location": "King's Cross", "origin_place_id": "ChIJkingscross", "destination": "Camden"},
+    )))
+
+    assert result.status == "answered"
+    assert maps.resolution_calls == ["Camden:london"]
+    assert result.route is not None
+    assert result.route.origin.place_id == "ChIJkingscross"
+
+
+def test_selected_place_rejects_conflicting_place_id_and_coordinates() -> None:
+    with pytest.raises(Exception, match="either a Place ID or coordinates"):
+        from apps.api.app.agent.places import GoogleMapsGroundingClient
+        GoogleMapsGroundingClient.resolve_selected_location(name="King's Cross", place_id="ChIJkingscross", latitude=51.53, longitude=-0.12)
 
 
 def test_route_intent_rejects_generic_endpoints_instead_of_silent_substitution() -> None:

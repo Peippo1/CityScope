@@ -171,10 +171,12 @@ class GoogleMapsGroundingClient:
         longitude: float | None,
     ) -> ResolvedPlace:
         """Use a user-selected location without sending precise coordinates to an LLM or persisting them."""
-        if latitude is None or longitude is None:
-            raise ProviderPayloadError("Google Maps", "a selected location requires coordinates")
-        if not place_id and not name.strip():
-            raise ProviderPayloadError("Google Maps", "a selected location requires a name or Place ID")
+        if place_id and (latitude is not None or longitude is not None):
+            raise ProviderPayloadError("Google Maps", "provide either a Place ID or coordinates for a selected location, not both")
+        if (latitude is None) != (longitude is None):
+            raise ProviderPayloadError("Google Maps", "selected coordinates must include both latitude and longitude")
+        if not place_id and latitude is None:
+            raise ProviderPayloadError("Google Maps", "a selected location requires a Place ID or coordinate pair")
         return ResolvedPlace(name=name.strip() or "Selected location", place_id=place_id, latitude=latitude, longitude=longitude)
 
 

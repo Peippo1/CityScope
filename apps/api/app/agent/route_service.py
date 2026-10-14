@@ -17,8 +17,8 @@ def h3_centroid(cell: str) -> tuple[float, float]:
 class RouteLocation(BaseModel):
     name: str
     place_id: str | None = None
-    latitude: float
-    longitude: float
+    latitude: float | None = None
+    longitude: float | None = None
     maps_uri: str | None = None
     source: Literal["google_maps"] = "google_maps"
 
@@ -49,8 +49,8 @@ class RouteDetails(BaseModel):
 class ResolvedPlace(BaseModel):
     name: str
     place_id: str | None = None
-    latitude: float
-    longitude: float
+    latitude: float | None = None
+    longitude: float | None = None
     maps_uri: str | None = None
 
     def as_location(self) -> RouteLocation:
@@ -71,6 +71,8 @@ def _distance_m(a: tuple[float, float], b: tuple[float, float]) -> float:
 
 def select_waypoints(origin: RouteLocation, destination: RouteLocation, hotspots: list[dict[str, Any]]) -> list[RouteWaypoint]:
     """Select at most two high-activity cells near the straight-line route."""
+    if origin.latitude is None or origin.longitude is None or destination.latitude is None or destination.longitude is None:
+        return []
     start, end = (origin.latitude, origin.longitude), (destination.latitude, destination.longitude)
     direct = max(_distance_m(start, end), 1.0)
     scored: list[RouteWaypoint] = []
@@ -132,6 +134,15 @@ class GoogleRoutesService:
         match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)s", str(duration))
         if not polyline or not match or float(route.get("distanceMeters", 0)) <= 0 or float(match.group(1)) <= 0:
             raise ProviderPayloadError("Google Routes", f"Google Routes API returned an invalid {travel_mode.lower()} route")
+        legs = route.get("legs", [])
+        start = (legs[0].get("startLocation") or {}).get("latLng") if legs else None
+        end = (legs[-1].get("endLocation") or {}).get("latLng") if legs else None
+        if origin.latitude is None and start:
+            origin = origin.model_copy(update={"latitude": float(start["latitude"]), "longitude": float(start["longitude"])})
+        if destination.latitude is None and end:
+            destination = destination.model_copy(update={"latitude": float(end["latitude"]), "longitude": float(end["longitude"])})
+        if origin.latitude is None or origin.longitude is None or destination.latitude is None or destination.longitude is None:
+            raise ProviderPayloadError("Google Routes", "route endpoint coordinates were missing from the validated response")
         mode = "bicycle" if travel_mode == "BICYCLE" else "walking"
         warning = "Bicycle routes are beta and may not include every suitable bicycle path; verify locally before travel." if mode == "bicycle" else "Running routes use Google walking geometry as a safe planning approximation; verify surfaces, crossings, and conditions locally."
         return RouteDetails(travel_mode=mode, distance_m=int(route["distanceMeters"]), duration_seconds=float(match.group(1)), polyline=polyline, origin=origin, destination=destination, waypoints=waypoints, attribution_title="Google Routes API", attribution_url="https://developers.google.com/maps/documentation/routes", warning=warning)

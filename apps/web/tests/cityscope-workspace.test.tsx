@@ -33,7 +33,7 @@ describe("CityScopeWorkspace", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "City" }), "new_york");
     await user.click(screen.getByRole("button", { name: /Running/ }));
     await user.type(screen.getByLabelText("Start location"), "Brooklyn");
-    await user.type(screen.getByLabelText("Distance (km)"), "10");
+    await user.type(screen.getByLabelText("Target distance (optional)"), "10");
     await user.type(screen.getByRole("textbox", { name: "Describe your route" }), "A 10K around Brooklyn with coffee");
     await user.click(screen.getByRole("button", { name: "Plan my route" }));
     expect(investigate).toHaveBeenCalledWith(expect.objectContaining({ city: "new_york", question: "Plan this as a running route. Start at Brooklyn. Target 10 km. A 10K around Brooklyn with coffee", context: expect.objectContaining({ start_location: "Brooklyn", distance_km: 10 }) }));
@@ -48,7 +48,7 @@ describe("CityScopeWorkspace", () => {
     Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: vi.fn((success: (position: { coords: { latitude: number; longitude: number } }) => void) => success({ coords: { latitude: 51.53, longitude: -0.12 } })) } });
     render(<CityScopeWorkspace services={{ investigate }} />);
     await user.selectOptions(screen.getByRole("combobox", { name: "Starting point" }), "current_location");
-    await user.type(screen.getByLabelText("Destination (optional)"), "Camden");
+    await user.type(screen.getByLabelText("Destination (required)"), "Camden");
     await user.type(screen.getByRole("textbox", { name: "Describe your route" }), "A ride there");
     await user.click(screen.getByRole("button", { name: "Plan my route" }));
     expect(investigate).toHaveBeenCalledWith(expect.objectContaining({
