@@ -22,7 +22,6 @@ docs
 CityScope- PRD__.pdf
 data/generated/*_fixture_*.parquet
 data/generated/london_cycling_journeys.parquet
-data/generated/london_cycling_activity.parquet
 data/metadata/*-fixture.json
 data/raw
 data/quarantine
