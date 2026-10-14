@@ -43,4 +43,19 @@ describe("QuestionComposer", () => {
     expect(screen.queryByRole("button", { name: "Fulham scenic loop" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /hotspots/i })).not.toBeInTheDocument();
   });
+
+  it("exposes structured route constraints without requiring them", async () => {
+    const user = userEvent.setup();
+    const onStartLocationChange = vi.fn();
+    const onDistanceKmChange = vi.fn();
+    const onFacilityCategoriesChange = vi.fn();
+    render(<QuestionComposer cityName="London" value="" isSubmitting={false} onChange={vi.fn()} onSubmit={vi.fn()} onStartLocationChange={onStartLocationChange} onDistanceKmChange={onDistanceKmChange} onFacilityCategoriesChange={onFacilityCategoriesChange} />);
+    await user.type(screen.getByLabelText("Start location"), "King's Cross");
+    await user.type(screen.getByLabelText("Distance (km)"), "10");
+    await user.click(screen.getByText("Add stops and facilities"));
+    await user.click(screen.getByLabelText("Public toilets"));
+    expect(onStartLocationChange).toHaveBeenCalled();
+    expect(onDistanceKmChange).toHaveBeenCalled();
+    expect(onFacilityCategoriesChange).toHaveBeenCalledWith(["public_bathroom"]);
+  });
 });

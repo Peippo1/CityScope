@@ -1,7 +1,7 @@
 export type InvestigationRequest = {
   city: "london" | "new_york" | "chicago" | "washington_dc" | "paris" | "copenhagen" | "barcelona" | "madrid";
   question: string;
-  context: { selected_h3_cells: string[]; previous_turns: { role: "user" | "assistant"; content: string }[]; evidence_summary?: string };
+  context: { selected_h3_cells: string[]; previous_turns: { role: "user" | "assistant"; content: string }[]; evidence_summary?: string; activity?: "running" | "cycling"; start_location?: string; distance_km?: number; preferences?: string[]; planned_stops?: string[]; facility_categories?: string[] };
 };
 
 export type InvestigationResult = {
@@ -11,6 +11,9 @@ export type InvestigationResult = {
   dataset?: { dataset_name: string; observation_start: string; observation_end: string; historical: boolean; attribution_text?: string };
   evidence: { source: "city_data" | "google_maps" | "google_routes"; metric: string; value: number; unit: string; source_aggregate: string; h3_cells: string[]; category?: string; search_radius_m?: number }[];
   places: { place_id: string; resource_name?: string; name?: string; latitude: number; longitude: number; maps_uri?: string; attribution_title?: string; attribution_url?: string; category: string; h3_cell: string }[];
+  planned_stops?: InvestigationResult["places"];
+  facilities?: InvestigationResult["places"];
+  requested_distance_km?: number;
   amenity_analysis: { h3_cell: string; category: string; place_count: number; mobility_value: number; scarcity_rank: number }[];
   city_insights: { h3_cell?: string; value?: number; metric?: string; [key: string]: unknown }[];
   route?: { travel_mode: "bicycle" | "walking"; distance_m: number; duration_seconds: number; polyline: string; origin: { name: string; place_id?: string; latitude: number; longitude: number; maps_uri?: string }; destination: { name: string; place_id?: string; latitude: number; longitude: number; maps_uri?: string }; waypoints: { h3_cell: string; latitude: number; longitude: number; mobility_value: number; score: number; reason: string }[]; source: "google_routes_api"; attribution_title?: string; attribution_url?: string; warning: string };

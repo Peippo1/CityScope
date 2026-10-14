@@ -338,6 +338,23 @@ def test_route_intent_loop_adds_return_segment_and_keeps_two_route_calls() -> No
     assert len(route_service.calls) == 2
 
 
+def test_route_intent_resolves_explicit_planned_stop_as_waypoint() -> None:
+    maps = RouteMaps()
+    route_service = FakeRouteService()
+    service = InvestigationService(mcp_client=FakeMcp(), maps_client=maps, route_service=route_service, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "King's Cross", "destination": "Borough"}),
+    ]))
+    request = InvestigationRequest(question="Cycle from King's Cross to Borough with a coffee stop.", context={"planned_stops": ["Foundry Coffee"]})
+
+    result = asyncio.run(service.investigate(request))
+
+    assert result.status == "answered"
+    assert "Foundry Coffee:london" in maps.resolution_calls
+    assert route_service.calls[0][2] == 1
+    assert result.planned_stops and result.planned_stops[0].name == "Foundry Coffee"
+    assert result.journey_plan is not None and result.journey_plan.selected_stops[0].name == "Foundry Coffee"
+
+
 def test_route_intent_includes_curated_template_metadata() -> None:
     service = InvestigationService(mcp_client=FakeMcp(), maps_client=RouteMaps(), route_service=FakeRouteService(), model=FakeModel([
         ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "Fulham", "destination": "Richmond Park", "preferences": ["scenic"]}),

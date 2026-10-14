@@ -36,7 +36,8 @@ describe("CityScopeWorkspace", () => {
     await user.click(screen.getByRole("button", { name: "Plan my route" }));
     expect(investigate).toHaveBeenCalledWith(expect.objectContaining({ city: "new_york", question: "Plan this as a running route: A 10K around Brooklyn with coffee" }));
     expect(await screen.findByText("A lovely route with places to pause.")).toBeVisible();
-    expect(screen.getByText("Good places to pause")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Nearby optional facilities" })).toBeVisible();
+    expect(investigate).toHaveBeenLastCalledWith(expect.objectContaining({ context: expect.objectContaining({ activity: "running", facility_categories: [] }) }));
   });
 
   it("resets the previous result when switching cities", async () => {

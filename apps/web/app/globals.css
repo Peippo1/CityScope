@@ -139,6 +139,15 @@ ul, ol { margin-top: 0; }
 .question-row { display: flex; gap: 8px; }
 .question-row input { width: 100%; min-width: 0; min-height: 48px; padding: 11px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius); color: var(--text); background: white; }
 .question-row input::placeholder { color: #777b80; }
+.route-controls { display: grid; grid-template-columns: minmax(0, 1fr) 140px; gap: 10px; margin: 14px 0 10px; }
+.route-controls label, .advanced-route-controls > label { display: grid; gap: 5px; color: var(--text-muted); font-size: .76rem; font-weight: 700; }
+.route-controls input, .advanced-route-controls input:not([type="checkbox"]) { min-height: 42px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text); background: var(--surface); font: inherit; font-weight: 400; }
+.advanced-route-controls { margin: 10px 0 14px; color: var(--text-muted); font-size: .78rem; }
+.advanced-route-controls summary { cursor: pointer; color: var(--blue-strong); font-weight: 700; }
+.advanced-route-controls > label { margin: 12px 0; }
+.advanced-route-controls fieldset { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0; padding: 0; border: 0; }
+.advanced-route-controls legend { width: 100%; margin-bottom: 6px; font-size: .76rem; font-weight: 700; }
+.advanced-route-controls fieldset label { display: flex; gap: 6px; align-items: center; }
 .question-row input:focus { border-color: var(--blue); }
 .question-row button, .secondary-button { min-height: 44px; border-radius: var(--radius); font-weight: 700; transition: background var(--motion), box-shadow var(--motion), transform var(--motion); }
 .question-row button { min-width: 118px; padding: 10px 18px; border: 1px solid var(--blue); color: white; background: var(--blue); }
@@ -320,6 +329,7 @@ ul, ol { margin-top: 0; }
 }
 
 @media (max-width: 720px) {
+  .route-controls { grid-template-columns: 1fr; }
   .app-shell { padding: 0 12px 32px; }
   .topbar { min-height: 64px; gap: 12px; }
   .view-nav { justify-content: stretch; margin-top: -4px; }

@@ -22,7 +22,7 @@ from .policy import ExecutionBudget, GuardrailPolicy, PolicyCode, PolicyDecision
 from .route_service import GoogleRoutesService, RouteDetails, RouteExecutor, RouteWaypoint, select_waypoints
 from .route_templates import match_route_templates
 from .journey_planner import JourneyPlanner
-from .schemas import InvestigationRequest, InvestigationResult, TraceEvent, ToolDecision, JourneyPlan, JourneySegment
+from .schemas import InvestigationRequest, InvestigationResult, TraceEvent, ToolDecision, JourneyPlan, JourneySegment, PlaceResult
 from .telemetry import TelemetryAdapter, TelemetryEvent, telemetry_from_env
 
 
@@ -162,7 +162,7 @@ class InvestigationService:
             if decision.kind == "unsupported":
                 return self.finish(InvestigationResult(investigation_id=iid, status="unsupported", answer=decision.answer or "This question is unsupported.", limitations=["No unsupported tool was executed."], trace=trace))
             if decision.kind == "answer": break
-            if decision.tool == "route.intent": return await self._route(iid, request.city, decision, trace, budget)
+            if decision.tool == "route.intent": return await self._route(iid, request.city, decision, request.context, trace, budget)
             if decision.tool == "maps.search_places":
                 try:
                     plan = normalize_amenity_plan(request.question, AmenitySearchPlan.model_validate(decision.arguments))
@@ -251,7 +251,7 @@ class InvestigationService:
         self.record(iid, trace, kind="tool_call", label="Called City Live Data MCP: get_live_station_status", status="completed", provider="city_data", tool="city_live_data.get_live_station_status", policy=self.policy.allow(), count=len(stations), ms=round((time.perf_counter()-started)*1000))
         return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=f"Paris live network status returned {len(stations)} stations. This is current operational availability, not historical trip demand.", city_insights=[status], limitations=status.get("limitations", []), trace=trace))
 
-    async def _route(self, iid: str, city: str, decision: ToolDecision, trace: list[TraceEvent], budget: ExecutionBudget) -> InvestigationResult:
+    async def _route(self, iid: str, city: str, decision: ToolDecision, request_context: Any, trace: list[TraceEvent], budget: ExecutionBudget) -> InvestigationResult:
         travel_mode = decision.arguments.get("travel_mode", "bicycle")
         mode_label = "running" if travel_mode == "walking" else "bicycle"
         route_tool = "routes.compute_walking_route" if travel_mode == "walking" else "routes.compute_bicycle_route"
@@ -319,6 +319,27 @@ class InvestigationService:
                     limitations_hint = "A curated waypoint could not be resolved; the route was computed using the named endpoints."
             elif hints:
                 limitations_hint = "The route used named endpoints because the Maps search budget was reached."
+        if limitations_hint and limitations_hint not in envelope.limitations:
+            envelope.limitations.append(limitations_hint)
+        planned_stop_places: list[PlaceResult] = []
+        planned_stop_waypoints: list[RouteWaypoint] = []
+        planned_queries = list(dict.fromkeys(request_context.planned_stops))
+        if planned_queries:
+            resolution_gate = self.policy.reserve_maps_resolution(budget, len(planned_queries))
+            if resolution_gate.outcome == PolicyOutcome.ALLOW:
+                try:
+                    resolved_planned = await asyncio.gather(*(self.maps_client.resolve_location(query, city) for query in planned_queries))
+                    for place in resolved_planned:
+                        cell = h3.latlng_to_cell(place.latitude, place.longitude, 9)
+                        planned_stop_places.append(PlaceResult(place_id=place.place_id or f"planned-{cell}", name=place.name, latitude=place.latitude, longitude=place.longitude, maps_uri=place.maps_uri, category="point_of_interest", h3_cell=cell))
+                        planned_stop_waypoints.append(RouteWaypoint(h3_cell=cell, latitude=place.latitude, longitude=place.longitude, mobility_value=0, score=1, reason="User-selected planned stop."))
+                    self.record(iid, trace, kind="tool_call", label="Resolved user-selected planned stops", status="completed", provider="google_maps", tool="maps.search_places", policy=resolution_gate, count=len(planned_stop_places), call=budget.maps_calls, limit=self.policy.max_maps_calls)
+                except Exception:
+                    limitations_hint = "One or more planned stops could not be resolved; the route used the remaining constraints."
+            else:
+                limitations_hint = "The Maps search budget was reached before planned stops could be added."
+        if planned_stop_waypoints:
+            waypoints = planned_stop_waypoints + waypoints[: max(0, 2 - len(planned_stop_waypoints))]
         if limitations_hint:
             envelope.limitations.append(limitations_hint)
         gate=self.policy.check_waypoints(waypoints)
@@ -336,12 +357,15 @@ class InvestigationService:
         self.record(iid,trace,kind="tool_call",label=f"Called Google Routes API: deterministic {mode_label} route",status="completed",provider="google_routes",tool=route_tool,policy=route_gate,count=1,call=budget.routes_calls,limit=self.policy.max_routes_calls)
         segments = [JourneySegment(label="Outbound", purpose="Start to destination", route=route)]
         limitations = list(dict.fromkeys(envelope.limitations + [route.warning] + (["The route was computed directly after waypoint routing failed."] if fallback and not route.waypoints else [])))
+        requested_distance_km = request_context.distance_km
+        if requested_distance_km is not None and abs((route.distance_m / 1000) - requested_distance_km) / requested_distance_km > 0.35:
+            limitations.append(f"The requested distance was {requested_distance_km:.1f} km; the resolved endpoints produced {route.distance_m / 1000:.1f} km. Refine the endpoints or ask for a longer or shorter route.")
         if planned.return_route:
             segments.append(JourneySegment(label="Return loop", purpose="Destination back to start", route=planned.return_route))
             self.record(iid, trace, kind="tool_call", label=f"Called Google Routes API: return {mode_label} route", status="completed", provider="google_routes", tool=route_tool, policy=route_gate, count=1, call=budget.routes_calls, limit=self.policy.max_routes_calls)
         elif return_to_origin:
             limitations.append("A return route could not be computed; the outbound route is still available.")
-        requested_stops = list(dict.fromkeys(decision.arguments.get("requested_stops") or []))
+        requested_stops = list(dict.fromkeys(request_context.facility_categories or decision.arguments.get("requested_stops") or []))
         if "interesting" in (decision.arguments.get("preferences") or []) and "point_of_interest" not in requested_stops:
             requested_stops.append("point_of_interest")
         food = next((item for item in requested_stops if item in {"cafe", "coffee_shop", "restaurant"}), None)
@@ -386,7 +410,7 @@ class InvestigationService:
         journey = JourneyPlan(
             summary=f"{origin.name} to {destination.name}" + (" and back" if return_to_origin else ""),
             segments=segments,
-            selected_stops=selected_stops,
+            selected_stops=planned_stop_places,
             warnings=limitations,
             provenance=provenance,
             template_id=template.template_id if template else None,
@@ -401,4 +425,4 @@ class InvestigationService:
             self.record(iid,trace,kind="synthesis",label="validate_route",status="completed",provider="google_routes",tool=route_tool,call=budget.routes_calls,limit=self.policy.max_routes_calls)
             self.record(iid,trace,kind="synthesis",label="compose_result",status="completed",policy=self.policy.allow())
             self.record(iid,trace,kind="synthesis",label="Investigation complete",status="completed",provider="gemini",policy=self.policy.allow())
-        return self.finish(InvestigationResult(investigation_id=iid,status="answered",answer=f"The validated {mode_label} journey from {origin.name} to {destination.name}" + (" and back" if return_to_origin else "") + f" is {route.distance_m/1000:.1f} km outbound and about {route.duration_seconds/60:.0f} minutes.",dataset=envelope.dataset,evidence=evidence,map_layers=envelope.map_layers,city_insights=envelope.results,route=route,journey_plan=journey,places=selected_stops,limitations=limitations,trace=trace))
+        return self.finish(InvestigationResult(investigation_id=iid,status="answered",answer=f"The validated {mode_label} journey from {origin.name} to {destination.name}" + (" and back" if return_to_origin else "") + f" is {route.distance_m/1000:.1f} km outbound and about {route.duration_seconds/60:.0f} minutes.",dataset=envelope.dataset,evidence=evidence,map_layers=envelope.map_layers,city_insights=envelope.results,route=route,journey_plan=journey,places=planned_stop_places + selected_stops,planned_stops=planned_stop_places,facilities=selected_stops,requested_distance_km=requested_distance_km,limitations=limitations,trace=trace))

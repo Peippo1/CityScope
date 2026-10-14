@@ -36,6 +36,11 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [selectedH3Cell, setSelectedH3Cell] = useState<string | null>(null);
   const [selectedCity, setSelectedCity] = useState<CityCapability>(fallbackCities[0]);
   const [focusedPlace, setFocusedPlace] = useState<FocusedMapPlace | null>(null);
+  const [startLocation, setStartLocation] = useState("");
+  const [distanceKm, setDistanceKm] = useState("");
+  const [plannedStop, setPlannedStop] = useState("");
+  const [facilityCategories, setFacilityCategories] = useState<string[]>([]);
+  const [previousTurns, setPreviousTurns] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
 
   useEffect(() => {
     if (!services.getCities) return;
@@ -57,10 +62,20 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
       const request = {
         city: selectedCity.id,
         question: `Plan this as a ${journeyMode === "running" ? "running" : "cycling"} route: ${trimmedQuestion}`,
-        context: { selected_h3_cells: selectedH3Cell ? [selectedH3Cell] : [], previous_turns: [], evidence_summary: undefined },
+        context: {
+          selected_h3_cells: selectedH3Cell ? [selectedH3Cell] : [],
+          previous_turns: previousTurns.slice(-6),
+          evidence_summary: investigation?.answer,
+          activity: journeyMode === "running" ? "running" : "cycling",
+          start_location: startLocation.trim() || undefined,
+          distance_km: distanceKm ? Number(distanceKm) : undefined,
+          planned_stops: plannedStop.trim() ? [plannedStop.trim()] : [],
+          facility_categories: facilityCategories,
+        },
       } satisfies InvestigationRequest;
       const result = await services.investigate(request);
       setInvestigation(result);
+      setPreviousTurns((turns) => [...turns, { role: "user" as const, content: trimmedQuestion }, { role: "assistant" as const, content: result.answer }].slice(-6));
       setSelectedH3Cell(result.map_layers[0]?.h3_cell ?? null);
     } catch {
       setInvestigationError("CityScope couldn't complete this plan just now. Try again.");
@@ -79,6 +94,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     setInvestigation(null);
     setSelectedH3Cell(null);
     setJourneyMode("bicycle");
+    setPreviousTurns([]);
   }, [cities]);
 
   const investigationCells = useMemo(() => investigation?.map_layers.map((layer) => ({
@@ -103,7 +119,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
       <section className="dashboard-intro" aria-labelledby="page-title"><div><p className="eyebrow">CityScope</p><h1 id="page-title">Discover your city with AI-powered routes.</h1></div><p>Turn everyday runs and rides into new adventures. Explore interesting places with personalised routes powered by AI.</p></section>
       <label className="city-switcher">City<select value={selectedCity.id} onChange={(event) => selectCity(event.target.value)}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}</select></label>
       <section id="explore" className="command-surface" aria-label={`${selectedCity.name} route planner`}>
-        <QuestionComposer cityName={selectedCity.name} value={question} mode={journeyMode} onModeChange={setJourneyMode} isSubmitting={investigating} error={investigationError} onChange={setQuestion} onSubmit={() => void submitQuestion()} />
+        <QuestionComposer cityName={selectedCity.name} value={question} mode={journeyMode} onModeChange={setJourneyMode} isSubmitting={investigating} error={investigationError} onChange={setQuestion} onSubmit={() => void submitQuestion()} startLocation={startLocation} onStartLocationChange={setStartLocation} distanceKm={distanceKm} onDistanceKmChange={setDistanceKm} plannedStop={plannedStop} onPlannedStopChange={setPlannedStop} facilityCategories={facilityCategories} onFacilityCategoriesChange={setFacilityCategories} />
         {investigationError && <button type="button" className="secondary-button retry-investigation" onClick={() => void submitQuestion()}>Try again</button>}
       </section>
       <section className="route-workspace" aria-label={`${selectedCity.name} route results`}>

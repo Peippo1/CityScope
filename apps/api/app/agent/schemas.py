@@ -10,6 +10,7 @@ from services.city_data_mcp.schemas import DatasetMetadata, Evidence, MapLayer
 
 AmenityCategory = Literal["cafe", "coffee_shop", "bicycle_repair_shop", "restaurant", "shop", "public_bathroom", "point_of_interest"]
 JourneyStopCategory = Literal["cafe", "restaurant", "public_bathroom", "shop", "bicycle_repair_shop", "point_of_interest"]
+ActivityMode = Literal["running", "cycling"]
 
 
 class ConversationTurn(BaseModel):
@@ -22,6 +23,12 @@ class InvestigationContext(BaseModel):
     selected_h3_cells: list[str] = Field(default_factory=list, max_length=50)
     previous_turns: list[ConversationTurn] = Field(default_factory=list, max_length=6)
     evidence_summary: str | None = Field(default=None, max_length=2000)
+    activity: ActivityMode | None = None
+    start_location: str | None = Field(default=None, max_length=120)
+    distance_km: float | None = Field(default=None, ge=0.5, le=100)
+    preferences: list[str] = Field(default_factory=list, max_length=6)
+    planned_stops: list[str] = Field(default_factory=list, max_length=2)
+    facility_categories: list[AmenityCategory] = Field(default_factory=list, max_length=2)
 
 
 class InvestigationRequest(BaseModel):
@@ -51,6 +58,9 @@ class InvestigationResult(BaseModel):
     dataset: DatasetMetadata | None = None
     evidence: list[Evidence] = Field(default_factory=list)
     places: list["PlaceResult"] = Field(default_factory=list)
+    planned_stops: list["PlaceResult"] = Field(default_factory=list, max_length=2)
+    facilities: list["PlaceResult"] = Field(default_factory=list, max_length=4)
+    requested_distance_km: float | None = Field(default=None, ge=0.5, le=100)
     amenity_analysis: list[dict[str, Any]] = Field(default_factory=list)
     route: "RouteDetails | None" = None
     journey_plan: "JourneyPlan | None" = None

@@ -120,9 +120,17 @@ type QuestionComposerProps = {
   onSubmit: () => void;
   mode?: "bicycle" | "running";
   onModeChange?: (mode: "bicycle" | "running") => void;
+  startLocation?: string;
+  onStartLocationChange?: (value: string) => void;
+  distanceKm?: string;
+  onDistanceKmChange?: (value: string) => void;
+  facilityCategories?: string[];
+  onFacilityCategoriesChange?: (categories: string[]) => void;
+  plannedStop?: string;
+  onPlannedStopChange?: (value: string) => void;
 };
 
-export function QuestionComposer({ cityName, value, isSubmitting, error, onChange, onSubmit, mode = "bicycle", onModeChange }: QuestionComposerProps) {
+export function QuestionComposer({ cityName, value, isSubmitting, error, onChange, onSubmit, mode = "bicycle", onModeChange, startLocation = "", onStartLocationChange = () => undefined, distanceKm = "", onDistanceKmChange = () => undefined, facilityCategories = [], onFacilityCategoriesChange = () => undefined, plannedStop = "", onPlannedStopChange = () => undefined }: QuestionComposerProps) {
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [listening, setListening] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
@@ -168,6 +176,15 @@ export function QuestionComposer({ cityName, value, isSubmitting, error, onChang
         <button type="button" className={mode === "bicycle" ? "is-selected" : ""} aria-pressed={mode === "bicycle"} onClick={() => onModeChange?.("bicycle")}>🚲 Cycling</button>
         <button type="button" className={mode === "running" ? "is-selected" : ""} aria-pressed={mode === "running"} onClick={() => onModeChange?.("running")}>🏃 Running</button>
       </div>
+      <div className="route-controls" aria-label="Route constraints">
+        <label>Start location<input value={startLocation} onChange={(event) => onStartLocationChange(event.target.value)} placeholder={promptContext.start} maxLength={120} /></label>
+        <label>Distance (km)<input type="number" min="0.5" max="100" step="0.5" value={distanceKm} onChange={(event) => onDistanceKmChange(event.target.value)} placeholder="10" /></label>
+      </div>
+      <details className="advanced-route-controls">
+        <summary>Add stops and facilities</summary>
+        <label>Planned stop<input value={plannedStop} onChange={(event) => onPlannedStopChange(event.target.value)} placeholder="e.g. a café near the finish" maxLength={120} /></label>
+        <fieldset><legend>Nearby optional facilities</legend>{[["cafe", "Cafés"], ["restaurant", "Restaurants"], ["public_bathroom", "Public toilets"], ["shop", "Water or useful shops"]].map(([category, label]) => <label key={category}><input type="checkbox" checked={facilityCategories.includes(category)} onChange={(event) => onFacilityCategoriesChange(event.target.checked ? [...facilityCategories, category] : facilityCategories.filter((item) => item !== category))} />{label}</label>)}</fieldset>
+      </details>
       <div className="prompt-list" aria-label="Example questions">
         {examples.map((example) => (
           <button key={example.label} type="button" className="prompt-chip" onClick={() => onChange(example.question)}>
