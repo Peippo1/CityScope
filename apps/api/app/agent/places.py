@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 from h3 import cell_to_latlng, is_valid_cell
@@ -34,6 +35,17 @@ CATEGORY_QUERY = {
     "public_bathroom": "public bathrooms",
     "point_of_interest": "interesting places and landmarks",
 }
+
+
+def _safe_google_url(value: Any) -> str | None:
+    """Keep provider-supplied links navigable without trusting arbitrary URLs."""
+    if not isinstance(value, str):
+        return None
+    parsed = urlsplit(value)
+    hostname = (parsed.hostname or "").lower().rstrip(".")
+    if parsed.scheme != "https" or not hostname.endswith(".google.com") and hostname not in {"google.com"}:
+        return None
+    return value
 
 
 class AmenitySearchPlan(BaseModel):
@@ -160,7 +172,7 @@ class GoogleMapsGroundingClient:
             raise ProviderPayloadError("Google Maps", "named location could not be resolved")
         location = raw["location"]
         links = raw.get("googleMapsLinks") or {}
-        return ResolvedPlace(name=raw.get("displayName") or raw.get("name") or query, place_id=raw.get("id"), latitude=float(location["latitude"]), longitude=float(location["longitude"]), maps_uri=links.get("placeUrl"))
+        return ResolvedPlace(name=raw.get("displayName") or raw.get("name") or query, place_id=raw.get("id"), latitude=float(location["latitude"]), longitude=float(location["longitude"]), maps_uri=_safe_google_url(links.get("placeUrl")))
 
     @staticmethod
     def resolve_selected_location(
@@ -219,9 +231,9 @@ def parse_search_result(payload: dict[str, Any], category: AmenityCategory, h3_c
             name=raw.get("displayName") or raw.get("name") or fallback_name,
             latitude=latitude,
             longitude=longitude,
-            maps_uri=links.get("placeUrl"),
+            maps_uri=_safe_google_url(links.get("placeUrl")),
             attribution_title=attribution.get("title"),
-            attribution_url=attribution.get("url"),
+            attribution_url=_safe_google_url(attribution.get("url")),
             category=category,
             h3_cell=h3_cell,
         ))

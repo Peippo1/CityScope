@@ -17,6 +17,8 @@ class _ClientWindow:
 
 
 class InvestigationAdmission:
+    max_tracked_clients = 4096
+
     def __init__(self) -> None:
         self._clients: dict[str, _ClientWindow] = {}
         self._active = 0
@@ -26,8 +28,20 @@ class InvestigationAdmission:
         now = time.monotonic()
         client = config.request_client_key(request)
         async with self._lock:
-            window = self._clients.setdefault(client, _ClientWindow(deque()))
             threshold = now - config.INVESTIGATION_RATE_WINDOW_SECONDS
+            # Do not retain one empty deque forever for every source address
+            # that reaches the public endpoint. This keeps rotating-client
+            # traffic from turning the limiter into an unbounded memory sink.
+            stale_clients = [key for key, state in self._clients.items() if not state.requests or state.requests[-1] <= threshold]
+            for key in stale_clients:
+                self._clients.pop(key, None)
+            if client not in self._clients and len(self._clients) >= self.max_tracked_clients:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="CityScope is at capacity. Try again shortly.",
+                    headers={"Retry-After": "5"},
+                )
+            window = self._clients.setdefault(client, _ClientWindow(deque()))
             while window.requests and window.requests[0] <= threshold:
                 window.requests.popleft()
             if len(window.requests) >= config.INVESTIGATION_RATE_LIMIT:
