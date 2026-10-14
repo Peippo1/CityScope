@@ -28,6 +28,7 @@ type CityMapProps = {
 export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cell, onSelectH3Cell, onSelectPlace, cityName = "London", bounds = [51.28, -0.52, 51.72, 0.34], ariaLabel, showCells = false, locale = "en-GB" }: CityMapProps) {
   const node = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
+  const initialLocale = useRef(locale);
   const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
@@ -35,7 +36,8 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
     if (!node.current || !key) return;
     let cancelled = false;
     const cleanups: (() => void)[] = [];
-    const loader = new Loader({ apiKey: key, version: "weekly", language: locale.slice(0, 2), region: locale === "fr-FR" ? "FR" : locale === "es-ES" ? "ES" : locale === "it-IT" ? "IT" : "GB", libraries: ["geometry", "places"] });
+    const mapLocale = initialLocale.current;
+    const loader = new Loader({ apiKey: key, version: "weekly", language: mapLocale.slice(0, 2), region: mapLocale === "fr-FR" ? "FR" : mapLocale === "es-ES" ? "ES" : mapLocale === "it-IT" ? "IT" : "GB", libraries: ["geometry", "places"] });
     loader.load().then((google) => {
       if (!node.current || cancelled) return;
       map.current = new google.maps.Map(node.current, {
@@ -114,7 +116,7 @@ export function CityMap({ cells, places = [], focusedPlace, route, selectedH3Cel
       cleanups.push(() => { polygons.forEach((polygon) => polygon.setMap(null)); markers.forEach((marker) => marker.setMap(null)); focusedMarker?.setMap(null); routeMarkers.forEach((marker) => marker.setMap(null)); routeLine?.setMap(null); infoWindow.close(); });
     }).catch(() => { if (!cancelled) setLoadError(true); });
     return () => { cancelled = true; cleanups.forEach((cleanup) => cleanup()); };
-  }, [cells, places, focusedPlace, route, selectedH3Cell, onSelectH3Cell, onSelectPlace, cityName, bounds, showCells, locale]);
+  }, [cells, places, focusedPlace, route, selectedH3Cell, onSelectH3Cell, onSelectPlace, cityName, bounds, showCells]);
 
   if (!process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY) {
     return <div className="map-placeholder" role="img" aria-label="Google Maps preview unavailable until a browser API key is configured">Google Maps preview requires NEXT_PUBLIC_GOOGLE_MAPS_API_KEY. Your route will appear here when the map key is configured.</div>;
