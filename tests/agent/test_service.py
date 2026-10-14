@@ -326,6 +326,26 @@ def test_route_intent_executes_city_data_then_private_route_adapter_without_rout
     assert "compute_routes" not in {event.tool for event in result.trace}
 
 
+def test_route_intent_uses_explicit_context_when_model_returns_generic_endpoints() -> None:
+    maps = RouteMaps()
+    route_service = FakeRouteService()
+    service = InvestigationService(mcp_client=FakeMcp(), maps_client=maps, route_service=route_service, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "City centre", "destination": "a nearby park", "travel_mode": "walking"}),
+    ]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(
+        question="Plan a running route. Start at King's Cross. from King's Cross to Borough with public toilets.",
+        context={"activity": "running", "start_location": "King's Cross"},
+    )))
+
+    assert result.status == "answered"
+    assert maps.resolution_calls[:2] == ["King's Cross:london", "Borough:london"]
+    assert result.route is not None
+    assert result.route.origin.name == "King's Cross"
+    assert result.route.destination.name == "Borough"
+    assert result.route.travel_mode == "walking"
+
+
 def test_route_intent_loop_adds_return_segment_and_keeps_two_route_calls() -> None:
     mcp = FakeMcp(); maps = RouteMaps(); route_service = FakeRouteService()
     service = InvestigationService(mcp_client=mcp, maps_client=maps, route_service=route_service, model=FakeModel([

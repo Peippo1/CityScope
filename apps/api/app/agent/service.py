@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import time
 import uuid
 import h3
@@ -162,7 +163,7 @@ class InvestigationService:
             if decision.kind == "unsupported":
                 return self.finish(InvestigationResult(investigation_id=iid, status="unsupported", answer=decision.answer or "This question is unsupported.", limitations=["No unsupported tool was executed."], trace=trace))
             if decision.kind == "answer": break
-            if decision.tool == "route.intent": return await self._route(iid, request.city, decision, request.context, trace, budget)
+            if decision.tool == "route.intent": return await self._route(iid, request.city, request.question, decision, request.context, trace, budget)
             if decision.tool == "maps.search_places":
                 try:
                     plan = normalize_amenity_plan(request.question, AmenitySearchPlan.model_validate(decision.arguments))
@@ -251,7 +252,8 @@ class InvestigationService:
         self.record(iid, trace, kind="tool_call", label="Called City Live Data MCP: get_live_station_status", status="completed", provider="city_data", tool="city_live_data.get_live_station_status", policy=self.policy.allow(), count=len(stations), ms=round((time.perf_counter()-started)*1000))
         return self.finish(InvestigationResult(investigation_id=iid, status="answered", answer=f"Paris live network status returned {len(stations)} stations. This is current operational availability, not historical trip demand.", city_insights=[status], limitations=status.get("limitations", []), trace=trace))
 
-    async def _route(self, iid: str, city: str, decision: ToolDecision, request_context: Any, trace: list[TraceEvent], budget: ExecutionBudget) -> InvestigationResult:
+    async def _route(self, iid: str, city: str, question: str, decision: ToolDecision, request_context: Any, trace: list[TraceEvent], budget: ExecutionBudget) -> InvestigationResult:
+        decision = self._apply_route_context(decision, question, request_context)
         travel_mode = decision.arguments.get("travel_mode", "bicycle")
         mode_label = "running" if travel_mode == "walking" else "bicycle"
         route_tool = "routes.compute_walking_route" if travel_mode == "walking" else "routes.compute_bicycle_route"
@@ -426,3 +428,19 @@ class InvestigationService:
             self.record(iid,trace,kind="synthesis",label="compose_result",status="completed",policy=self.policy.allow())
             self.record(iid,trace,kind="synthesis",label="Investigation complete",status="completed",provider="gemini",policy=self.policy.allow())
         return self.finish(InvestigationResult(investigation_id=iid,status="answered",answer=f"The validated {mode_label} journey from {origin.name} to {destination.name}" + (" and back" if return_to_origin else "") + f" is {route.distance_m/1000:.1f} km outbound and about {route.duration_seconds/60:.0f} minutes.",dataset=envelope.dataset,evidence=evidence,map_layers=envelope.map_layers,city_insights=envelope.results,route=route,journey_plan=journey,places=planned_stop_places + selected_stops,planned_stops=planned_stop_places,facilities=selected_stops,requested_distance_km=requested_distance_km,limitations=limitations,trace=trace))
+
+    @staticmethod
+    def _apply_route_context(decision: ToolDecision, question: str, request_context: Any) -> ToolDecision:
+        """Keep explicit UI route constraints authoritative over generic model output."""
+        arguments = dict(decision.arguments)
+        if request_context.start_location:
+            arguments["origin"] = request_context.start_location
+
+        generic_destination = str(arguments.get("destination", "")).casefold() in {"a nearby park", "city centre", "city center"}
+        if generic_destination:
+            match = re.search(r"\bfrom\s+(.+?)\s+to\s+(.+?)(?=\s+(?:with|and|nearby|around)\b|[.!?,]|$)", question, re.IGNORECASE)
+            if match:
+                arguments["origin"] = request_context.start_location or match.group(1).strip()
+                arguments["destination"] = match.group(2).strip()
+
+        return decision.model_copy(update={"arguments": arguments})
