@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sys
 import time
 import uuid
 from contextvars import ContextVar
@@ -45,7 +46,14 @@ def emit_event(event: str, **fields: object) -> None:
     if activity():
         payload["activity"] = activity()
     payload.update({key: value for key, value in fields.items() if value is not None})
-    LOGGER.info(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+    sys.stdout.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
+
+
+def emit_json(payload: dict[str, object]) -> None:
+    """Write a pre-shaped sanitized event as one Cloud Logging JSON line."""
+    sys.stdout.write(json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n")
+    sys.stdout.flush()
 
 
 def elapsed_ms(started: float) -> int:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 import os
 import random
@@ -9,7 +8,7 @@ from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel, Field
 
-from ..observability import activity, request_id
+from ..observability import activity, emit_json, request_id
 
 
 LOGGER = logging.getLogger("cityscope.telemetry")
@@ -48,7 +47,7 @@ class LocalTelemetryAdapter:
         payload = event.model_dump(mode="json", exclude_none=True)
         payload.setdefault("request_id", request_id())
         payload.setdefault("activity", activity())
-        self.logger.info(json.dumps({"event": "investigation.telemetry", **{k: v for k, v in payload.items() if v is not None}}, sort_keys=True, separators=(",", ":")))
+        emit_json({"event": "investigation.telemetry", **{k: v for k, v in payload.items() if v is not None}})
 
 
 class SafeTelemetryAdapter:

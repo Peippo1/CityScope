@@ -1,4 +1,4 @@
-import logging
+import json
 
 from apps.api.app.agent.telemetry import LocalTelemetryAdapter, SafeTelemetryAdapter, TelemetryEvent
 from apps.api.app.observability import new_request_id, set_request_context, reset_request_context
@@ -11,25 +11,25 @@ def test_request_ids_are_bounded_and_invalid_values_are_replaced():
     assert len(generated) <= 64
 
 
-def test_local_telemetry_contains_metadata_only(caplog):
+def test_local_telemetry_contains_metadata_only(capsys):
     tokens = set_request_context("release-123", "cycling")
     try:
-        with caplog.at_level(logging.INFO, logger="cityscope.telemetry"):
-            LocalTelemetryAdapter().emit(TelemetryEvent(
-                investigation_id="investigation-123",
-                event_type="tool_call",
-                provider="google_routes",
-                status="completed",
-                duration_ms=42,
-            ))
+        LocalTelemetryAdapter().emit(TelemetryEvent(
+            investigation_id="investigation-123",
+            event_type="tool_call",
+            provider="google_routes",
+            status="completed",
+            duration_ms=42,
+        ))
     finally:
         reset_request_context(tokens)
 
-    message = caplog.records[-1].message
-    assert "release-123" in message
-    assert "cycling" in message
-    assert "prompt" not in message
-    assert "coordinates" not in message
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["request_id"] == "release-123"
+    assert payload["activity"] == "cycling"
+    assert payload["event"] == "investigation.telemetry"
+    assert "prompt" not in payload
+    assert "coordinates" not in payload
 
 
 def test_telemetry_failure_is_non_fatal():
