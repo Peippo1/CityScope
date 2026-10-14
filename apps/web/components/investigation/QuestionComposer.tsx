@@ -122,6 +122,11 @@ type QuestionComposerProps = {
   onModeChange?: (mode: "bicycle" | "running") => void;
   startLocation?: string;
   onStartLocationChange?: (value: string) => void;
+  originMode?: "named" | "current_location";
+  onUseCurrentLocation?: () => void;
+  locationError?: string | null;
+  destination?: string;
+  onDestinationChange?: (value: string) => void;
   distanceKm?: string;
   onDistanceKmChange?: (value: string) => void;
   facilityCategories?: string[];
@@ -130,7 +135,7 @@ type QuestionComposerProps = {
   onPlannedStopChange?: (value: string) => void;
 };
 
-export function QuestionComposer({ cityName, value, isSubmitting, error, onChange, onSubmit, mode = "bicycle", onModeChange, startLocation = "", onStartLocationChange = () => undefined, distanceKm = "", onDistanceKmChange = () => undefined, facilityCategories = [], onFacilityCategoriesChange = () => undefined, plannedStop = "", onPlannedStopChange = () => undefined }: QuestionComposerProps) {
+export function QuestionComposer({ cityName, value, isSubmitting, error, onChange, onSubmit, mode = "bicycle", onModeChange, startLocation = "", onStartLocationChange = () => undefined, originMode = "named", onUseCurrentLocation = () => undefined, locationError, destination = "", onDestinationChange = () => undefined, distanceKm = "", onDistanceKmChange = () => undefined, facilityCategories = [], onFacilityCategoriesChange = () => undefined, plannedStop = "", onPlannedStopChange = () => undefined }: QuestionComposerProps) {
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const [listening, setListening] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
@@ -177,7 +182,10 @@ export function QuestionComposer({ cityName, value, isSubmitting, error, onChang
         <button type="button" className={mode === "running" ? "is-selected" : ""} aria-pressed={mode === "running"} onClick={() => onModeChange?.("running")}>🏃 Running</button>
       </div>
       <div className="route-controls" aria-label="Route constraints">
-        <label>Start location<input value={startLocation} onChange={(event) => onStartLocationChange(event.target.value)} placeholder={promptContext.start} maxLength={120} /></label>
+        <label>Starting point<select value={originMode} onChange={(event) => event.target.value === "current_location" ? onUseCurrentLocation() : onStartLocationChange("")}><option value="named">Choose a starting point</option><option value="current_location">Use my current location</option></select></label>
+        <label>{originMode === "current_location" ? "Current location" : "Start location"}<input value={startLocation} onChange={(event) => onStartLocationChange(event.target.value)} placeholder={promptContext.start} maxLength={120} readOnly={originMode === "current_location"} /></label>
+        {locationError && <p className="inline-error" role="alert">{locationError}</p>}
+        <label>Destination (optional)<input value={destination} onChange={(event) => onDestinationChange(event.target.value)} placeholder={promptContext.destination} maxLength={120} /></label>
         <label>Distance (km)<input type="number" min="0.5" max="100" step="0.5" value={distanceKm} onChange={(event) => onDistanceKmChange(event.target.value)} placeholder="10" /></label>
       </div>
       <details className="advanced-route-controls">

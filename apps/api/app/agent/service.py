@@ -254,6 +254,11 @@ class InvestigationService:
 
     async def _route(self, iid: str, city: str, question: str, decision: ToolDecision, request_context: Any, trace: list[TraceEvent], budget: ExecutionBudget) -> InvestigationResult:
         decision = self._apply_route_context(decision, question, request_context)
+        if self._is_generic_endpoint(decision.arguments.get("origin")) or self._is_generic_endpoint(decision.arguments.get("destination")):
+            message = "Choose a specific starting point and destination before planning this route."
+            if request_context.journey_type == "distance_based":
+                message = "Approximate-distance routes need a destination or an explicitly supported loop before they can be planned."
+            return self.finish(InvestigationResult(investigation_id=iid, status="failed", answer=message, limitations=["CityScope will not silently substitute a generic endpoint."] , trace=trace))
         travel_mode = decision.arguments.get("travel_mode", "bicycle")
         mode_label = "running" if travel_mode == "walking" else "bicycle"
         route_tool = "routes.compute_walking_route" if travel_mode == "walking" else "routes.compute_bicycle_route"
@@ -262,7 +267,11 @@ class InvestigationService:
         gate = self.policy.reserve_route_resolution(budget)
         if gate.outcome != PolicyOutcome.ALLOW: return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Route resolution was rejected.",limitations=[gate.message],trace=trace))
         started=time.perf_counter()
-        try: resolved=await asyncio.gather(self.maps_client.resolve_location(decision.arguments["origin"], city),self.maps_client.resolve_location(decision.arguments["destination"], city))
+        try:
+            resolved = await asyncio.gather(
+                self._resolve_endpoint(decision.arguments["origin"], city, request_context, "origin"),
+                self._resolve_endpoint(decision.arguments["destination"], city, request_context, "destination"),
+            )
         except Exception:
             failure=self.policy.provider_error("Google Maps Grounding Lite"); self.record(iid,trace,kind="tool_call",label="Google Maps location resolution unavailable",status="failed",provider="google_maps",tool="maps.search_places",policy=failure)
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="The route endpoints could not be resolved.",limitations=[failure.message],trace=trace))
@@ -435,6 +444,8 @@ class InvestigationService:
         arguments = dict(decision.arguments)
         if request_context.start_location:
             arguments["origin"] = request_context.start_location
+        if request_context.destination:
+            arguments["destination"] = request_context.destination
 
         generic_destination = str(arguments.get("destination", "")).casefold() in {"a nearby park", "city centre", "city center"}
         if generic_destination:
@@ -444,3 +455,22 @@ class InvestigationService:
                 arguments["destination"] = match.group(2).strip()
 
         return decision.model_copy(update={"arguments": arguments})
+
+    @staticmethod
+    def _is_generic_endpoint(value: Any) -> bool:
+        return str(value or "").strip().casefold() in {"a nearby park", "city centre", "city center"}
+
+    async def _resolve_endpoint(self, query: str, city: str, request_context: Any, endpoint: str):
+        prefix = "origin_" if endpoint == "origin" else "destination_"
+        name = request_context.start_location if endpoint == "origin" else request_context.destination
+        place_id = getattr(request_context, f"{prefix}place_id", None)
+        latitude = getattr(request_context, f"{prefix}latitude", None)
+        longitude = getattr(request_context, f"{prefix}longitude", None)
+        if latitude is not None or longitude is not None or place_id:
+            return GoogleMapsGroundingClient.resolve_selected_location(
+                name=name or query,
+                place_id=place_id,
+                latitude=latitude,
+                longitude=longitude,
+            )
+        return await self.maps_client.resolve_location(name or query, city)

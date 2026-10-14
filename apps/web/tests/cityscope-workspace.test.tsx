@@ -42,6 +42,21 @@ describe("CityScopeWorkspace", () => {
     expect(investigate).toHaveBeenLastCalledWith(expect.objectContaining({ context: expect.objectContaining({ activity: "running", facility_categories: [] }) }));
   });
 
+  it("requests current location without putting coordinates in the question", async () => {
+    const user = userEvent.setup();
+    const investigate = vi.fn().mockResolvedValue(routeResult);
+    Object.defineProperty(navigator, "geolocation", { configurable: true, value: { getCurrentPosition: vi.fn((success: (position: { coords: { latitude: number; longitude: number } }) => void) => success({ coords: { latitude: 51.53, longitude: -0.12 } })) } });
+    render(<CityScopeWorkspace services={{ investigate }} />);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Starting point" }), "current_location");
+    await user.type(screen.getByLabelText("Destination (optional)"), "Camden");
+    await user.type(screen.getByRole("textbox", { name: "Describe your route" }), "A ride there");
+    await user.click(screen.getByRole("button", { name: "Plan my route" }));
+    expect(investigate).toHaveBeenCalledWith(expect.objectContaining({
+      question: "Plan this as a cycling route. Start at Current location. Go to Camden. A ride there",
+      context: expect.objectContaining({ origin_mode: "current_location", origin_latitude: 51.53, origin_longitude: -0.12, destination: "Camden" }),
+    }));
+  });
+
   it("resets the previous result when switching cities", async () => {
     const user = userEvent.setup();
     const investigate = vi.fn().mockResolvedValue(routeResult);

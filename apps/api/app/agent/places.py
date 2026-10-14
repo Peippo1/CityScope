@@ -162,6 +162,21 @@ class GoogleMapsGroundingClient:
         links = raw.get("googleMapsLinks") or {}
         return ResolvedPlace(name=raw.get("displayName") or raw.get("name") or query, place_id=raw.get("id"), latitude=float(location["latitude"]), longitude=float(location["longitude"]), maps_uri=links.get("placeUrl"))
 
+    @staticmethod
+    def resolve_selected_location(
+        *,
+        name: str,
+        place_id: str | None,
+        latitude: float | None,
+        longitude: float | None,
+    ) -> ResolvedPlace:
+        """Use a user-selected location without sending precise coordinates to an LLM or persisting them."""
+        if latitude is None or longitude is None:
+            raise ProviderPayloadError("Google Maps", "a selected location requires coordinates")
+        if not place_id and not name.strip():
+            raise ProviderPayloadError("Google Maps", "a selected location requires a name or Place ID")
+        return ResolvedPlace(name=name.strip() or "Selected location", place_id=place_id, latitude=latitude, longitude=longitude)
+
 
 def _structured_payload(result: Any) -> dict[str, Any]:
     structured = getattr(result, "structuredContent", None)

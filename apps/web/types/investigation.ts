@@ -1,7 +1,26 @@
 export type InvestigationRequest = {
   city: "london" | "new_york" | "chicago" | "washington_dc" | "paris" | "copenhagen" | "barcelona" | "madrid";
   question: string;
-  context: { selected_h3_cells: string[]; previous_turns: { role: "user" | "assistant"; content: string }[]; evidence_summary?: string; activity?: "running" | "cycling"; start_location?: string; distance_km?: number; preferences?: string[]; planned_stops?: string[]; facility_categories?: string[] };
+  context: {
+    selected_h3_cells: string[];
+    previous_turns: { role: "user" | "assistant"; content: string }[];
+    evidence_summary?: string;
+    activity?: "running" | "cycling";
+    origin_mode?: "named" | "selected_place" | "current_location";
+    start_location?: string;
+    origin_place_id?: string;
+    origin_latitude?: number;
+    origin_longitude?: number;
+    destination?: string;
+    destination_place_id?: string;
+    destination_latitude?: number;
+    destination_longitude?: number;
+    journey_type?: "a_to_b" | "distance_based";
+    distance_km?: number;
+    preferences?: string[];
+    planned_stops?: string[];
+    facility_categories?: string[];
+  };
 };
 
 export type InvestigationResult = {

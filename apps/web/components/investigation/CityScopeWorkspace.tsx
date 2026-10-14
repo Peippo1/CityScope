@@ -37,10 +37,27 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
   const [selectedCity, setSelectedCity] = useState<CityCapability>(fallbackCities[0]);
   const [focusedPlace, setFocusedPlace] = useState<FocusedMapPlace | null>(null);
   const [startLocation, setStartLocation] = useState("");
+  const [originMode, setOriginMode] = useState<"named" | "current_location">("named");
+  const [originCoordinates, setOriginCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
+  const [destination, setDestination] = useState("");
   const [distanceKm, setDistanceKm] = useState("");
   const [plannedStop, setPlannedStop] = useState("");
   const [facilityCategories, setFacilityCategories] = useState<string[]>([]);
   const [previousTurns, setPreviousTurns] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+
+  const useCurrentLocation = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setLocationError("This browser does not provide location access. Enter a starting point instead.");
+      return;
+    }
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => { setOriginMode("current_location"); setStartLocation("Current location"); setOriginCoordinates({ latitude: coords.latitude, longitude: coords.longitude }); },
+      () => setLocationError("Location permission was unavailable. Enter a starting point instead."),
+      { enableHighAccuracy: false, maximumAge: 300000, timeout: 8000 },
+    );
+  }, []);
 
   useEffect(() => {
     if (!services.getCities) return;
@@ -61,13 +78,18 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     try {
       const request = {
         city: selectedCity.id,
-        question: [`Plan this as a ${journeyMode === "running" ? "running" : "cycling"} route.`, startLocation.trim() ? `Start at ${startLocation.trim()}.` : "", distanceKm ? `Target ${distanceKm} km.` : "", trimmedQuestion].filter(Boolean).join(" "),
+        question: [`Plan this as a ${journeyMode === "running" ? "running" : "cycling"} route.`, startLocation.trim() ? `Start at ${startLocation.trim()}.` : "", destination.trim() ? `Go to ${destination.trim()}.` : "", distanceKm ? `Target ${distanceKm} km.` : "", trimmedQuestion].filter(Boolean).join(" "),
         context: {
           selected_h3_cells: selectedH3Cell ? [selectedH3Cell] : [],
           previous_turns: previousTurns.slice(-6),
           evidence_summary: investigation?.answer,
           activity: journeyMode === "running" ? "running" : "cycling",
+          origin_mode: originMode,
           start_location: startLocation.trim() || undefined,
+          origin_latitude: originCoordinates?.latitude,
+          origin_longitude: originCoordinates?.longitude,
+          destination: destination.trim() || undefined,
+          journey_type: destination.trim() ? "a_to_b" : "distance_based",
           distance_km: distanceKm ? Number(distanceKm) : undefined,
           planned_stops: plannedStop.trim() ? [plannedStop.trim()] : [],
           facility_categories: facilityCategories,
@@ -82,7 +104,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     } finally {
       setInvestigating(false);
     }
-  }, [distanceKm, facilityCategories, investigation?.answer, investigating, journeyMode, plannedStop, previousTurns, question, selectedCity.id, selectedH3Cell, services, startLocation]);
+  }, [destination, distanceKm, facilityCategories, investigation?.answer, investigating, journeyMode, originCoordinates, originMode, plannedStop, previousTurns, question, selectedCity.id, selectedH3Cell, services, startLocation]);
 
   const selectCity = useCallback((cityId: string) => {
     const city = cities.find((item) => item.id === cityId);
@@ -95,6 +117,9 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
     setSelectedH3Cell(null);
     setJourneyMode("bicycle");
     setPreviousTurns([]);
+    setOriginMode("named");
+    setOriginCoordinates(null);
+    setDestination("");
   }, [cities]);
 
   const investigationCells = useMemo(() => investigation?.map_layers.map((layer) => ({
@@ -119,7 +144,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
       <section className="dashboard-intro" aria-labelledby="page-title"><div><p className="eyebrow">CityScope</p><h1 id="page-title">Discover your city with AI-powered routes.</h1></div><p>Turn everyday runs and rides into new adventures. Explore interesting places with personalised routes powered by AI.</p></section>
       <label className="city-switcher">City<select value={selectedCity.id} onChange={(event) => selectCity(event.target.value)}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}</select></label>
       <section id="explore" className="command-surface" aria-label={`${selectedCity.name} route planner`}>
-        <QuestionComposer cityName={selectedCity.name} value={question} mode={journeyMode} onModeChange={setJourneyMode} isSubmitting={investigating} error={investigationError} onChange={setQuestion} onSubmit={() => void submitQuestion()} startLocation={startLocation} onStartLocationChange={setStartLocation} distanceKm={distanceKm} onDistanceKmChange={setDistanceKm} plannedStop={plannedStop} onPlannedStopChange={setPlannedStop} facilityCategories={facilityCategories} onFacilityCategoriesChange={setFacilityCategories} />
+        <QuestionComposer cityName={selectedCity.name} value={question} mode={journeyMode} onModeChange={setJourneyMode} isSubmitting={investigating} error={investigationError} onChange={setQuestion} onSubmit={() => void submitQuestion()} startLocation={startLocation} onStartLocationChange={(value) => { setOriginMode("named"); setOriginCoordinates(null); setStartLocation(value); }} originMode={originMode} onUseCurrentLocation={useCurrentLocation} locationError={locationError} destination={destination} onDestinationChange={setDestination} distanceKm={distanceKm} onDistanceKmChange={setDistanceKm} plannedStop={plannedStop} onPlannedStopChange={setPlannedStop} facilityCategories={facilityCategories} onFacilityCategoriesChange={setFacilityCategories} />
         {investigationError && <button type="button" className="secondary-button retry-investigation" onClick={() => void submitQuestion()}>Try again</button>}
       </section>
       <section className="route-workspace" aria-label={`${selectedCity.name} route results`}>

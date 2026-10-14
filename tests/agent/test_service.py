@@ -346,6 +346,38 @@ def test_route_intent_uses_explicit_context_when_model_returns_generic_endpoints
     assert result.route.travel_mode == "walking"
 
 
+def test_route_intent_uses_selected_coordinates_without_maps_geocoding() -> None:
+    maps = RouteMaps()
+    route_service = FakeRouteService()
+    service = InvestigationService(mcp_client=FakeMcp(), maps_client=maps, route_service=route_service, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "City centre", "destination": "Camden", "travel_mode": "bicycle"}),
+    ]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(
+        question="Ride to Camden.",
+        context={"origin_mode": "current_location", "start_location": "Current location", "origin_latitude": 51.53, "origin_longitude": -0.12, "destination": "Camden"},
+    )))
+
+    assert result.status == "answered"
+    assert maps.resolution_calls == ["Camden:london"]
+    assert result.route is not None
+    assert result.route.origin.latitude == 51.53
+    assert result.route.origin.longitude == -0.12
+
+
+def test_route_intent_rejects_generic_endpoints_instead_of_silent_substitution() -> None:
+    maps = RouteMaps()
+    service = InvestigationService(mcp_client=FakeMcp(), maps_client=maps, model=FakeModel([
+        ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "City centre", "destination": "a nearby park"}),
+    ]))
+
+    result = asyncio.run(service.investigate(InvestigationRequest(question="Plan a route around town.")))
+
+    assert result.status == "failed"
+    assert "specific starting point" in result.answer
+    assert maps.resolution_calls == []
+
+
 def test_route_intent_loop_adds_return_segment_and_keeps_two_route_calls() -> None:
     mcp = FakeMcp(); maps = RouteMaps(); route_service = FakeRouteService()
     service = InvestigationService(mcp_client=mcp, maps_client=maps, route_service=route_service, model=FakeModel([

@@ -11,6 +11,8 @@ from services.city_data_mcp.schemas import DatasetMetadata, Evidence, MapLayer
 AmenityCategory = Literal["cafe", "coffee_shop", "bicycle_repair_shop", "restaurant", "shop", "public_bathroom", "point_of_interest"]
 JourneyStopCategory = Literal["cafe", "restaurant", "public_bathroom", "shop", "bicycle_repair_shop", "point_of_interest"]
 ActivityMode = Literal["running", "cycling"]
+OriginMode = Literal["named", "selected_place", "current_location"]
+JourneyType = Literal["a_to_b", "distance_based"]
 
 
 class ConversationTurn(BaseModel):
@@ -24,7 +26,16 @@ class InvestigationContext(BaseModel):
     previous_turns: list[ConversationTurn] = Field(default_factory=list, max_length=6)
     evidence_summary: str | None = Field(default=None, max_length=2000)
     activity: ActivityMode | None = None
+    origin_mode: OriginMode = "named"
     start_location: str | None = Field(default=None, max_length=120)
+    origin_place_id: str | None = Field(default=None, max_length=300)
+    origin_latitude: float | None = Field(default=None, ge=-90, le=90)
+    origin_longitude: float | None = Field(default=None, ge=-180, le=180)
+    destination: str | None = Field(default=None, max_length=120)
+    destination_place_id: str | None = Field(default=None, max_length=300)
+    destination_latitude: float | None = Field(default=None, ge=-90, le=90)
+    destination_longitude: float | None = Field(default=None, ge=-180, le=180)
+    journey_type: JourneyType = "a_to_b"
     distance_km: float | None = Field(default=None, ge=0.5, le=100)
     preferences: list[str] = Field(default_factory=list, max_length=6)
     planned_stops: list[str] = Field(default_factory=list, max_length=2)
