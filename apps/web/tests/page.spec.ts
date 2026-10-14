@@ -13,7 +13,7 @@ test("renders a concise route result with stops and no legacy panels", async ({ 
   await page.getByRole("button", { name: "Plan my route" }).click();
   await expect(page.getByRole("heading", { name: "Your ride" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "King's Cross → Borough" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Good places to pause" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nearby optional facilities" })).toBeVisible();
   await expect(page.getByText("Coffee stop")).toBeVisible();
   await expect(page.getByText("Request flow")).not.toBeVisible();
   await expect(page.getByText("Historical mobility evidence")).not.toBeVisible();
