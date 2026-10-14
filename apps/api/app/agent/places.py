@@ -21,6 +21,8 @@ from .route_service import ResolvedPlace
 from .errors import ProviderOperationError, ProviderPayloadError, ProviderUnavailableError
 
 MAPS_MCP_URL = "https://mapstools.googleapis.com/mcp"
+MAPS_RESOLUTION_URL = "https://mapstools.googleapis.com/v1:resolveNames"
+PLACES_DETAILS_URL = "https://places.googleapis.com/v1/places"
 DEFAULT_CANDIDATE_CELLS = 3
 DEFAULT_CATEGORIES = 1
 MAX_CANDIDATE_CELLS = 5
@@ -129,12 +131,15 @@ def google_search_arguments(category: AmenityCategory, cell: str, city: CityId =
 
 
 class GoogleMapsGroundingClient:
-    """MCP client restricted to Google's search_places tool."""
+    """Use Grounding for discovery and deterministic APIs for named endpoints."""
 
-    def __init__(self, url: str | None = None, api_key: str | None = None, timeout_s: float = 20.0) -> None:
+    def __init__(self, url: str | None = None, api_key: str | None = None, timeout_s: float = 20.0, transport: httpx.AsyncBaseTransport | None = None) -> None:
         self.url = url or os.getenv("CITYSCOPE_MAPS_MCP_URL", MAPS_MCP_URL)
+        self.resolution_url = os.getenv("CITYSCOPE_MAPS_RESOLUTION_URL", MAPS_RESOLUTION_URL)
+        self.place_details_url = os.getenv("CITYSCOPE_PLACES_API_URL", PLACES_DETAILS_URL).rstrip("/")
         self.api_key = api_key or os.getenv("GOOGLE_MAPS_GROUNDING_API_KEY") or os.getenv("GOOGLE_MAPS_API_KEY")
         self.timeout_s = timeout_s
+        self.transport = transport
 
     async def search_places(self, category: AmenityCategory, cell: str, city: CityId = "london", locale: str | None = None) -> MapsSearchResult:
         if not self.api_key:
@@ -145,7 +150,7 @@ class GoogleMapsGroundingClient:
             "Accept": "application/json, text/event-stream",
             "Content-Type": "application/json",
         }
-        async with httpx.AsyncClient(headers=headers, timeout=self.timeout_s) as http_client:
+        async with httpx.AsyncClient(headers=headers, timeout=self.timeout_s, transport=self.transport) as http_client:
             async with streamable_http_client(self.url, http_client=http_client) as (read_stream, write_stream, _):
                 async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=self.timeout_s)) as session:
                     tools = await session.list_tools()
@@ -158,24 +163,67 @@ class GoogleMapsGroundingClient:
                     return parse_search_result(payload, category, cell, city)
 
     async def resolve_location(self, query: str, city: CityId = "london", locale: str | None = None) -> ResolvedPlace:
-        """Resolve a named endpoint through Grounding search; never accept model coordinates."""
+        """Resolve one named endpoint through Resolution API plus Place Details."""
+        return (await self.resolve_locations([query], city, locale))[0]
+
+    async def resolve_locations(self, queries: list[str], city: CityId = "london", locale: str | None = None) -> list[ResolvedPlace]:
+        """Resolve bounded named endpoints without relying on discovery summaries."""
         if not self.api_key:
             raise ProviderUnavailableError("Google Maps", "API key is not configured")
-        headers = {"X-Goog-Api-Key": self.api_key, "Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
+        if not 1 <= len(queries) <= 2 or any(not isinstance(query, str) or not query.strip() for query in queries):
+            raise ProviderPayloadError("Google Maps", "named endpoint resolution request was invalid", reason_code="resolution_response_invalid")
         city_definition = get_city(city)
-        language = LOCALE_LANGUAGE.get(locale or "", CITY_LANGUAGE.get(city_definition.region_code, "en"))
-        arguments = {"text_query": f"{query}, {city_definition.maps_location}", "language_code": language, "region_code": city_definition.region_code}
-        async with httpx.AsyncClient(headers=headers, timeout=self.timeout_s) as http_client:
-            async with streamable_http_client(self.url, http_client=http_client) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream, read_timeout_seconds=timedelta(seconds=self.timeout_s)) as session:
-                    tools = await session.list_tools()
-                    if "search_places" not in {tool.name for tool in tools.tools}:
-                        raise ProviderPayloadError("Google Maps", "search_places tool is unavailable", reason_code="tool_unavailable")
-                    result = await session.call_tool("search_places", arguments)
-                    if result.isError:
-                        raise ProviderOperationError("Google Maps", "location resolution failed")
-                    payload = _structured_payload(result)
-        return resolve_place_from_payload(payload, query, city)
+        headers = {"X-Goog-Api-Key": self.api_key, "Content-Type": "application/json"}
+        arguments = {
+            "queries": [{"text": f"{query.strip()}, {city_definition.maps_location}"} for query in queries],
+            "locationBias": {"viewport": {"low": {"latitude": city_definition.bounds[0], "longitude": city_definition.bounds[1]}, "high": {"latitude": city_definition.bounds[2], "longitude": city_definition.bounds[3]}}},
+            "regionCode": city_definition.region_code,
+        }
+        async with httpx.AsyncClient(headers=headers, timeout=self.timeout_s, transport=self.transport) as http_client:
+            resolution = await _json_request(http_client, "POST", self.resolution_url, arguments, "Google Maps")
+            results = resolution.get("results")
+            if not isinstance(results, list) or len(results) != len(queries):
+                raise ProviderPayloadError("Google Maps", reason_code="resolution_response_invalid")
+            resolved_ids: list[str] = []
+            for index, result in enumerate(results):
+                if not isinstance(result, dict) or not result:
+                    raise ProviderPayloadError("Google Maps", "named location was not found", reason_code="resolution_no_match")
+                if result.get("confidence") != "HIGH":
+                    raise ProviderPayloadError("Google Maps", "named location was ambiguous", reason_code="resolution_low_confidence")
+                entity = result.get("entity")
+                resource = entity.get("place") if isinstance(entity, dict) else None
+                if not isinstance(resource, str) or not re.fullmatch(r"places/[A-Za-z0-9_-]+", resource):
+                    raise ProviderPayloadError("Google Maps", reason_code="resolution_missing_place_id")
+                resolved_ids.append(resource)
+            details: list[ResolvedPlace] = []
+            for query, resource in zip(queries, resolved_ids, strict=True):
+                details.append(await self._place_details(http_client, resource, query, city))
+        return details
+
+    async def resolve_place_id(self, place_id: str, city: CityId = "london", name: str = "Selected location") -> ResolvedPlace:
+        """Server-validate a public Place ID before it can be used for routing."""
+        resource = place_id if place_id.startswith("places/") else f"places/{place_id}"
+        if not re.fullmatch(r"places/[A-Za-z0-9_-]+", resource):
+            raise ProviderPayloadError("Google Places", reason_code="resolution_missing_place_id")
+        if not self.api_key:
+            raise ProviderUnavailableError("Google Places", "API key is not configured")
+        headers = {"X-Goog-Api-Key": self.api_key, "Content-Type": "application/json"}
+        async with httpx.AsyncClient(headers=headers, timeout=self.timeout_s, transport=self.transport) as http_client:
+            return await self._place_details(http_client, resource, name, city)
+
+    async def _place_details(self, client: httpx.AsyncClient, resource: str, name: str, city: CityId) -> ResolvedPlace:
+        payload = await _json_request(client, "GET", f"{self.place_details_url}/{resource.removeprefix('places/')}", None, "Google Places")
+        location = payload.get("location") if isinstance(payload, dict) else None
+        latitude = location.get("latitude") if isinstance(location, dict) else None
+        longitude = location.get("longitude") if isinstance(location, dict) else None
+        if not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float)):
+            raise ProviderPayloadError("Google Places", reason_code="details_missing_location")
+        if not math.isfinite(latitude) or not math.isfinite(longitude) or not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+            raise ProviderPayloadError("Google Places", reason_code="details_invalid_geometry")
+        south, west, north, east = get_city(city).bounds
+        if not (south <= latitude <= north and west <= longitude <= east):
+            raise ProviderPayloadError("Google Places", "selected location is outside the selected city", reason_code="candidate_outside_city")
+        return ResolvedPlace(name=name.strip() or "Selected location", place_id=resource.removeprefix("places/"), latitude=float(latitude), longitude=float(longitude))
 
     @staticmethod
     def resolve_selected_location(
@@ -219,6 +267,18 @@ def _structured_payload(result: Any) -> dict[str, Any]:
             raise ProviderPayloadError("Google Maps", reason_code="json_content_invalid")
     reason_code = "json_content_invalid" if saw_text else "structured_content_missing"
     raise ProviderPayloadError("Google Maps", "structured search result was missing", reason_code=reason_code)
+
+
+async def _json_request(client: httpx.AsyncClient, method: str, url: str, body: dict[str, Any] | None, provider: str) -> dict[str, Any]:
+    response = await client.request(method, url, json=body, headers={"X-Goog-FieldMask": "location"} if method == "GET" else None)
+    response.raise_for_status()
+    try:
+        payload = response.json()
+    except (TypeError, ValueError) as exc:
+        raise ProviderPayloadError(provider, reason_code="resolution_response_invalid") from exc
+    if not isinstance(payload, dict):
+        raise ProviderPayloadError(provider, reason_code="resolution_response_invalid")
+    return payload
 
 
 def resolve_place_from_payload(payload: dict[str, Any], query: str, city: CityId) -> ResolvedPlace:

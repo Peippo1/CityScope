@@ -317,27 +317,44 @@ class InvestigationService:
         route_tool = "routes.compute_walking_route" if travel_mode == "walking" else "routes.compute_bicycle_route"
         if self.adk_runtime:
             self.record(iid, trace, kind="planning", label="route.intent", status="completed", provider="gemini", tool="route.intent", call=budget.model_rounds, limit=self.policy.max_model_rounds)
-        gate = self.policy.reserve_route_resolution(budget)
+        named_endpoints = [
+            endpoint for endpoint in ("origin", "destination")
+            if not (getattr(request_context, f"{'origin' if endpoint == 'origin' else 'destination'}_place_id", None)
+                    or getattr(request_context, f"{'origin' if endpoint == 'origin' else 'destination'}_latitude", None) is not None
+                    or getattr(request_context, f"{'origin' if endpoint == 'origin' else 'destination'}_longitude", None) is not None)
+        ]
+        selected_place_ids = [
+            endpoint for endpoint in ("origin", "destination")
+            if getattr(request_context, f"{'origin' if endpoint == 'origin' else 'destination'}_place_id", None)
+            and getattr(request_context, f"{'origin' if endpoint == 'origin' else 'destination'}_latitude", None) is None
+            and getattr(request_context, f"{'origin' if endpoint == 'origin' else 'destination'}_longitude", None) is None
+        ]
+        gate = self.policy.reserve_endpoint_resolution(budget, len(named_endpoints), len(selected_place_ids)) if (named_endpoints or selected_place_ids) else self.policy.allow()
         if gate.outcome != PolicyOutcome.ALLOW: return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="Route resolution was rejected.",limitations=[gate.message],trace=trace))
         started=time.perf_counter()
         try:
-            # The streamable-HTTP MCP transport can cancel sibling work when
-            # one overlapping session fails. Two bounded sequential calls are
-            # more predictable and ensure each session exits before the next.
-            resolved = [
-                await self._resolve_endpoint(decision.arguments["origin"], city, request_context, "origin"),
-                await self._resolve_endpoint(decision.arguments["destination"], city, request_context, "destination"),
-            ]
+            # Named endpoints use one bounded batch plus Place Details; selected
+            # coordinates stay local, while public Place IDs get server-validated.
+            if named_endpoints and hasattr(self.maps_client, "resolve_locations") and len(named_endpoints) == 2:
+                names = [decision.arguments["origin"], decision.arguments["destination"]]
+                resolved_named = await self.maps_client.resolve_locations(names, city, request_context.locale)
+                resolved = [resolved_named[0], resolved_named[1]]
+            else:
+                resolved = [
+                    await self._resolve_endpoint(decision.arguments["origin"], city, request_context, "origin"),
+                    await self._resolve_endpoint(decision.arguments["destination"], city, request_context, "destination"),
+                ]
         except BaseException as exc:
             diagnostic = classify_provider_exception(exc)
-            failure=self.policy.provider_error("Google Maps Grounding Lite"); self.record(iid,trace,kind="tool_call",label="Google Maps location resolution unavailable",status="failed",provider="google_maps",tool="maps.search_places",policy=failure,ms=round((time.perf_counter()-started)*1000),diagnostic=diagnostic)
+            failure=self.policy.provider_error("Google Maps Resolution API"); self.record(iid,trace,kind="tool_call",label="Google Maps location resolution unavailable",status="failed",provider="google_maps",tool="maps.resolve_names",policy=failure,ms=round((time.perf_counter()-started)*1000),diagnostic=diagnostic)
             if contains_cancellation(exc):
                 raise
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="The route endpoints could not be resolved.",limitations=[failure.message],trace=trace))
-        self.record(iid,trace,kind="tool_call",label="Resolved route endpoints with Google Maps Grounding MCP: search_places",status="completed",provider="google_maps",tool="maps.search_places",policy=gate,count=2,ms=round((time.perf_counter()-started)*1000),call=budget.maps_calls,limit=self.policy.max_maps_calls)
+        if named_endpoints:
+            self.record(iid,trace,kind="tool_call",label="Resolved route endpoints with Google Maps Resolution API and Place Details",status="completed",provider="google_maps",tool="maps.resolve_names",policy=gate,count=len(named_endpoints),ms=round((time.perf_counter()-started)*1000),call=budget.maps_calls,limit=self.policy.max_maps_calls)
         origin,destination=(x.as_location() for x in resolved); location_gate = self.policy.check_route_locations(city, [origin, destination])
         if location_gate.outcome != PolicyOutcome.ALLOW:
-            self.record(iid,trace,kind="tool_call",label="Rejected route endpoints outside selected city",status="rejected",provider="google_maps",tool="maps.search_places",policy=location_gate)
+            self.record(iid,trace,kind="tool_call",label="Rejected route endpoints outside selected city",status="rejected",provider="google_maps",tool="maps.resolve_names",policy=location_gate)
             return self.finish(InvestigationResult(investigation_id=iid,status="failed",answer="The route endpoints are outside the selected city.",limitations=[location_gate.message],trace=trace))
         templates = match_route_templates(origin.name, destination.name, decision.arguments.get("preferences"), decision.arguments.get("requested_stops"), city=city)
         requested_template_id = decision.arguments.get("template_id")
@@ -550,7 +567,12 @@ class InvestigationService:
         place_id = getattr(request_context, f"{prefix}place_id", None)
         latitude = getattr(request_context, f"{prefix}latitude", None)
         longitude = getattr(request_context, f"{prefix}longitude", None)
-        if latitude is not None or longitude is not None or place_id:
+        if place_id and latitude is None and longitude is None:
+            resolver = getattr(self.maps_client, "resolve_place_id", None)
+            if resolver is None:
+                raise ValueError("A public Place ID requires server-side validation before routing")
+            return await resolver(place_id, city, name=name or query)
+        if latitude is not None or longitude is not None:
             return GoogleMapsGroundingClient.resolve_selected_location(
                 name=name or query,
                 place_id=place_id,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import httpx
+import pytest
 
 from apps.api.app.agent.places import (
     MAX_SEARCH_RADIUS_M,
@@ -92,6 +93,89 @@ def test_maps_client_uses_server_credential_and_official_endpoint_defaults() -> 
     assert client.url == "https://mapstools.googleapis.com/mcp"
     assert client.api_key == "server-only-test-key"
     assert client.timeout_s == 20.0
+
+
+def test_named_endpoint_resolution_uses_batched_ids_and_minimal_place_details() -> None:
+    requests: list[tuple[str, str, dict[str, str]]] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append((request.method, str(request.url), dict(request.headers)))
+        if request.url.path.endswith(":resolveNames"):
+            return httpx.Response(200, json={
+                "results": [
+                    {"entity": {"place": "places/ChIJorigin"}, "confidence": "HIGH"},
+                    {"entity": {"place": "places/ChIJdestination"}, "confidence": "HIGH"},
+                ],
+            })
+        place_id = request.url.path.rsplit("/", 1)[-1]
+        coordinates = {
+            "ChIJorigin": {"latitude": 51.5308, "longitude": -0.1238},
+            "ChIJdestination": {"latitude": 51.5396, "longitude": -0.1426},
+        }
+        return httpx.Response(200, json={"location": coordinates[place_id], "googleMapsUri": "https://www.google.com/maps/place/example"})
+
+    client = GoogleMapsGroundingClient(api_key="server-only-test-key", transport=httpx.MockTransport(handler))
+    resolved = asyncio.run(client.resolve_locations(["King's Cross", "Camden Market"], "london"))
+
+    assert [place.place_id for place in resolved] == ["ChIJorigin", "ChIJdestination"]
+    assert [place.name for place in resolved] == ["King's Cross", "Camden Market"]
+    assert len(requests) == 3
+    assert requests[0][0] == "POST"
+    assert requests[1][0] == requests[2][0] == "GET"
+    assert requests[1][2]["x-goog-fieldmask"] == "location"
+
+
+def test_named_endpoint_resolution_rejects_ambiguous_or_incomplete_details() -> None:
+    async def ambiguous(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"results": [{"entity": {"place": "places/ChIJorigin"}, "confidence": "MEDIUM"}]})
+
+    with pytest.raises(ProviderPayloadError, match="ambiguous") as exc_info:
+        asyncio.run(GoogleMapsGroundingClient(api_key="test", transport=httpx.MockTransport(ambiguous)).resolve_location("King's Cross"))
+    assert exc_info.value.reason_code == "resolution_low_confidence"
+
+    async def incomplete_details(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(":resolveNames"):
+            return httpx.Response(200, json={"results": [{"entity": {"place": "places/ChIJorigin"}, "confidence": "HIGH"}]})
+        return httpx.Response(200, json={"googleMapsUri": "https://www.google.com/maps/place/example"})
+
+    with pytest.raises(ProviderPayloadError) as exc_info:
+        asyncio.run(GoogleMapsGroundingClient(api_key="test", transport=httpx.MockTransport(incomplete_details)).resolve_location("King's Cross"))
+    assert exc_info.value.reason_code == "details_missing_location"
+
+
+def test_named_endpoint_resolution_does_not_substitute_a_partial_batch_result() -> None:
+    async def partial(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={
+            "results": [
+                {},
+                {"entity": {"place": "places/ChIJdestination"}, "confidence": "HIGH"},
+            ],
+            "failedRequests": {"0": {"code": 5}},
+        })
+
+    with pytest.raises(ProviderPayloadError) as exc_info:
+        asyncio.run(GoogleMapsGroundingClient(api_key="test", transport=httpx.MockTransport(partial)).resolve_locations(["Unknown place", "Camden Market"]))
+    assert exc_info.value.reason_code == "resolution_no_match"
+
+
+def test_named_endpoint_resolution_rejects_out_of_city_and_non_finite_details() -> None:
+    async def details(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(":resolveNames"):
+            return httpx.Response(200, json={"results": [{"entity": {"place": "places/ChIJplace"}, "confidence": "HIGH"}]})
+        return httpx.Response(200, json={"location": {"latitude": 41.88, "longitude": -87.63}})
+
+    with pytest.raises(ProviderPayloadError) as exc_info:
+        asyncio.run(GoogleMapsGroundingClient(api_key="test", transport=httpx.MockTransport(details)).resolve_location("King's Cross"))
+    assert exc_info.value.reason_code == "candidate_outside_city"
+
+    async def non_finite(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith(":resolveNames"):
+            return httpx.Response(200, json={"results": [{"entity": {"place": "places/ChIJplace"}, "confidence": "HIGH"}]})
+        return httpx.Response(200, content=b'{"location":{"latitude":NaN,"longitude":-0.12}}')
+
+    with pytest.raises(ProviderPayloadError) as exc_info:
+        asyncio.run(GoogleMapsGroundingClient(api_key="test", transport=httpx.MockTransport(non_finite)).resolve_location("King's Cross"))
+    assert exc_info.value.reason_code == "details_invalid_geometry"
 
 
 def test_structured_payload_accepts_direct_and_result_wrapped_objects() -> None:

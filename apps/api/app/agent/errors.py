@@ -27,6 +27,12 @@ FailureReason = Literal[
     "candidate_not_relevant",
     "invalid_candidate_geometry",
     "provider_result_malformed",
+    "resolution_response_invalid",
+    "resolution_no_match",
+    "resolution_low_confidence",
+    "resolution_missing_place_id",
+    "details_missing_location",
+    "details_invalid_geometry",
 ]
 
 
@@ -83,7 +89,7 @@ def _exception_diagnostic(exc: BaseException) -> ProviderDiagnostic:
     if isinstance(exc, httpx.HTTPStatusError):
         return _status_diagnostic(exc.response.status_code)
     if isinstance(exc, ProviderPayloadError):
-        category: FailureCategory = "no_match" if exc.reason_code in {"places_empty", "candidate_outside_city", "candidate_not_relevant"} else "invalid_response"
+        category: FailureCategory = "no_match" if exc.reason_code in {"places_empty", "candidate_outside_city", "candidate_not_relevant", "resolution_no_match", "resolution_low_confidence"} else "invalid_response"
         return ProviderDiagnostic(category=category, response_received=True, reason_code=exc.reason_code)
     if isinstance(exc, ProviderOperationError):
         return ProviderDiagnostic(category="unknown", response_received=True, reason_code=exc.reason_code)

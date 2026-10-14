@@ -114,7 +114,7 @@ def test_route_maps_failure_records_safe_diagnostic_metadata() -> None:
     failure = next(event for event in telemetry.events if event.status == "failed" and event.provider == "google_maps")
     assert result.status == "failed"
     assert failure.error_category == "permission"
-    assert failure.operation == "maps.search_places"
+    assert failure.operation == "maps.resolve_names"
     assert failure.request_id
     assert failure.upstream_http_status == 403
     assert failure.upstream_response_received is True
@@ -136,6 +136,9 @@ class FakeMaps:
 
     async def resolve_location(self, query: str, city: str = "london") -> ResolvedPlace:
         raise NotImplementedError
+
+    async def resolve_place_id(self, place_id: str, city: str = "london", name: str = "Selected location") -> ResolvedPlace:
+        return ResolvedPlace(name=name, place_id=place_id, latitude=51.5308, longitude=-0.1238)
 
 
 class RouteMaps(FakeMaps):
@@ -575,7 +578,7 @@ def test_route_intent_uses_selected_coordinates_without_maps_geocoding() -> None
     assert result.route.origin.longitude == -0.12
 
 
-def test_route_intent_uses_selected_place_id_without_coordinate_or_maps_resolution() -> None:
+def test_route_intent_server_validates_selected_place_id_without_coordinates() -> None:
     maps = RouteMaps()
     route_service = FakeRouteService()
     service = InvestigationService(mcp_client=FakeMcp(), maps_client=maps, route_service=route_service, model=FakeModel([
@@ -591,6 +594,26 @@ def test_route_intent_uses_selected_place_id_without_coordinate_or_maps_resoluti
     assert maps.resolution_calls == ["Camden:london"]
     assert result.route is not None
     assert result.route.origin.place_id == "ChIJkingscross"
+
+
+def test_route_intent_rejects_client_supplied_out_of_city_place_id() -> None:
+    class OutOfCityPlaceIdMaps(RouteMaps):
+        async def resolve_place_id(self, place_id: str, city: str = "london", name: str = "Selected location") -> ResolvedPlace:
+            return ResolvedPlace(name=name, place_id=place_id, latitude=41.88, longitude=-87.63)
+
+    maps = OutOfCityPlaceIdMaps()
+    route_service = FakeRouteService()
+    result = asyncio.run(InvestigationService(
+        mcp_client=FakeMcp(), maps_client=maps, route_service=route_service, model=FakeModel([
+            ToolDecision(kind="call_tool", tool="route.intent", arguments={"origin": "City centre", "destination": "Camden", "travel_mode": "bicycle"}),
+        ]),
+    ).investigate(InvestigationRequest(
+        question="Ride to Camden.",
+        context={"origin_mode": "selected_place", "start_location": "Chicago", "origin_place_id": "ChIJoutside", "destination": "Camden"},
+    )))
+
+    assert result.status == "failed"
+    assert route_service.calls == []
 
 
 def test_selected_place_rejects_conflicting_place_id_and_coordinates() -> None:

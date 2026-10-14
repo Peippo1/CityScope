@@ -174,17 +174,21 @@ class GuardrailPolicy:
         budget.maps_calls += calls
         return self.allow()
 
-    def reserve_route_resolution(self, budget: ExecutionBudget) -> PolicyDecision:
-        if budget.maps_calls + 2 > self.max_maps_calls:
+    def reserve_endpoint_resolution(self, budget: ExecutionBudget, named_count: int, place_id_count: int) -> PolicyDecision:
+        """Reserve name resolution and server validation for public endpoints."""
+        calls = (1 + named_count if named_count else 0) + place_id_count
+        total_endpoints = named_count + place_id_count
+        if total_endpoints < 1 or budget.maps_calls + calls > self.max_maps_calls:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.MAPS_CALL_LIMIT, message="The Maps search call budget was exceeded.")
-        budget.maps_calls += 2
+        budget.maps_calls += calls
         return self.allow()
 
     def reserve_maps_resolution(self, budget: ExecutionBudget, count: int) -> PolicyDecision:
         """Reserve a bounded number of named-place resolutions for route hints."""
-        if count < 1 or budget.maps_calls + count > self.max_maps_calls:
+        calls = count * 2
+        if count < 1 or budget.maps_calls + calls > self.max_maps_calls:
             return PolicyDecision(outcome=PolicyOutcome.REJECT, code=PolicyCode.MAPS_CALL_LIMIT, message="The Maps search call budget was exceeded.")
-        budget.maps_calls += count
+        budget.maps_calls += calls
         return self.allow()
 
     def check_waypoints(self, waypoints: list[Any]) -> PolicyDecision:

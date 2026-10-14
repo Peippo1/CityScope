@@ -45,6 +45,11 @@ class FakeMaps:
     async def resolve_location(self,name,city="london"):
         self.calls.append(("resolve",name,city)); return ResolvedPlace(name=name,place_id=f"place-{len(self.calls)}",latitude=51.50+len(self.calls)/100,longitude=-0.1,maps_uri="https://maps.google.com/eval")
 
+    async def resolve_locations(self, names, city="london", locale=None):
+        self.calls.append(("resolve_names", tuple(names), city))
+        self.calls.extend([("place_details", name, city) for name in names])
+        return [ResolvedPlace(name=name, place_id=f"place-{index}", latitude=51.51 + index / 100, longitude=-0.1, maps_uri="https://maps.google.com/eval") for index, name in enumerate(names)]
+
 
 class FakeRoutes:
     def __init__(self,failure=False): self.calls=[]; self.failure=failure
