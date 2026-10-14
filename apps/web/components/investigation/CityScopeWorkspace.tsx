@@ -100,7 +100,7 @@ export function CityScopeWorkspace({ services = defaultServices }: { services?: 
           Build story
         </a>
       </header>
-      <section className="dashboard-intro" aria-labelledby="page-title"><div><p className="eyebrow">CityScope</p><h1 id="page-title">Explore a city your way</h1></div><p>Tell CityScope where you are and how you want to explore. It will build a run or ride through interesting places, with a good stop along the way.</p></section>
+      <section className="dashboard-intro" aria-labelledby="page-title"><div><p className="eyebrow">CityScope</p><h1 id="page-title">Discover your city with AI-powered routes.</h1></div><p>Turn everyday runs and rides into new adventures. Explore interesting places with personalised routes powered by AI.</p></section>
       <label className="city-switcher">City<select value={selectedCity.id} onChange={(event) => selectCity(event.target.value)}>{cities.map((city) => <option key={city.id} value={city.id}>{city.name}</option>)}</select></label>
       <section id="explore" className="command-surface" aria-label={`${selectedCity.name} route planner`}>
         <QuestionComposer cityName={selectedCity.name} value={question} mode={journeyMode} onModeChange={setJourneyMode} isSubmitting={investigating} error={investigationError} onChange={setQuestion} onSubmit={() => void submitQuestion()} />

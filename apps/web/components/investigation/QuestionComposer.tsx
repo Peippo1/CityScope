@@ -191,7 +191,7 @@ export function QuestionComposer({ cityName, value, isSubmitting, error, onChang
             {isSubmitting ? "Planning route…" : "Plan my route"}
           </button>
         </div>
-        <p id="question-help" className="helper-text">{isSubmitting ? <span className="generation-status" role="status" aria-live="polite"><span className="generation-spinner" aria-hidden="true" />{generationMessages[generationStep]}</span> : <>Try a starting point, rough time or distance, and anything you want to see — for example {promptContext.start} · Google Maps and grounded city knowledge</>}</p>
+        <p id="question-help" className="helper-text">{isSubmitting ? <span className="generation-status" role="status" aria-live="polite"><span className="generation-spinner" aria-hidden="true" />{generationMessages[generationStep]}</span> : <>Try a starting point, rough time or distance, and anything you want to see — for example {promptContext.start}. You’ll get a mapped route with places to pause.</>}</p>
         {error && <p id="investigation-error" className="inline-error" role="alert">{error}</p>}
       </form>
     </section>

@@ -13,7 +13,8 @@ describe("CityScopeWorkspace", () => {
   it("renders the route-first workspace without legacy evidence panels or activity requests", async () => {
     const investigate = vi.fn();
     render(<CityScopeWorkspace services={{ investigate }} />);
-    expect(screen.getByRole("heading", { name: "Explore a city your way" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Discover your city with AI-powered routes." })).toBeVisible();
+    expect(screen.getByText("Turn everyday runs and rides into new adventures. Explore interesting places with personalised routes powered by AI.")).toBeVisible();
     expect(screen.getByRole("link", { name: "Build story" })).toHaveAttribute(
       "href",
       "https://tfinch.dev/writing/building-cityscope",
